@@ -1,0 +1,41 @@
+---
+# SPDX-License-Identifier: CC0-1.0
+# SPDX-FileCopyrightText: 2018-2023, Collabora, Ltd. and the Monado contributors
+# Ideally we'd turn back on some of these that are disabled.
+# Things on the same line are synonyms
+Checks:       |
+    clang-diagnostic-*,
+    clang-analyzer-*,
+    hicpp-signed-bitwise,
+    performance-*,
+    bugprone-*,
+    cert-*,
+    readability-*,
+    misc-*,
+    -modernize-*,
+    -bugprone-macro-parentheses,
+    -bugprone-reserved-identifier,-cert-dcl37-c,-cert-dcl51-cpp,
+    -cert-dcl21-cpp,
+    -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
+    -clang-analyzer-security.insecureAPI.strcpy,
+    -clang-diagnostic-missing-braces,
+    -clang-diagnostic-missing-field-initializers,
+    -clang-diagnostic-unused-function,
+    -misc-non-private-member-variables-in-classes,
+    -misc-static-assert,-cert-dcl03-c,
+    -misc-unused-parameters,
+    -performance-no-int-to-ptr,
+    -readability-braces-around-statements,
+    -readability-function-cognitive-complexity,
+    -readability-identifier-length,
+    -readability-implicit-bool-conversion,
+    -readability-redundant-access-specifiers,
+    -readability-uppercase-literal-suffix,-hicpp-uppercase-literal-suffix,
+# Notes:
+# misc-static-assert turns our assert(false) in failure/bad cases into static_asserts. We should revise them, but not like that.
+# cert-dcl21-cpp is an overkill "recommendation" to return a special type from iterator post-increment
+WarningsAsErrors: ''
+HeaderFilterRegex: 'src/xrt/.*'
+AnalyzeTemporaryDtors: false
+FormatStyle:     file
+...

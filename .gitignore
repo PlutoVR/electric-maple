@@ -1,0 +1,14 @@
+.vs/
+.vscode/
+out/
+
+cmake-build-*/
+build/
+deps/
+
+CMakeSettings.json
+
+patches/
+__pycache__/
+
+.cache/

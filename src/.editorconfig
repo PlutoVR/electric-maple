@@ -1,0 +1,10 @@
+# To use this config on your editor, follow the instructions at:
+# http://editorconfig.org
+
+# SPDX-License-Identifier: CC0-1.0
+# SPDX-FileCopyrightText: 2018-2021 Collabora, Ltd. and the Monado contributors
+
+[*]
+charset = utf-8
+insert_final_newline = true
+trim_trailing_whitespace = true
