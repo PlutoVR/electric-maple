@@ -42,10 +42,16 @@ set(MONADO_SRC_XRT ${CMAKE_CURRENT_SOURCE_DIR}/monado/src/xrt)
 
 ### Set configuration options for Monado
 
-set(XRT_FEATURE_COMPOSITOR_MAIN OFF) # we are not using this
-set(XRT_FEATURE_COMPOSITOR_NULL ON) # Let's use this for now
-set(XRT_FEATURE_OPENXR OFF
-	)# we need to replace this to pull together a different combination of modules
+# Let's use this for now: Monado's main compositor is really good and is an
+#easy way to see that things are working.
+set(XRT_FEATURE_COMPOSITOR_MAIN ON)
+
+# No reason to disable this
+set(XRT_FEATURE_COMPOSITOR_NULL ON)
+
+# It looks like we can use Monado's normal out-of-proc OpenXR instance as-is. We'll see.
+set(XRT_FEATURE_OPENXR ON)
+
 set(XRT_FEATURE_RENDERDOC OFF) # we are not using this
 set(XRT_FEATURE_STEAMVR_PLUGIN OFF) # we are not using this
 set(XRT_FEATURE_TRACING OFF) # we are not using this yet
