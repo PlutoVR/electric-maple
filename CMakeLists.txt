@@ -43,9 +43,12 @@ set(XRT_FEATURE_CLIENT_DEBUG_GUI OFF) # we are not using this
 
 set(XRT_MODULE_MONADO_CLI OFF) # we are not using this
 set(XRT_MODULE_MONADO_GUI OFF) # we are not using this
+set(XRT_MODULE_MERCURY_HANDTRACKING OFF)
+
 
 set(XRT_HAVE_D3D11 OFF)
 set(XRT_HAVE_D3D12 OFF)
+set(XRT_HAVE_OPENCV OFF)
 
 # No drivers!
 set(XRT_BUILD_DRIVER_ANDROID OFF)
