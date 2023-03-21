@@ -14,7 +14,7 @@
 #include "util/u_pacing.h"
 #include "util/u_logging.h"
 
-#include "../../compositor/pluto_streaming_compositor/pl_comp.h"
+#include "../../compositor/pl_comp.h"
 
 
 #ifdef __cplusplus

@@ -15,7 +15,7 @@
 #include "util/u_trace_marker.h"
 
 #include "pl_server_internal.h"
-#include "../../drivers/pluto_streaming_driver/driver_pluto_streaming.h"
+#include "../../drivers/pl_driver.h"
 #include <assert.h>
 
 #include "main/comp_main_interface.h"
