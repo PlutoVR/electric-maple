@@ -101,6 +101,9 @@ set(BUILD_DOC OFF)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 
+set(XRT_OXR_RUNTIME_SUFFIX pluto_server)
+
+
 add_subdirectory(monado)
 
 add_subdirectory(src)
