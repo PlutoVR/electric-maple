@@ -11,7 +11,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(CMAKE_BUILD_TYPE RelWithDebInfo)
 
-
 # Make sure we have pretty colours
 option(DISABLE_COLORED_OUTPUT "Always produce ANSI-colored output (GNU/Clang only)." OFF)
 
@@ -58,7 +57,6 @@ set(XRT_MODULE_MONADO_CLI OFF) # we are not using this
 set(XRT_MODULE_MONADO_GUI OFF) # we are not using this
 set(XRT_MODULE_MERCURY_HANDTRACKING OFF)
 
-
 set(XRT_HAVE_D3D11 OFF)
 set(XRT_HAVE_D3D12 OFF)
 set(XRT_HAVE_OPENCV OFF)
@@ -102,7 +100,6 @@ set(BUILD_DOC OFF)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 
 set(XRT_OXR_RUNTIME_SUFFIX pluto_server)
-
 
 add_subdirectory(monado)
 
