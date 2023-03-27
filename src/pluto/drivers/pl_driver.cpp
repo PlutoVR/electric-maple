@@ -27,6 +27,17 @@
 
 #include <stdio.h>
 
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+
+#include <thread>
+
+#include "pluto.pb.h"
+
+
+extern "C" {
 
 /*
  *
@@ -44,6 +55,18 @@ struct pluto_hmd
 	struct xrt_device base;
 
 	struct xrt_pose pose;
+
+	// renameto: bind_sockfd
+	int server_socket_fd;
+	struct sockaddr_in server_socket_address;
+
+	// renameto: client_sockfd
+	int client_socket_fd;
+	struct sockaddr_in client_socket_address;
+
+	std::thread aaaaa = {};
+
+	float y_position_hack = 26.0f;
 
 	enum u_logging_level log_level;
 };
@@ -112,6 +135,103 @@ pluto_hmd_get_view_poses(struct xrt_device *xdev,
 	u_device_get_view_poses(xdev, default_eye_relation, at_timestamp_ns, view_count, out_head_relation, out_fovs,
 	                        out_poses);
 }
+
+void
+accept_client_connection(struct pluto_hmd &ph)
+{
+	socklen_t clilen = sizeof(ph.client_socket_address);
+
+	ph.client_socket_fd = accept(ph.server_socket_fd, (struct sockaddr *)&ph.client_socket_address, &clilen);
+}
+
+
+//!@todo So cursed
+void
+run_comms_thread(struct pluto_hmd *ph_ptr)
+{
+	struct pluto_hmd &ph = *ph_ptr;
+	accept_client_connection(ph);
+	while (true) {
+
+		char server_message_bytes[8192] = {};
+
+		int n = read(ph.client_socket_fd, server_message_bytes, 8192 - 1);
+
+		U_LOG_E("n %d", n);
+
+		pluto::TrackingMessage message = {};
+
+		bool result = message.ParseFromArray(server_message_bytes, n);
+
+		U_LOG_E("result %d", result);
+
+		ph.pose.position.x = message.p_localspace_viewspace().position().x();
+		ph.pose.position.y = message.p_localspace_viewspace().position().y() + ph.y_position_hack;
+		ph.pose.position.z = message.p_localspace_viewspace().position().z();
+
+		ph.pose.orientation.w = message.p_localspace_viewspace().orientation().w();
+		ph.pose.orientation.x = message.p_localspace_viewspace().orientation().x();
+		ph.pose.orientation.y = message.p_localspace_viewspace().orientation().y();
+		ph.pose.orientation.z = message.p_localspace_viewspace().orientation().z();
+	}
+}
+
+
+void
+make_connect_socket(struct pluto_hmd &ph)
+{
+
+	const char *HARDCODED_IP = "192.168.0.168";
+
+
+	socklen_t clilen;
+	// char *buffer = (char *)malloc(BUFSIZE);
+
+	// struct sockaddr_in serv_addr, cli_addr;
+	// int n;
+
+	ph.server_socket_fd = socket(AF_INET, SOCK_STREAM, 0);
+	if (ph.server_socket_fd < 0) {
+		perror("socket");
+		exit(1);
+	}
+
+	int flag = 1;
+	// SO_REUSEADDR makes the OS reap this socket right after we quit.
+	setsockopt(ph.server_socket_fd, SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(flag));
+	if (ph.server_socket_fd < 0) {
+		perror("setsockopt");
+		exit(1);
+	}
+
+	socklen_t addrlen = sizeof(ph.server_socket_address);
+
+
+	ph.server_socket_address.sin_family = AF_INET;
+	ph.server_socket_address.sin_port = htons(61943); // Randomly chosen, doesn't mean anything
+
+
+	if (inet_pton(AF_INET, HARDCODED_IP, &ph.server_socket_address.sin_addr) <= 0) {
+		perror("inet_pton");
+		exit(1);
+	}
+
+
+	if (bind(ph.server_socket_fd, (struct sockaddr *)&ph.server_socket_address, addrlen) < 0) {
+		perror("bind");
+		exit(1);
+	}
+
+
+	//!@todo This allows for 128 pending connections. We only really need one.
+	if (listen(ph.server_socket_fd, 128) < 0) {
+		perror("listen");
+		exit(1);
+	}
+	// clilen = sizeof(cli_addr);
+}
+
+
 
 struct xrt_device *
 pluto_hmd_create(void)
@@ -198,8 +318,14 @@ pluto_hmd_create(void)
 	// Setup variable tracker: Optional but useful for debugging
 	u_var_add_root(ph, "Pluto HMD", true);
 	u_var_add_pose(ph, &ph->pose, "pose");
+	u_var_add_f32(ph, &ph->y_position_hack, "hack");
 	u_var_add_log_level(ph, &ph->log_level, "log_level");
+
+	make_connect_socket(*ph);
+
+	ph->aaaaa = std::thread(run_comms_thread, ph);
 
 
 	return &ph->base;
 }
+} // extern "C"

@@ -10,10 +10,9 @@ target_link_libraries(
 		aux_util_debug_gui
 		st_prober
 		ipc_server
-		# target_lists
-		# target_instance
 		comp_main
 		drv_pluto
+		pluto_proto
 	)
 
 target_link_libraries(pluto_streaming_server PRIVATE st_gui xrt-external-imgui-sdl2 aux_ogl)
