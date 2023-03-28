@@ -1,0 +1,63 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    compileSdkVersion 30
+    buildToolsVersion "30.0.2"
+
+    lintOptions {
+        checkReleaseBuilds false
+        // Or, if you prefer, you can continue to check for errors in release builds,
+        // but continue the build even when errors are found:
+        abortOnError false
+    }
+
+    defaultConfig {
+        applicationId "com.collabora.xrgears"
+        minSdkVersion 24
+        // Version 30 breaks loader
+        targetSdkVersion 29
+        versionCode 1
+        versionName "1.0"
+
+        externalNativeBuild {
+            cmake {
+                arguments '-DANDROID_STL=c++_shared'
+            }
+        }
+        externalNativeBuild {
+            ndk {
+                abiFilters 'arm64-v8a', 'armeabi-v7a'
+            }
+        }       
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    externalNativeBuild {
+        cmake {
+            path "../src/CMakeLists.txt"
+            version "3.10.2"
+        }
+    }
+    sourceSets {
+        main {
+            assets {
+                srcDirs '../textures'
+            }
+        }
+    }
+    // enable prefab support for the OpenXR AAR
+    buildFeatures {
+        prefab true
+    }
+}
+
+dependencies {
+    implementation 'org.khronos.openxr:openxr_loader_for_android:1.0.20'
+}

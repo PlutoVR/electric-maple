@@ -113,6 +113,6 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 set(XRT_OXR_RUNTIME_SUFFIX pluto_server)
 
 add_subdirectory(monado)
-add_subdirectory(proto)
+add_subdirectory(../proto ${CMAKE_CURRENT_BINARY_DIR}/proto)
 
 add_subdirectory(src)
