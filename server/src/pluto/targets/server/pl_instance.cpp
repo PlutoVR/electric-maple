@@ -19,6 +19,7 @@
 #include <assert.h>
 
 #include "main/comp_main_interface.h"
+#include "pl_comp_interface.h"
 
 extern "C" {
 
@@ -87,7 +88,8 @@ pluto_instance_create_system(struct xrt_instance *xinst,
 	// Pluto-compositor :)
 
 	if (xret == XRT_SUCCESS && xsysc == NULL) {
-		xret = comp_main_create_system_compositor(sp->xsysd_base.roles.head, NULL, &xsysc);
+		// xret = comp_main_create_system_compositor(sp->xsysd_base.roles.head, NULL, &xsysc);
+		xret = null_compositor_create_system(sp->xsysd_base.roles.head, &xsysc);
 	}
 
 	*out_xsysc = xsysc;
