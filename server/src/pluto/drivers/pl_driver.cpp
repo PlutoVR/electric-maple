@@ -162,6 +162,11 @@ run_comms_thread(struct pluto_hmd *ph_ptr)
 
 		int n = recv(ph.client_socket_fd, server_message_bytes, 8192 - 1, 0);
 
+		if (n == 0) {
+			U_LOG_E("Client disconnected!");
+			accept_client_connection(ph);
+		}
+
 
 		// !!!HACK!!! TCP SOCK_STREAM sockets don't guarantee any delineation between messages, it's just
 		// emergent behaviour that we usually get one packet at a time.
