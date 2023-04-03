@@ -176,39 +176,28 @@ mainloop_one(struct state_t &state)
 			XrEventDataSessionStateChanged *event = (XrEventDataSessionStateChanged *)&buffer;
 
 			switch (event->state) {
-			case XR_SESSION_STATE_IDLE: U_LOG_E("OpenXR session is now IDLE"); break;
-			case XR_SESSION_STATE_READY: U_LOG_E("OpenXR session is now READY, beginning session");
+			case XR_SESSION_STATE_IDLE: U_LOG_I("OpenXR session is now IDLE"); break;
+			case XR_SESSION_STATE_READY: {
+				U_LOG_I("OpenXR session is now READY, beginning session");
+				XrSessionBeginInfo beginInfo = {};
+				beginInfo.type = XR_TYPE_SESSION_BEGIN_INFO;
+				beginInfo.primaryViewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
 
-#if 0
-                        result = xrBeginSession(state.session, &(XrSessionBeginInfo) {
-                                .type = XR_TYPE_SESSION_BEGIN_INFO,
-                                .primaryViewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO
-                        });
-#else
-				{
-					XrSessionBeginInfo beginInfo = {};
-					beginInfo.type = XR_TYPE_SESSION_BEGIN_INFO;
-					beginInfo.primaryViewConfigurationType =
-					    XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
-
-					result = xrBeginSession(state.session, &beginInfo);
-				}
-#endif
+				result = xrBeginSession(state.session, &beginInfo);
 
 				if (XR_FAILED(result)) {
-					U_LOG_E("Failed to begin OpenXR session (%d)", result);
+					U_LOG_I("Failed to begin OpenXR session (%d)", result);
 				}
-
-				break;
-			case XR_SESSION_STATE_SYNCHRONIZED: U_LOG_E("OpenXR session is now SYNCHRONIZED"); break;
-			case XR_SESSION_STATE_VISIBLE: U_LOG_E("OpenXR session is now VISIBLE"); break;
-			case XR_SESSION_STATE_FOCUSED: U_LOG_E("OpenXR session is now FOCUSED"); break;
+			} break;
+			case XR_SESSION_STATE_SYNCHRONIZED: U_LOG_I("OpenXR session is now SYNCHRONIZED"); break;
+			case XR_SESSION_STATE_VISIBLE: U_LOG_I("OpenXR session is now VISIBLE"); break;
+			case XR_SESSION_STATE_FOCUSED: U_LOG_I("OpenXR session is now FOCUSED"); break;
 			case XR_SESSION_STATE_STOPPING:
-				U_LOG_E("OpenXR session is now STOPPING");
+				U_LOG_I("OpenXR session is now STOPPING");
 				xrEndSession(state.session);
 				break;
-			case XR_SESSION_STATE_LOSS_PENDING: U_LOG_E("OpenXR session is now LOSS_PENDING"); break;
-			case XR_SESSION_STATE_EXITING: U_LOG_E("OpenXR session is now EXITING"); break;
+			case XR_SESSION_STATE_LOSS_PENDING: U_LOG_I("OpenXR session is now LOSS_PENDING"); break;
+			case XR_SESSION_STATE_EXITING: U_LOG_I("OpenXR session is now EXITING"); break;
 			default: break;
 			}
 
@@ -220,7 +209,7 @@ mainloop_one(struct state_t &state)
 
 	// Spin until session is ready
 	if (state.sessionState < XR_SESSION_STATE_READY) {
-		U_LOG_E("Waiting!");
+		U_LOG_I("Waiting for session ready state!");
 		os_nanosleep(U_TIME_1MS_IN_NS * 100);
 		return;
 	}
@@ -290,37 +279,37 @@ mainloop_one(struct state_t &state)
 
 	// Render
 
-		uint32_t imageIndex;
-		result = xrAcquireSwapchainImage(state.swapchain, NULL, &imageIndex);
+	uint32_t imageIndex;
+	result = xrAcquireSwapchainImage(state.swapchain, NULL, &imageIndex);
 
-		if (XR_FAILED(result)) {
-			U_LOG_E("Failed to acquire swapchain image (%d)", result);
-		}
+	if (XR_FAILED(result)) {
+		U_LOG_E("Failed to acquire swapchain image (%d)", result);
+	}
 
-		XrSwapchainImageWaitInfo waitInfo = {.type = XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO,
-		                                     .timeout = XR_INFINITE_DURATION};
+	XrSwapchainImageWaitInfo waitInfo = {.type = XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO,
+	                                     .timeout = XR_INFINITE_DURATION};
 
-		result = xrWaitSwapchainImage(state.swapchain, &waitInfo);
+	result = xrWaitSwapchainImage(state.swapchain, &waitInfo);
 
-		if (XR_FAILED(result)) {
-			U_LOG_E("Failed to wait for swapchain image (%d)", result);
-		}
-
-
-		glBindFramebuffer(GL_FRAMEBUFFER, state.framebuffers[imageIndex]);
-
-		// Just display purple nothingness
-		for (uint32_t eye = 0; eye < 2; eye++) {
-			glViewport(eye * state.width, 0, state.width, state.height);
-			drawTriangle(state.shader_program);
-		}
-
-		// Release
-
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	if (XR_FAILED(result)) {
+		U_LOG_E("Failed to wait for swapchain image (%d)", result);
+	}
 
 
-		xrReleaseSwapchainImage(state.swapchain, NULL);
+	glBindFramebuffer(GL_FRAMEBUFFER, state.framebuffers[imageIndex]);
+
+	// Just display purple nothingness
+	for (uint32_t eye = 0; eye < 2; eye++) {
+		glViewport(eye * state.width, 0, state.width, state.height);
+		drawTriangle(state.shader_program);
+	}
+
+	// Release
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+
+	xrReleaseSwapchainImage(state.swapchain, NULL);
 
 	// Submit frame
 
@@ -500,5 +489,3 @@ android_main(struct android_app *app)
 
 	(*app->activity->vm).DetachCurrentThread();
 }
-
-
