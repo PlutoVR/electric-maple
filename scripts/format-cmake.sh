@@ -18,8 +18,10 @@ fi
 
     cd "$(dirname $0)/.."
     find \
-        ./src \
-        ./CMakeLists.txt \
+        ./server/src \
+        ./server/CMakeLists.txt \
+        ./client/src \
+        ./client/CMakeLists.txt \
         \( -name "CMakeLists.txt" -o -name "*.cmake" \) \
         -print0 | \
         xargs -0 "${CMAKE_FORMAT}" -c "$(pwd)/.cmake-format.py" -i
