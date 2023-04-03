@@ -11,8 +11,6 @@ set(CMAKE_BUILD_TYPE Debug)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
-add_definitions(-DXR_OS_ANDROID)
-
 find_package(Vulkan REQUIRED)
 find_package(OpenXR REQUIRED)
 
