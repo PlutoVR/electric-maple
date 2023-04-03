@@ -101,7 +101,7 @@ really_make_socket(struct state &st)
 	serverAddr.sin_family = AF_INET;
 
 	// todo: use inet_pton
-	serverAddr.sin_addr.s_addr = inet_addr("192.168.0.168");
+	serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
 	serverAddr.sin_port = htons(61943);
 
 	int iResult = connect(st.socket_fd, (struct sockaddr *)&serverAddr, sizeof(serverAddr));

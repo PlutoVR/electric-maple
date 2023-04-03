@@ -35,6 +35,7 @@
 #include <thread>
 
 #include "pluto.pb.h"
+#include "pb_decode.h"
 
 
 extern "C" {
@@ -65,8 +66,6 @@ struct pluto_hmd
 	struct sockaddr_in client_socket_address;
 
 	std::thread aaaaa = {};
-
-	float y_position_hack = 26.0f;
 
 	enum u_logging_level log_level;
 };
@@ -141,7 +140,10 @@ accept_client_connection(struct pluto_hmd &ph)
 {
 	socklen_t clilen = sizeof(ph.client_socket_address);
 
+	U_LOG_E("Waiting for client connection...");
+
 	ph.client_socket_fd = accept(ph.server_socket_fd, (struct sockaddr *)&ph.client_socket_address, &clilen);
+	U_LOG_E("Got client connection!");
 }
 
 
@@ -153,26 +155,53 @@ run_comms_thread(struct pluto_hmd *ph_ptr)
 	accept_client_connection(ph);
 	while (true) {
 
-		char server_message_bytes[8192] = {};
+		pb_byte_t server_message_bytes[8192] = {};
 
-		int n = read(ph.client_socket_fd, server_message_bytes, 8192 - 1);
 
-		U_LOG_E("n %d", n);
 
-		pluto::TrackingMessage message = {};
+		int n = recv(ph.client_socket_fd, server_message_bytes, 8192 - 1, 0);
 
-		bool result = message.ParseFromArray(server_message_bytes, n);
 
-		U_LOG_E("result %d", result);
+		// !!!HACK!!! TCP SOCK_STREAM sockets don't guarantee any delineation between messages, it's just
+		// emergent behaviour that we usually get one packet at a time.
+		// There's no guarantee this'll work; it just usually does on eg. home networks. We have to figure out
+		// how to do this correctly once we're on the WebRTC data_channel.
+		if (n != pluto_TrackingMessage_size) {
+			U_LOG_E("Message of wrong size %d! Expected %d! You probably have bad network conditions.", n,
+			        pluto_TrackingMessage_size);
+			continue;
+		}
 
-		ph.pose.position.x = message.p_localspace_viewspace().position().x();
-		ph.pose.position.y = message.p_localspace_viewspace().position().y() + ph.y_position_hack;
-		ph.pose.position.z = message.p_localspace_viewspace().position().z();
+		pluto_TrackingMessage message = pluto_TrackingMessage_init_default;
 
-		ph.pose.orientation.w = message.p_localspace_viewspace().orientation().w();
-		ph.pose.orientation.x = message.p_localspace_viewspace().orientation().x();
-		ph.pose.orientation.y = message.p_localspace_viewspace().orientation().y();
-		ph.pose.orientation.z = message.p_localspace_viewspace().orientation().z();
+		pb_istream_t our_istream = pb_istream_from_buffer(server_message_bytes, n);
+
+
+#if 0
+		// Seems to always fail with `zero tag`.
+		bool result = pb_decode(&our_istream, pluto_TrackingMessage_fields, &message);
+#else
+		// I don't understand why this works and not the above. I don't think I asked for it to be
+		// null-terminated on the client side, so really confused.
+		bool result =
+		    pb_decode_ex(&our_istream, pluto_TrackingMessage_fields, &message, PB_DECODE_NULLTERMINATED);
+#endif
+
+
+
+		if (!result) {
+			U_LOG_E("Error! %s", PB_GET_ERROR(&our_istream));
+			continue;
+		}
+
+		ph.pose.position.x = message.P_localSpace_viewSpace.position.x;
+		ph.pose.position.x = message.P_localSpace_viewSpace.position.y;
+		ph.pose.position.x = message.P_localSpace_viewSpace.position.z;
+
+		ph.pose.orientation.w = message.P_localSpace_viewSpace.orientation.w;
+		ph.pose.orientation.x = message.P_localSpace_viewSpace.orientation.x;
+		ph.pose.orientation.y = message.P_localSpace_viewSpace.orientation.y;
+		ph.pose.orientation.z = message.P_localSpace_viewSpace.orientation.z;
 	}
 }
 
@@ -181,7 +210,11 @@ void
 make_connect_socket(struct pluto_hmd &ph)
 {
 
-	const char *HARDCODED_IP = "192.168.0.168";
+#if 0
+	const char *HARDCODED_IP = "192.168.69.168";
+#else
+	const char *HARDCODED_IP = "127.0.0.1";
+#endif
 
 
 	socklen_t clilen;
@@ -189,8 +222,13 @@ make_connect_socket(struct pluto_hmd &ph)
 
 	// struct sockaddr_in serv_addr, cli_addr;
 	// int n;
-
+#if 1
 	ph.server_socket_fd = socket(AF_INET, SOCK_STREAM, 0);
+#else
+	// Doesn't work :(
+	ph.server_socket_fd = socket(PF_INET, SOCK_SEQPACKET, IPPROTO_SCTP);
+#endif
+
 	if (ph.server_socket_fd < 0) {
 		perror("socket");
 		exit(1);
@@ -318,7 +356,6 @@ pluto_hmd_create(void)
 	// Setup variable tracker: Optional but useful for debugging
 	u_var_add_root(ph, "Pluto HMD", true);
 	u_var_add_pose(ph, &ph->pose, "pose");
-	u_var_add_f32(ph, &ph->y_position_hack, "hack");
 	u_var_add_log_level(ph, &ph->log_level, "log_level");
 
 	make_connect_socket(*ph);
