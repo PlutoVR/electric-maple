@@ -207,7 +207,7 @@ mainloop_one(struct state_t &state)
 		buffer.type = XR_TYPE_EVENT_DATA_BUFFER;
 	}
 
-	// Spin until session is ready
+	// If session isn't ready, return. We'll be called again and will poll events again.
 	if (state.sessionState < XR_SESSION_STATE_READY) {
 		U_LOG_I("Waiting for session ready state!");
 		os_nanosleep(U_TIME_1MS_IN_NS * 100);
@@ -217,7 +217,6 @@ mainloop_one(struct state_t &state)
 	// Begin frame
 
 	XrFrameState frameState = {.type = XR_TYPE_FRAME_STATE};
-
 
 	result = xrWaitFrame(state.session, NULL, &frameState);
 
