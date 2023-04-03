@@ -224,7 +224,7 @@ compositor_init_pacing(struct pluto_compositor *c)
 {
 	xrt_result_t xret = u_pc_fake_create(c->settings.frame_interval_ns, os_monotonic_get_ns(), &c->upc);
 	if (xret != XRT_SUCCESS) {
-		NULL_ERROR(c, "Failed to create fake pacing helper!");
+		PLUTO_COMP_ERROR(c, "Failed to create fake pacing helper!");
 		return false;
 	}
 
@@ -302,7 +302,7 @@ static xrt_result_t
 pluto_compositor_begin_session(struct xrt_compositor *xc, enum xrt_view_type type)
 {
 	struct pluto_compositor *c = pluto_compositor(xc);
-	NULL_DEBUG(c, "BEGIN_SESSION");
+	PLUTO_COMP_DEBUG(c, "BEGIN_SESSION");
 
 	/*
 	 * No logic needed here for the null compositor, if using the null
@@ -316,7 +316,7 @@ static xrt_result_t
 pluto_compositor_end_session(struct xrt_compositor *xc)
 {
 	struct pluto_compositor *c = pluto_compositor(xc);
-	NULL_DEBUG(c, "END_SESSION");
+	PLUTO_COMP_DEBUG(c, "END_SESSION");
 
 	/*
 	 * No logic needed here for the null compositor, if using the null
@@ -337,7 +337,7 @@ pluto_compositor_predict_frame(struct xrt_compositor *xc,
 	COMP_TRACE_MARKER();
 
 	struct pluto_compositor *c = pluto_compositor(xc);
-	NULL_TRACE(c, "PREDICT_FRAME");
+	PLUTO_COMP_TRACE(c, "PREDICT_FRAME");
 
 	uint64_t now_ns = os_monotonic_get_ns();
 	uint64_t null_desired_present_time_ns = 0;
@@ -367,7 +367,7 @@ pluto_compositor_mark_frame(struct xrt_compositor *xc,
 	COMP_TRACE_MARKER();
 
 	struct pluto_compositor *c = pluto_compositor(xc);
-	NULL_TRACE(c, "MARK_FRAME %i", point);
+	PLUTO_COMP_TRACE(c, "MARK_FRAME %i", point);
 
 	switch (point) {
 	case XRT_COMPOSITOR_FRAME_POINT_WOKE:
@@ -383,7 +383,7 @@ static xrt_result_t
 pluto_compositor_begin_frame(struct xrt_compositor *xc, int64_t frame_id)
 {
 	struct pluto_compositor *c = pluto_compositor(xc);
-	NULL_TRACE(c, "BEGIN_FRAME");
+	PLUTO_COMP_TRACE(c, "BEGIN_FRAME");
 
 	/*
 	 * No logic needed here for the null compositor, if using the null
@@ -397,7 +397,7 @@ static xrt_result_t
 pluto_compositor_discard_frame(struct xrt_compositor *xc, int64_t frame_id)
 {
 	struct pluto_compositor *c = pluto_compositor(xc);
-	NULL_TRACE(c, "DISCARD_FRAME");
+	PLUTO_COMP_TRACE(c, "DISCARD_FRAME");
 
 	// Shouldn't be called.
 	assert(false);
@@ -411,7 +411,7 @@ pluto_compositor_layer_commit(struct xrt_compositor *xc, int64_t frame_id, xrt_g
 	COMP_TRACE_MARKER();
 
 	struct pluto_compositor *c = pluto_compositor(xc);
-	NULL_TRACE(c, "LAYER_COMMIT");
+	PLUTO_COMP_TRACE(c, "LAYER_COMMIT");
 
 	/*
 	 * The null compositor doesn't render and frames, but needs to do
@@ -448,7 +448,7 @@ static xrt_result_t
 pluto_compositor_poll_events(struct xrt_compositor *xc, union xrt_compositor_event *out_xce)
 {
 	struct pluto_compositor *c = pluto_compositor(xc);
-	NULL_TRACE(c, "POLL_EVENTS");
+	PLUTO_COMP_TRACE(c, "POLL_EVENTS");
 
 	/*
 	 * The null compositor does only minimal state keeping. If using the
@@ -460,25 +460,25 @@ pluto_compositor_poll_events(struct xrt_compositor *xc, union xrt_compositor_eve
 	U_ZERO(out_xce);
 
 	switch (c->state) {
-	case NULL_COMP_STATE_UNINITIALIZED:
-		NULL_ERROR(c, "Polled uninitialized compositor");
+	case PLUTO_COMP_COMP_STATE_UNINITIALIZED:
+		PLUTO_COMP_ERROR(c, "Polled uninitialized compositor");
 		out_xce->state.type = XRT_COMPOSITOR_EVENT_NONE;
 		break;
-	case NULL_COMP_STATE_READY: out_xce->state.type = XRT_COMPOSITOR_EVENT_NONE; break;
-	case NULL_COMP_STATE_PREPARED:
-		NULL_DEBUG(c, "PREPARED -> VISIBLE");
+	case PLUTO_COMP_COMP_STATE_READY: out_xce->state.type = XRT_COMPOSITOR_EVENT_NONE; break;
+	case PLUTO_COMP_COMP_STATE_PREPARED:
+		PLUTO_COMP_DEBUG(c, "PREPARED -> VISIBLE");
 		out_xce->state.type = XRT_COMPOSITOR_EVENT_STATE_CHANGE;
 		out_xce->state.visible = true;
-		c->state = NULL_COMP_STATE_VISIBLE;
+		c->state = PLUTO_COMP_COMP_STATE_VISIBLE;
 		break;
-	case NULL_COMP_STATE_VISIBLE:
-		NULL_DEBUG(c, "VISIBLE -> FOCUSED");
+	case PLUTO_COMP_COMP_STATE_VISIBLE:
+		PLUTO_COMP_DEBUG(c, "VISIBLE -> FOCUSED");
 		out_xce->state.type = XRT_COMPOSITOR_EVENT_STATE_CHANGE;
 		out_xce->state.visible = true;
 		out_xce->state.focused = true;
-		c->state = NULL_COMP_STATE_FOCUSED;
+		c->state = PLUTO_COMP_COMP_STATE_FOCUSED;
 		break;
-	case NULL_COMP_STATE_FOCUSED:
+	case PLUTO_COMP_COMP_STATE_FOCUSED:
 		// No more transitions.
 		out_xce->state.type = XRT_COMPOSITOR_EVENT_NONE;
 		break;
@@ -493,7 +493,7 @@ pluto_compositor_destroy(struct xrt_compositor *xc)
 	struct pluto_compositor *c = pluto_compositor(xc);
 	struct vk_bundle *vk = get_vk(c);
 
-	NULL_DEBUG(c, "NULL_COMP_DESTROY");
+	PLUTO_COMP_DEBUG(c, "PLUTO_COMP_COMP_DESTROY");
 
 	// Make sure we don't have anything to destroy.
 	comp_swapchain_garbage_collect(&c->base.cscgc);
@@ -547,13 +547,13 @@ pluto_compositor_create_system(struct xrt_device *xdev, struct xrt_system_compos
 	c->settings.log_level = debug_get_log_option_log();
 	c->frame.waited.id = -1;
 	c->frame.rendering.id = -1;
-	c->state = NULL_COMP_STATE_READY;
+	c->state = PLUTO_COMP_COMP_STATE_READY;
 	c->settings.frame_interval_ns = U_TIME_1S_IN_NS / 20; // 20 FPS
 	c->xdev = xdev;
 
-	NULL_DEBUG(c, "Doing init %p", (void *)c);
+	PLUTO_COMP_DEBUG(c, "Doing init %p", (void *)c);
 
-	NULL_INFO(c,
+	PLUTO_COMP_INFO(c,
 	          "\n"
 	          "################################################################################\n"
 	          "# Null compositor starting, if you intended to use the null compositor (for CI #\n"
@@ -576,14 +576,14 @@ pluto_compositor_create_system(struct xrt_device *xdev, struct xrt_system_compos
 	    !compositor_init_vulkan(c) ||         //
 	    !compositor_init_sys_info(c, xdev) || //
 	    !compositor_init_info(c)) {           //
-		NULL_DEBUG(c, "Failed to init compositor %p", (void *)c);
+		PLUTO_COMP_DEBUG(c, "Failed to init compositor %p", (void *)c);
 		c->base.base.base.destroy(&c->base.base.base);
 
 		return XRT_ERROR_VULKAN;
 	}
 
 
-	NULL_DEBUG(c, "Done %p", (void *)c);
+	PLUTO_COMP_DEBUG(c, "Done %p", (void *)c);
 
 	// Standard app pacer.
 	struct u_pacing_app_factory *upaf = NULL;

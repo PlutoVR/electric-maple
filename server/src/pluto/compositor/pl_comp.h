@@ -61,11 +61,11 @@ extern "C" {
  */
 enum null_comp_state
 {
-	NULL_COMP_STATE_UNINITIALIZED = 0,
-	NULL_COMP_STATE_READY = 1,
-	NULL_COMP_STATE_PREPARED = 2,
-	NULL_COMP_STATE_VISIBLE = 3,
-	NULL_COMP_STATE_FOCUSED = 4,
+	PLUTO_COMP_COMP_STATE_UNINITIALIZED = 0,
+	PLUTO_COMP_COMP_STATE_READY = 1,
+	PLUTO_COMP_COMP_STATE_PREPARED = 2,
+	PLUTO_COMP_COMP_STATE_VISIBLE = 3,
+	PLUTO_COMP_COMP_STATE_FOCUSED = 4,
 };
 
 /*!
@@ -146,14 +146,14 @@ pluto_compositor(struct xrt_compositor *xc)
  * @relates pluto_compositor
  * @ingroup comp_null
  */
-#define NULL_TRACE(c, ...) U_LOG_IFL_T(c->settings.log_level, __VA_ARGS__);
+#define PLUTO_COMP_TRACE(c, ...) U_LOG_IFL_T(c->settings.log_level, __VA_ARGS__);
 
 /*!
  * Debug level logging.
  *
  * @relates pluto_compositor
  */
-#define NULL_DEBUG(c, ...) U_LOG_IFL_D(c->settings.log_level, __VA_ARGS__);
+#define PLUTO_COMP_DEBUG(c, ...) U_LOG_IFL_D(c->settings.log_level, __VA_ARGS__);
 
 /*!
  * Info level logging.
@@ -161,7 +161,7 @@ pluto_compositor(struct xrt_compositor *xc)
  * @relates pluto_compositor
  * @ingroup comp_null
  */
-#define NULL_INFO(c, ...) U_LOG_IFL_I(c->settings.log_level, __VA_ARGS__);
+#define PLUTO_COMP_INFO(c, ...) U_LOG_IFL_I(c->settings.log_level, __VA_ARGS__);
 
 /*!
  * Warn level logging.
@@ -169,7 +169,7 @@ pluto_compositor(struct xrt_compositor *xc)
  * @relates pluto_compositor
  * @ingroup comp_null
  */
-#define NULL_WARN(c, ...) U_LOG_IFL_W(c->settings.log_level, __VA_ARGS__);
+#define PLUTO_COMP_WARN(c, ...) U_LOG_IFL_W(c->settings.log_level, __VA_ARGS__);
 
 /*!
  * Error level logging.
@@ -177,7 +177,7 @@ pluto_compositor(struct xrt_compositor *xc)
  * @relates pluto_compositor
  * @ingroup comp_null
  */
-#define NULL_ERROR(c, ...) U_LOG_IFL_E(c->settings.log_level, __VA_ARGS__);
+#define PLUTO_COMP_ERROR(c, ...) U_LOG_IFL_E(c->settings.log_level, __VA_ARGS__);
 
 
 #ifdef __cplusplus
