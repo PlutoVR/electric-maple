@@ -66,3 +66,19 @@ struct state_t
 	int socket_fd;
 	struct sockaddr_in socket_addr;
 };
+
+
+
+// render.cpp
+
+void
+initializeEGL(struct state_t &state);
+
+GLuint
+makeShaderProgram();
+
+void
+drawTriangle(GLuint shader_program);
+
+//
+

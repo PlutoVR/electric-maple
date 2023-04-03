@@ -2,17 +2,103 @@
 // SPDX-License-Identifier: MIT
 /*!
  * @file
- * @brief Very simple shader program to display a triangle. Safe to remove once we have something more interesting to
+ * @brief Very simple GLES3 renderer
  * render.
  * @author Moshi Turner <moses@collabora.com>
  */
 
-#pragma once
 #include "common.hpp"
 
+// Initialize EGL context. We'll need this going forward.
+void
+initializeEGL(struct state_t &state)
+{
+	state.display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+
+	if (state.display == EGL_NO_DISPLAY) {
+		U_LOG_E("Failed to get EGL display");
+		return;
+	}
+
+	bool success = eglInitialize(state.display, NULL, NULL);
+
+	if (!success) {
+		U_LOG_E("Failed to initialize EGL");
+		return;
+	}
+
+	EGLint configCount;
+	EGLConfig configs[1024];
+	success = eglGetConfigs(state.display, configs, 1024, &configCount);
+
+	if (!success) {
+		U_LOG_E("Failed to get EGL configs");
+		return;
+	}
+
+	const EGLint attributes[] = {EGL_RED_SIZE,   8, EGL_GREEN_SIZE,   8, EGL_BLUE_SIZE, 8, EGL_ALPHA_SIZE, 8,
+	                             EGL_DEPTH_SIZE, 0, EGL_STENCIL_SIZE, 0, EGL_SAMPLES,   0, EGL_NONE};
+
+	for (EGLint i = 0; i < configCount && !state.config; i++) {
+		EGLint renderableType;
+		EGLint surfaceType;
+
+		eglGetConfigAttrib(state.display, configs[i], EGL_RENDERABLE_TYPE, &renderableType);
+		eglGetConfigAttrib(state.display, configs[i], EGL_SURFACE_TYPE, &surfaceType);
+
+		if ((renderableType & EGL_OPENGL_ES3_BIT) == 0) {
+			continue;
+		}
+
+		if ((surfaceType & (EGL_PBUFFER_BIT | EGL_WINDOW_BIT)) != (EGL_PBUFFER_BIT | EGL_WINDOW_BIT)) {
+			continue;
+		}
+
+		for (size_t a = 0; a < sizeof(attributes) / sizeof(attributes[0]); a += 2) {
+			if (attributes[a] == EGL_NONE) {
+				state.config = configs[i];
+				break;
+			}
+
+			EGLint value;
+			eglGetConfigAttrib(state.display, configs[i], attributes[a], &value);
+			if (value != attributes[a + 1]) {
+				break;
+			}
+		}
+	}
+
+	if (!state.config) {
+		U_LOG_E("Failed to find suitable EGL config");
+	}
+
+	EGLint contextAttributes[] = {EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE};
+
+	if ((state.context = eglCreateContext(state.display, state.config, EGL_NO_CONTEXT, contextAttributes)) ==
+	    EGL_NO_CONTEXT) {
+		U_LOG_E("Failed to create EGL context");
+	}
+
+	EGLint surfaceAttributes[] = {EGL_WIDTH, 16, EGL_HEIGHT, 16, EGL_NONE};
+
+	if ((state.surface = eglCreatePbufferSurface(state.display, state.config, surfaceAttributes)) ==
+	    EGL_NO_SURFACE) {
+		U_LOG_E("Failed to create EGL surface");
+		eglDestroyContext(state.display, state.context);
+		return;
+	}
+
+	if (eglMakeCurrent(state.display, state.surface, state.surface, state.context) == EGL_FALSE) {
+		U_LOG_E("Failed to make EGL context current");
+		eglDestroySurface(state.display, state.surface);
+		eglDestroyContext(state.display, state.context);
+	}
+}
+
+// These two functions aren't important, just draw a triangle. We will remove them later
 
 GLuint
-make_program()
+makeShaderProgram()
 {
 	// Vertex shader program
 	const char *vertex_shader_source =

@@ -13,16 +13,21 @@
 
 #include "common.hpp"
 
-#include "unimportant_triangle.hpp"
-
 static state_t state = {};
 
 static void
-onAppCmd(struct android_app *app, int32_t cmd);
-
-static void
-initializeEGL(void);
-
+onAppCmd(struct android_app *app, int32_t cmd)
+{
+	switch (cmd) {
+	case APP_CMD_START: U_LOG_E("APP_CMD_START"); break;
+	case APP_CMD_RESUME: U_LOG_E("APP_CMD_RESUME"); break;
+	case APP_CMD_PAUSE: U_LOG_E("APP_CMD_PAUSE"); break;
+	case APP_CMD_STOP: U_LOG_E("APP_CMD_STOP"); break;
+	case APP_CMD_DESTROY: U_LOG_E("APP_CMD_DESTROY"); break;
+	case APP_CMD_INIT_WINDOW: U_LOG_E("APP_CMD_INIT_WINDOW"); break;
+	case APP_CMD_TERM_WINDOW: U_LOG_E("APP_CMD_TERM_WINDOW"); break;
+	}
+}
 
 void
 die_errno()
@@ -240,17 +245,9 @@ mainloop_one(struct state_t &state)
 	}
 
 	// Locate views, set up layers
-
-#if 0
-        XrView views[2] = {
-                [0].type = XR_TYPE_VIEW,
-                [1].type = XR_TYPE_VIEW
-        };
-#else
 	XrView views[2] = {};
 	views[0].type = XR_TYPE_VIEW;
 	views[1].type = XR_TYPE_VIEW;
-#endif
 
 
 	XrViewLocateInfo locateInfo = {.type = XR_TYPE_VIEW_LOCATE_INFO,
@@ -267,29 +264,6 @@ mainloop_one(struct state_t &state)
 		U_LOG_E("Failed to locate views");
 	}
 
-#if 0
-        XrCompositionLayerProjection layer = {
-                .type = XR_TYPE_COMPOSITION_LAYER_PROJECTION,
-                .space = state.worldSpace,
-                .viewCount = 2,
-                .views = (XrCompositionLayerProjectionView[2]) {
-                        {
-                                .type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW,
-                                .subImage = {state.swapchain,
-                                             {{0, 0}, {state.width, state.height}}},
-                                .pose = views[0].pose,
-                                .fov = views[0].fov
-                        },
-                        {
-                                .type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW,
-                                .subImage = {state.swapchain,
-                                             {{state.width, 0}, {state.width, state.height}}},
-                                .pose = views[1].pose,
-                                .fov = views[1].fov
-                        }
-                }
-        };
-#else
 	int width = state.width;
 	int height = state.height;
 	XrCompositionLayerProjection layer = {};
@@ -313,15 +287,9 @@ mainloop_one(struct state_t &state)
 	projectionViews[1].fov = views[1].fov;
 
 	layer.views = projectionViews;
-#endif
-
 
 	// Render
 
-	// ??
-	frameState.shouldRender = true;
-
-	if (frameState.shouldRender) {
 		uint32_t imageIndex;
 		result = xrAcquireSwapchainImage(state.swapchain, NULL, &imageIndex);
 
@@ -353,28 +321,16 @@ mainloop_one(struct state_t &state)
 
 
 		xrReleaseSwapchainImage(state.swapchain, NULL);
-	}
 
 	// Submit frame
 
-#if 0
-        XrFrameEndInfo endInfo = {
-                .type = XR_TYPE_FRAME_END_INFO,
-                .displayTime = frameState.predictedDisplayTime,
-                .environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE,
-                .layerCount = frameState.shouldRender,
-                .layers = (const XrCompositionLayerBaseHeader *[1]) {
-                        (XrCompositionLayerBaseHeader *) &layer
-                }
-        };
-#else
+
 	XrFrameEndInfo endInfo = {};
 	endInfo.type = XR_TYPE_FRAME_END_INFO;
 	endInfo.displayTime = frameState.predictedDisplayTime;
 	endInfo.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
 	endInfo.layerCount = frameState.shouldRender ? 1 : 0;
 	endInfo.layers = (const XrCompositionLayerBaseHeader *[1]){(XrCompositionLayerBaseHeader *)&layer};
-#endif
 
 	hmd_pose(state);
 
@@ -389,7 +345,7 @@ android_main(struct android_app *app)
 	(*app->activity->vm).AttachCurrentThread(&state.jni, NULL);
 	app->onAppCmd = onAppCmd;
 
-	initializeEGL();
+	initializeEGL(state);
 
 
 
@@ -413,16 +369,6 @@ android_main(struct android_app *app)
 
 	const char *extensions[] = {"XR_KHR_opengl_es_enable"};
 
-#if 0
-    XrInstanceCreateInfo instanceInfo = {
-            .type = XR_TYPE_INSTANCE_CREATE_INFO,
-            .applicationInfo.engineName = "N/A",
-            .applicationInfo.applicationName = "N/A",
-            .applicationInfo.apiVersion = XR_CURRENT_API_VERSION,
-            .enabledExtensionCount = sizeof(extensions) / sizeof(extensions[0]),
-            .enabledExtensionNames = extensions
-    };
-#else
 	XrInstanceCreateInfo instanceInfo = {};
 	instanceInfo.type = XR_TYPE_INSTANCE_CREATE_INFO;
 	instanceInfo.next = nullptr;
@@ -436,7 +382,6 @@ android_main(struct android_app *app)
 	instanceInfo.applicationInfo.apiVersion = XR_CURRENT_API_VERSION;
 	instanceInfo.enabledExtensionCount = sizeof(extensions) / sizeof(extensions[0]);
 	instanceInfo.enabledExtensionNames = extensions;
-#endif
 
 
 	result = xrCreateInstance(&instanceInfo, &state.instance);
@@ -461,19 +406,12 @@ android_main(struct android_app *app)
 		U_LOG_E("Failed to enumerate view configurations");
 	}
 
-	uint32_t viewCount = 0;
-#if 0
-    XrViewConfigurationView viewInfo[2] = {
-            [0].type = XR_TYPE_VIEW_CONFIGURATION_VIEW,
-            [1].type = XR_TYPE_VIEW_CONFIGURATION_VIEW
-    };
-#else
+
 	XrViewConfigurationView viewInfo[2] = {};
 	viewInfo[0].type = XR_TYPE_VIEW_CONFIGURATION_VIEW;
 	viewInfo[1].type = XR_TYPE_VIEW_CONFIGURATION_VIEW;
-#endif
 
-
+	uint32_t viewCount = 0;
 	xrEnumerateViewConfigurationViews(state.instance, state.system, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO, 0,
 	                                  &viewCount, NULL);
 	result = xrEnumerateViewConfigurationViews(state.instance, state.system,
@@ -509,20 +447,6 @@ android_main(struct android_app *app)
 	}
 
 	// OpenXR swapchain
-
-#if 0
-    XrSwapchainCreateInfo swapchainInfo = {
-            .type = XR_TYPE_SWAPCHAIN_CREATE_INFO,
-            .usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT,
-            .format = GL_SRGB8_ALPHA8,
-            .width = state.width * 2,
-            .height = state.height,
-            .sampleCount = 1,
-            .faceCount = 1,
-            .arraySize = 1,
-            .mipCount = 1
-    };
-#else
 	XrSwapchainCreateInfo swapchainInfo = {};
 	swapchainInfo.type = XR_TYPE_SWAPCHAIN_CREATE_INFO;
 	swapchainInfo.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT;
@@ -533,7 +457,6 @@ android_main(struct android_app *app)
 	swapchainInfo.faceCount = 1;
 	swapchainInfo.arraySize = 1;
 	swapchainInfo.mipCount = 1;
-#endif
 
 	result = xrCreateSwapchain(state.session, &swapchainInfo, &state.swapchain);
 
@@ -565,7 +488,7 @@ android_main(struct android_app *app)
 
 	create_spaces(state);
 
-	state.shader_program = make_program();
+	state.shader_program = makeShaderProgram();
 
 	really_make_socket(state);
 
@@ -578,107 +501,4 @@ android_main(struct android_app *app)
 	(*app->activity->vm).DetachCurrentThread();
 }
 
-JNIEXPORT void JNICALL
-Java_com_example_test_MainActivity_onPermissionsGranted(JNIEnv *jni, jobject activity)
-{
-	state.hasPermissions = true;
-}
 
-static void
-onAppCmd(struct android_app *app, int32_t cmd)
-{
-	switch (cmd) {
-	case APP_CMD_START: U_LOG_E("APP_CMD_START"); break;
-	case APP_CMD_RESUME: U_LOG_E("APP_CMD_RESUME"); break;
-	case APP_CMD_PAUSE: U_LOG_E("APP_CMD_PAUSE"); break;
-	case APP_CMD_STOP: U_LOG_E("APP_CMD_STOP"); break;
-	case APP_CMD_DESTROY: U_LOG_E("APP_CMD_DESTROY"); break;
-	case APP_CMD_INIT_WINDOW: U_LOG_E("APP_CMD_INIT_WINDOW"); break;
-	case APP_CMD_TERM_WINDOW: U_LOG_E("APP_CMD_TERM_WINDOW"); break;
-	}
-}
-
-static void
-initializeEGL(void)
-{
-	state.display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
-
-	if (state.display == EGL_NO_DISPLAY) {
-		U_LOG_E("Failed to get EGL display");
-		return;
-	}
-
-	bool success = eglInitialize(state.display, NULL, NULL);
-
-	if (!success) {
-		U_LOG_E("Failed to initialize EGL");
-		return;
-	}
-
-	EGLint configCount;
-	EGLConfig configs[1024];
-	success = eglGetConfigs(state.display, configs, 1024, &configCount);
-
-	if (!success) {
-		U_LOG_E("Failed to get EGL configs");
-		return;
-	}
-
-	const EGLint attributes[] = {EGL_RED_SIZE,   8, EGL_GREEN_SIZE,   8, EGL_BLUE_SIZE, 8, EGL_ALPHA_SIZE, 8,
-	                             EGL_DEPTH_SIZE, 0, EGL_STENCIL_SIZE, 0, EGL_SAMPLES,   0, EGL_NONE};
-
-	for (EGLint i = 0; i < configCount && !state.config; i++) {
-		EGLint renderableType;
-		EGLint surfaceType;
-
-		eglGetConfigAttrib(state.display, configs[i], EGL_RENDERABLE_TYPE, &renderableType);
-		eglGetConfigAttrib(state.display, configs[i], EGL_SURFACE_TYPE, &surfaceType);
-
-		if ((renderableType & EGL_OPENGL_ES3_BIT) == 0) {
-			continue;
-		}
-
-		if ((surfaceType & (EGL_PBUFFER_BIT | EGL_WINDOW_BIT)) != (EGL_PBUFFER_BIT | EGL_WINDOW_BIT)) {
-			continue;
-		}
-
-		for (size_t a = 0; a < sizeof(attributes) / sizeof(attributes[0]); a += 2) {
-			if (attributes[a] == EGL_NONE) {
-				state.config = configs[i];
-				break;
-			}
-
-			EGLint value;
-			eglGetConfigAttrib(state.display, configs[i], attributes[a], &value);
-			if (value != attributes[a + 1]) {
-				break;
-			}
-		}
-	}
-
-	if (!state.config) {
-		U_LOG_E("Failed to find suitable EGL config");
-	}
-
-	EGLint contextAttributes[] = {EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE};
-
-	if ((state.context = eglCreateContext(state.display, state.config, EGL_NO_CONTEXT, contextAttributes)) ==
-	    EGL_NO_CONTEXT) {
-		U_LOG_E("Failed to create EGL context");
-	}
-
-	EGLint surfaceAttributes[] = {EGL_WIDTH, 16, EGL_HEIGHT, 16, EGL_NONE};
-
-	if ((state.surface = eglCreatePbufferSurface(state.display, state.config, surfaceAttributes)) ==
-	    EGL_NO_SURFACE) {
-		U_LOG_E("Failed to create EGL surface");
-		eglDestroyContext(state.display, state.context);
-		return;
-	}
-
-	if (eglMakeCurrent(state.display, state.surface, state.surface, state.context) == EGL_FALSE) {
-		U_LOG_E("Failed to make EGL context current");
-		eglDestroySurface(state.display, state.surface);
-		eglDestroyContext(state.display, state.context);
-	}
-}
