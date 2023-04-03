@@ -27,7 +27,8 @@ fi
         cd $(dirname $0)/..
 
         find \
-                ./src \
+                ./server/src \
+                ./client/src \
                 \( -name "*.c" -o -name "*.cpp" -o -name "*.h" -o -name "*.hpp" \) \
                 -exec ${CLANGFORMAT} -i -style=file \{\} +
 )
