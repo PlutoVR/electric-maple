@@ -21,14 +21,10 @@
 extern "C" {
 #endif
 
-
-
 struct pluto_program
 {
 	//! Instance base.
 	struct xrt_instance xinst_base;
-
-
 
 	//! System devices base.
 	struct xrt_system_devices xsysd_base;
@@ -49,19 +45,6 @@ from_xsysd(struct xrt_system_devices *xsysd)
 {
 	return container_of(xsysd, struct pluto_program, xsysd_base);
 }
-
-// static inline struct pluto_program *
-// from_xdev(struct xrt_device *xdev)
-// {
-// 	return container_of(xdev, struct pluto_program, xdev_base);
-// }
-
-// static inline struct pluto_program *
-// from_comp(struct xrt_compositor *xc)
-// {
-// 	return container_of(xc, struct pluto_program, c.base.base);
-// }
-
 
 #ifdef __cplusplus
 }

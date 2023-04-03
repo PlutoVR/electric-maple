@@ -20,11 +20,6 @@
 
 #include "main/comp_main_interface.h"
 
-#if 0 && defined(XRT_BUILD_DRIVER_SIMULATED)
-#include "simulated/simulated_interface.h"
-#define USE_SIMULATED
-#endif
-
 extern "C" {
 
 /*
@@ -74,7 +69,7 @@ pluto_instance_create_system(struct xrt_instance *xinst,
 
 	struct xrt_system_compositor *xsysc = NULL;
 	struct xrt_space_overseer *xso = NULL;
-	// struct xrt_system_devices *xsysd = NULL;
+
 	xrt_result_t xret = XRT_SUCCESS;
 
 
@@ -83,26 +78,16 @@ pluto_instance_create_system(struct xrt_instance *xinst,
 	*out_xsysd = &sp->xsysd_base;
 	*out_xso = sp->xso;
 
-	// If we don't have a head role yet
-	if (sp->xsysd_base.roles.head == NULL) {
-		// pluto_d
-	}
-
 	// Early out if we only want devices.
 	if (out_xsysc == NULL) {
 		return XRT_SUCCESS;
 	}
 
-	//!@todo this is going to be null
-	struct xrt_device *head = sp->xsysd_base.roles.head;
-
-
-
-	//!@todo Create regular compositor?
-	// pluto_compositor_create_system(sp, out_xsysc);
+	//! @todo We're creating the regular compositor here, which is good for testing, but we need to make a
+	// Pluto-compositor :)
 
 	if (xret == XRT_SUCCESS && xsysc == NULL) {
-		xret = comp_main_create_system_compositor(head, NULL, &xsysc);
+		xret = comp_main_create_system_compositor(sp->xsysd_base.roles.head, NULL, &xsysc);
 	}
 
 	*out_xsysc = xsysc;
@@ -115,10 +100,7 @@ pluto_instance_destroy(struct xrt_instance *xinst)
 {
 	struct pluto_program *sp = from_xinst(xinst);
 
-	assert(false);
-
-	// Frees struct.
-	// pluto_program_plus_destroy(sp->spp);
+	delete sp;
 }
 
 
