@@ -8,9 +8,12 @@
 
 #pragma once
 
-#include <cstring>
-#include "util/u_logging.h"
+#define XR_USE_PLATFORM_ANDROID
+#define XR_USE_GRAPHICS_API_OPENGL_ES
 
+#include "util/u_logging.h"
+#include "util/u_time.h"
+#include "os/os_time.h"
 
 #include <android_native_app_glue.h>
 #include <GLES3/gl3.h>
@@ -18,11 +21,7 @@
 #include <EGL/egl.h>
 #include <android/log.h>
 #include <jni.h>
-#include <stdbool.h>
 
-
-#define XR_USE_PLATFORM_ANDROID
-#define XR_USE_GRAPHICS_API_OPENGL_ES
 
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
@@ -33,6 +32,10 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+
+#include <string.h>
+#include <stdbool.h>
+
 
 #define XR_LOAD(fn) xrGetInstanceProcAddr(state.instance, #fn, (PFN_xrVoidFunction *)&fn);
 
@@ -59,11 +62,6 @@ struct state_t
 	uint32_t imageCount;
 	uint32_t width;
 	uint32_t height;
-
-	// Remove this! This is a hack because Moshi didn't really have time to figure out how to get system time on
-	// Android!
-	XrTime last_predicted_display_time;
-
 
 	int socket_fd;
 	struct sockaddr_in socket_addr;

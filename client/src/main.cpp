@@ -28,7 +28,6 @@ void
 die_errno()
 {
 	U_LOG_E("Something happened! %s", strerror(errno));
-	//	assert(false);
 }
 
 
@@ -73,7 +72,7 @@ hmd_pose(struct state_t &st)
 	XrSpaceLocation hmdLocalLocation = {};
 	hmdLocalLocation.type = XR_TYPE_SPACE_LOCATION;
 	hmdLocalLocation.next = NULL;
-	result = xrLocateSpace(st.viewSpace, st.worldSpace, state.last_predicted_display_time, &hmdLocalLocation);
+	result = xrLocateSpace(st.viewSpace, st.worldSpace, os_monotonic_get_ns(), &hmdLocalLocation);
 	if (result != XR_SUCCESS) {
 		U_LOG_E("Bad!");
 	}
@@ -135,6 +134,253 @@ create_spaces(struct state_t &st)
 	}
 }
 
+
+void
+mainloop_one(struct state_t &state)
+{
+
+
+	// Poll Android events
+
+	for (;;) {
+		int events;
+		struct android_poll_source *source;
+		bool wait = !state.app->window || state.app->activityState != APP_CMD_RESUME;
+		int timeout = wait ? -1 : 0;
+		if (ALooper_pollAll(timeout, NULL, &events, (void **)&source) >= 0) {
+			if (source) {
+				source->process(state.app, source);
+			}
+
+			if (timeout == 0 && (!state.app->window || state.app->activityState != APP_CMD_RESUME)) {
+				break;
+			}
+		} else {
+			break;
+		}
+	}
+
+	// Poll OpenXR events
+	XrResult result = XR_SUCCESS;
+	XrEventDataBuffer buffer;
+	buffer.type = XR_TYPE_EVENT_DATA_BUFFER;
+	buffer.next = NULL;
+
+	while (xrPollEvent(state.instance, &buffer) == XR_SUCCESS) {
+		if (buffer.type == XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED) {
+			XrEventDataSessionStateChanged *event = (XrEventDataSessionStateChanged *)&buffer;
+
+			switch (event->state) {
+			case XR_SESSION_STATE_IDLE: U_LOG_E("OpenXR session is now IDLE"); break;
+			case XR_SESSION_STATE_READY: U_LOG_E("OpenXR session is now READY, beginning session");
+
+#if 0
+                        result = xrBeginSession(state.session, &(XrSessionBeginInfo) {
+                                .type = XR_TYPE_SESSION_BEGIN_INFO,
+                                .primaryViewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO
+                        });
+#else
+				{
+					XrSessionBeginInfo beginInfo = {};
+					beginInfo.type = XR_TYPE_SESSION_BEGIN_INFO;
+					beginInfo.primaryViewConfigurationType =
+					    XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
+
+					result = xrBeginSession(state.session, &beginInfo);
+				}
+#endif
+
+				if (XR_FAILED(result)) {
+					U_LOG_E("Failed to begin OpenXR session (%d)", result);
+				}
+
+				break;
+			case XR_SESSION_STATE_SYNCHRONIZED: U_LOG_E("OpenXR session is now SYNCHRONIZED"); break;
+			case XR_SESSION_STATE_VISIBLE: U_LOG_E("OpenXR session is now VISIBLE"); break;
+			case XR_SESSION_STATE_FOCUSED: U_LOG_E("OpenXR session is now FOCUSED"); break;
+			case XR_SESSION_STATE_STOPPING:
+				U_LOG_E("OpenXR session is now STOPPING");
+				xrEndSession(state.session);
+				break;
+			case XR_SESSION_STATE_LOSS_PENDING: U_LOG_E("OpenXR session is now LOSS_PENDING"); break;
+			case XR_SESSION_STATE_EXITING: U_LOG_E("OpenXR session is now EXITING"); break;
+			default: break;
+			}
+
+			state.sessionState = event->state;
+		}
+
+		buffer.type = XR_TYPE_EVENT_DATA_BUFFER;
+	}
+
+	// Spin until session is ready
+	if (state.sessionState < XR_SESSION_STATE_READY) {
+		U_LOG_E("Waiting!");
+		os_nanosleep(U_TIME_1MS_IN_NS * 100);
+		return;
+	}
+
+	// Begin frame
+
+	XrFrameState frameState = {.type = XR_TYPE_FRAME_STATE};
+
+
+	result = xrWaitFrame(state.session, NULL, &frameState);
+
+	if (XR_FAILED(result)) {
+		U_LOG_E("xrWaitFrame failed");
+	}
+
+	XrFrameBeginInfo beginfo = {.type = XR_TYPE_FRAME_BEGIN_INFO};
+
+	result = xrBeginFrame(state.session, &beginfo);
+
+	if (XR_FAILED(result)) {
+		U_LOG_E("xrBeginFrame failed");
+	}
+
+	// Locate views, set up layers
+
+#if 0
+        XrView views[2] = {
+                [0].type = XR_TYPE_VIEW,
+                [1].type = XR_TYPE_VIEW
+        };
+#else
+	XrView views[2] = {};
+	views[0].type = XR_TYPE_VIEW;
+	views[1].type = XR_TYPE_VIEW;
+#endif
+
+
+	XrViewLocateInfo locateInfo = {.type = XR_TYPE_VIEW_LOCATE_INFO,
+	                               .viewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO,
+	                               .displayTime = frameState.predictedDisplayTime,
+	                               .space = state.worldSpace};
+
+	XrViewState viewState = {.type = XR_TYPE_VIEW_STATE};
+
+	uint32_t viewCount = 2;
+	result = xrLocateViews(state.session, &locateInfo, &viewState, 2, &viewCount, views);
+
+	if (XR_FAILED(result)) {
+		U_LOG_E("Failed to locate views");
+	}
+
+#if 0
+        XrCompositionLayerProjection layer = {
+                .type = XR_TYPE_COMPOSITION_LAYER_PROJECTION,
+                .space = state.worldSpace,
+                .viewCount = 2,
+                .views = (XrCompositionLayerProjectionView[2]) {
+                        {
+                                .type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW,
+                                .subImage = {state.swapchain,
+                                             {{0, 0}, {state.width, state.height}}},
+                                .pose = views[0].pose,
+                                .fov = views[0].fov
+                        },
+                        {
+                                .type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW,
+                                .subImage = {state.swapchain,
+                                             {{state.width, 0}, {state.width, state.height}}},
+                                .pose = views[1].pose,
+                                .fov = views[1].fov
+                        }
+                }
+        };
+#else
+	int width = state.width;
+	int height = state.height;
+	XrCompositionLayerProjection layer = {};
+	layer.type = XR_TYPE_COMPOSITION_LAYER_PROJECTION;
+	layer.space = state.worldSpace;
+	layer.viewCount = 2;
+
+	XrCompositionLayerProjectionView projectionViews[2] = {};
+	projectionViews[0].type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW;
+	projectionViews[0].subImage.swapchain = state.swapchain;
+	projectionViews[0].subImage.imageRect.offset = {0, 0};
+	projectionViews[0].subImage.imageRect.extent = {width, height};
+	projectionViews[0].pose = views[0].pose;
+	projectionViews[0].fov = views[0].fov;
+
+	projectionViews[1].type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW;
+	projectionViews[1].subImage.swapchain = state.swapchain;
+	projectionViews[1].subImage.imageRect.offset = {width, 0};
+	projectionViews[1].subImage.imageRect.extent = {width, height};
+	projectionViews[1].pose = views[1].pose;
+	projectionViews[1].fov = views[1].fov;
+
+	layer.views = projectionViews;
+#endif
+
+
+	// Render
+
+	// ??
+	frameState.shouldRender = true;
+
+	if (frameState.shouldRender) {
+		uint32_t imageIndex;
+		result = xrAcquireSwapchainImage(state.swapchain, NULL, &imageIndex);
+
+		if (XR_FAILED(result)) {
+			U_LOG_E("Failed to acquire swapchain image (%d)", result);
+		}
+
+		XrSwapchainImageWaitInfo waitInfo = {.type = XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO,
+		                                     .timeout = XR_INFINITE_DURATION};
+
+		result = xrWaitSwapchainImage(state.swapchain, &waitInfo);
+
+		if (XR_FAILED(result)) {
+			U_LOG_E("Failed to wait for swapchain image (%d)", result);
+		}
+
+
+		glBindFramebuffer(GL_FRAMEBUFFER, state.framebuffers[imageIndex]);
+
+		// Just display purple nothingness
+		for (uint32_t eye = 0; eye < 2; eye++) {
+			glViewport(eye * state.width, 0, state.width, state.height);
+			drawTriangle(state.shader_program);
+		}
+
+		// Release
+
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+
+		xrReleaseSwapchainImage(state.swapchain, NULL);
+	}
+
+	// Submit frame
+
+#if 0
+        XrFrameEndInfo endInfo = {
+                .type = XR_TYPE_FRAME_END_INFO,
+                .displayTime = frameState.predictedDisplayTime,
+                .environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE,
+                .layerCount = frameState.shouldRender,
+                .layers = (const XrCompositionLayerBaseHeader *[1]) {
+                        (XrCompositionLayerBaseHeader *) &layer
+                }
+        };
+#else
+	XrFrameEndInfo endInfo = {};
+	endInfo.type = XR_TYPE_FRAME_END_INFO;
+	endInfo.displayTime = frameState.predictedDisplayTime;
+	endInfo.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
+	endInfo.layerCount = frameState.shouldRender ? 1 : 0;
+	endInfo.layers = (const XrCompositionLayerBaseHeader *[1]){(XrCompositionLayerBaseHeader *)&layer};
+#endif
+
+	hmd_pose(state);
+
+	xrEndFrame(state.session, &endInfo);
+}
+
 void
 android_main(struct android_app *app)
 {
@@ -181,10 +427,10 @@ android_main(struct android_app *app)
 	instanceInfo.type = XR_TYPE_INSTANCE_CREATE_INFO;
 	instanceInfo.next = nullptr;
 
-	std::strncpy(instanceInfo.applicationInfo.engineName, "N/A", XR_MAX_APPLICATION_NAME_SIZE - 1);
+	strncpy(instanceInfo.applicationInfo.engineName, "N/A", XR_MAX_APPLICATION_NAME_SIZE - 1);
 	instanceInfo.applicationInfo.engineName[XR_MAX_APPLICATION_NAME_SIZE - 1] = '\0';
 
-	std::strncpy(instanceInfo.applicationInfo.applicationName, "N/A", XR_MAX_APPLICATION_NAME_SIZE - 1);
+	strncpy(instanceInfo.applicationInfo.applicationName, "N/A", XR_MAX_APPLICATION_NAME_SIZE - 1);
 	instanceInfo.applicationInfo.applicationName[XR_MAX_APPLICATION_NAME_SIZE - 1] = '\0';
 
 	instanceInfo.applicationInfo.apiVersion = XR_CURRENT_API_VERSION;
@@ -235,6 +481,7 @@ android_main(struct android_app *app)
 
 	if (XR_FAILED(result) || viewCount != 2) {
 		U_LOG_E("Failed to enumerate view configuration views");
+		return;
 	}
 
 	state.width = viewInfo[0].recommendedImageRectWidth;
@@ -315,278 +562,17 @@ android_main(struct android_app *app)
 		}
 	}
 
-	// Space
 
-#if 0
-	XrReferenceSpaceCreateInfo spaceInfo = {.type = XR_TYPE_REFERENCE_SPACE_CREATE_INFO,
-	                                        .referenceSpaceType = XR_REFERENCE_SPACE_TYPE_STAGE,
-	                                        .poseInReferenceSpace = {{0.f, 0.f, 0.f, 1.f}, {0.f, 0.f, 0.f}}};
-
-
-	result = xrCreateReferenceSpace(state.session, &spaceInfo, &state.worldSpace);
-
-	if (XR_FAILED(result)) {
-		U_LOG_E("Failed to create reference space (%d)", result);
-	}
-#else
 	create_spaces(state);
-#endif
-	state.shader_program = make_program();
 
-	// Loop
+	state.shader_program = make_program();
 
 	really_make_socket(state);
 
 
-
+	// Mainloop
 	while (!app->destroyRequested) {
-
-		// Poll Android events
-
-		for (;;) {
-			int events;
-			struct android_poll_source *source;
-			bool wait = !app->window || app->activityState != APP_CMD_RESUME;
-			int timeout = wait ? -1 : 0;
-			if (ALooper_pollAll(timeout, NULL, &events, (void **)&source) >= 0) {
-				if (source) {
-					source->process(app, source);
-				}
-
-				if (timeout == 0 && (!app->window || app->activityState != APP_CMD_RESUME)) {
-					break;
-				}
-			} else {
-				break;
-			}
-		}
-
-		// Poll OpenXR events
-
-		XrEventDataBuffer buffer;
-		buffer.type = XR_TYPE_EVENT_DATA_BUFFER;
-		buffer.next = NULL;
-
-		while (xrPollEvent(state.instance, &buffer) == XR_SUCCESS) {
-			if (buffer.type == XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED) {
-				XrEventDataSessionStateChanged *event = (XrEventDataSessionStateChanged *)&buffer;
-
-				switch (event->state) {
-				case XR_SESSION_STATE_IDLE: U_LOG_E("OpenXR session is now IDLE"); break;
-				case XR_SESSION_STATE_READY: U_LOG_E("OpenXR session is now READY, beginning session");
-
-#if 0
-                        result = xrBeginSession(state.session, &(XrSessionBeginInfo) {
-                                .type = XR_TYPE_SESSION_BEGIN_INFO,
-                                .primaryViewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO
-                        });
-#else
-					{
-						XrSessionBeginInfo beginInfo = {};
-						beginInfo.type = XR_TYPE_SESSION_BEGIN_INFO;
-						beginInfo.primaryViewConfigurationType =
-						    XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
-
-						result = xrBeginSession(state.session, &beginInfo);
-					}
-#endif
-
-					if (XR_FAILED(result)) {
-						U_LOG_E("Failed to begin OpenXR session (%d)", result);
-					}
-
-					break;
-				case XR_SESSION_STATE_SYNCHRONIZED:
-					U_LOG_E("OpenXR session is now SYNCHRONIZED");
-					break;
-				case XR_SESSION_STATE_VISIBLE: U_LOG_E("OpenXR session is now VISIBLE"); break;
-				case XR_SESSION_STATE_FOCUSED: U_LOG_E("OpenXR session is now FOCUSED"); break;
-				case XR_SESSION_STATE_STOPPING:
-					U_LOG_E("OpenXR session is now STOPPING");
-					xrEndSession(state.session);
-					break;
-				case XR_SESSION_STATE_LOSS_PENDING:
-					U_LOG_E("OpenXR session is now LOSS_PENDING");
-					break;
-				case XR_SESSION_STATE_EXITING: U_LOG_E("OpenXR session is now EXITING"); break;
-				default: break;
-				}
-
-				state.sessionState = event->state;
-			}
-
-			buffer.type = XR_TYPE_EVENT_DATA_BUFFER;
-		}
-
-		// Spin until session is ready and permissions are granted
-
-		if (state.sessionState < XR_SESSION_STATE_READY) { // || !state.hasPermissions) {
-			U_LOG_E("Waiting!");
-			continue;
-		}
-
-		// Begin frame
-
-		XrFrameState frameState = {.type = XR_TYPE_FRAME_STATE};
-
-
-		result = xrWaitFrame(state.session, NULL, &frameState);
-
-		if (XR_FAILED(result)) {
-			U_LOG_E("xrWaitFrame failed");
-		}
-
-		// HACK!!!!
-		state.last_predicted_display_time = frameState.predictedDisplayTime;
-
-		XrFrameBeginInfo beginfo = {.type = XR_TYPE_FRAME_BEGIN_INFO};
-
-		result = xrBeginFrame(state.session, &beginfo);
-
-		if (XR_FAILED(result)) {
-			U_LOG_E("xrBeginFrame failed");
-		}
-
-		// Locate views, set up layers
-
-#if 0
-        XrView views[2] = {
-                [0].type = XR_TYPE_VIEW,
-                [1].type = XR_TYPE_VIEW
-        };
-#else
-		XrView views[2] = {};
-		views[0].type = XR_TYPE_VIEW;
-		views[1].type = XR_TYPE_VIEW;
-#endif
-
-
-		XrViewLocateInfo locateInfo = {.type = XR_TYPE_VIEW_LOCATE_INFO,
-		                               .viewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO,
-		                               .displayTime = frameState.predictedDisplayTime,
-		                               .space = state.worldSpace};
-
-		XrViewState viewState = {.type = XR_TYPE_VIEW_STATE};
-
-		//        uint32_t viewCount = {};
-		result = xrLocateViews(state.session, &locateInfo, &viewState, 2, &viewCount, views);
-
-		if (XR_FAILED(result)) {
-			U_LOG_E("Failed to locate views");
-		}
-
-#if 0
-        XrCompositionLayerProjection layer = {
-                .type = XR_TYPE_COMPOSITION_LAYER_PROJECTION,
-                .space = state.worldSpace,
-                .viewCount = 2,
-                .views = (XrCompositionLayerProjectionView[2]) {
-                        {
-                                .type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW,
-                                .subImage = {state.swapchain,
-                                             {{0, 0}, {state.width, state.height}}},
-                                .pose = views[0].pose,
-                                .fov = views[0].fov
-                        },
-                        {
-                                .type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW,
-                                .subImage = {state.swapchain,
-                                             {{state.width, 0}, {state.width, state.height}}},
-                                .pose = views[1].pose,
-                                .fov = views[1].fov
-                        }
-                }
-        };
-#else
-		int width = state.width;
-		int height = state.height;
-		XrCompositionLayerProjection layer = {};
-		layer.type = XR_TYPE_COMPOSITION_LAYER_PROJECTION;
-		layer.space = state.worldSpace;
-		layer.viewCount = 2;
-
-		XrCompositionLayerProjectionView projectionViews[2] = {};
-		projectionViews[0].type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW;
-		projectionViews[0].subImage.swapchain = state.swapchain;
-		projectionViews[0].subImage.imageRect.offset = {0, 0};
-		projectionViews[0].subImage.imageRect.extent = {width, height};
-		projectionViews[0].pose = views[0].pose;
-		projectionViews[0].fov = views[0].fov;
-
-		projectionViews[1].type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW;
-		projectionViews[1].subImage.swapchain = state.swapchain;
-		projectionViews[1].subImage.imageRect.offset = {width, 0};
-		projectionViews[1].subImage.imageRect.extent = {width, height};
-		projectionViews[1].pose = views[1].pose;
-		projectionViews[1].fov = views[1].fov;
-
-		layer.views = projectionViews;
-#endif
-
-
-		// Render
-
-		// ??
-		frameState.shouldRender = true;
-
-		if (frameState.shouldRender) {
-			uint32_t imageIndex;
-			result = xrAcquireSwapchainImage(state.swapchain, NULL, &imageIndex);
-
-			if (XR_FAILED(result)) {
-				U_LOG_E("Failed to acquire swapchain image (%d)", result);
-			}
-
-			XrSwapchainImageWaitInfo waitInfo = {.type = XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO,
-			                                     .timeout = XR_INFINITE_DURATION};
-
-			result = xrWaitSwapchainImage(state.swapchain, &waitInfo);
-
-			if (XR_FAILED(result)) {
-				U_LOG_E("Failed to wait for swapchain image (%d)", result);
-			}
-
-
-			glBindFramebuffer(GL_FRAMEBUFFER, state.framebuffers[imageIndex]);
-
-			// Just display purple nothingness
-			for (uint32_t eye = 0; eye < 2; eye++) {
-				glViewport(eye * state.width, 0, state.width, state.height);
-				drawTriangle(state.shader_program);
-			}
-
-			// Release
-
-			glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-
-			xrReleaseSwapchainImage(state.swapchain, NULL);
-		}
-
-		// Submit frame
-
-#if 0
-        XrFrameEndInfo endInfo = {
-                .type = XR_TYPE_FRAME_END_INFO,
-                .displayTime = frameState.predictedDisplayTime,
-                .environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE,
-                .layerCount = frameState.shouldRender,
-                .layers = (const XrCompositionLayerBaseHeader *[1]) {
-                        (XrCompositionLayerBaseHeader *) &layer
-                }
-        };
-#else
-		XrFrameEndInfo endInfo = {};
-		endInfo.type = XR_TYPE_FRAME_END_INFO;
-		endInfo.displayTime = frameState.predictedDisplayTime;
-		endInfo.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
-		endInfo.layerCount = frameState.shouldRender ? 1 : 0;
-		endInfo.layers = (const XrCompositionLayerBaseHeader *[1]){(XrCompositionLayerBaseHeader *)&layer};
-#endif
-
-		hmd_pose(state);
-
-		xrEndFrame(state.session, &endInfo);
+		mainloop_one(state);
 	}
 
 	(*app->activity->vm).DetachCurrentThread();
