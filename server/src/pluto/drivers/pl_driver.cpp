@@ -201,8 +201,8 @@ run_comms_thread(struct pluto_hmd *ph_ptr)
 		}
 
 		ph.pose.position.x = message.P_localSpace_viewSpace.position.x;
-		ph.pose.position.x = message.P_localSpace_viewSpace.position.y;
-		ph.pose.position.x = message.P_localSpace_viewSpace.position.z;
+		ph.pose.position.y = message.P_localSpace_viewSpace.position.y;
+		ph.pose.position.z = message.P_localSpace_viewSpace.position.z;
 
 		ph.pose.orientation.w = message.P_localSpace_viewSpace.orientation.w;
 		ph.pose.orientation.x = message.P_localSpace_viewSpace.orientation.x;
