@@ -1,11 +1,9 @@
-// Copyright 2020-2023, Collabora, Ltd.
+// Copyright 2023, Pluto VR, Inc.
 // SPDX-License-Identifier: MIT
 /*!
  * @file
  * @brief Pluto HMD device
  *
- * @author Jakob Bornecrantz <jakob@collabora.com>
- * @author Ryan Pavlik <ryan.pavlik@collabora.com>
  * @author Moshi Turner <moses@collabora.com>
  * @ingroup drv_sample
  */

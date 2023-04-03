@@ -1,4 +1,4 @@
-# Copyright 2018-2022, Collabora, Ltd.
+# Copyright 2023, Pluto VR, Inc.
 # SPDX-License-Identifier: MIT
 
 cmake_minimum_required(VERSION 3.10.2)
