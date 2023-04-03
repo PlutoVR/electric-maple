@@ -89,7 +89,7 @@ pluto_instance_create_system(struct xrt_instance *xinst,
 
 	if (xret == XRT_SUCCESS && xsysc == NULL) {
 		// xret = comp_main_create_system_compositor(sp->xsysd_base.roles.head, NULL, &xsysc);
-		xret = null_compositor_create_system(sp->xsysd_base.roles.head, &xsysc);
+		xret = pluto_compositor_create_system(sp->xsysd_base.roles.head, &xsysc);
 	}
 
 	*out_xsysc = xsysc;

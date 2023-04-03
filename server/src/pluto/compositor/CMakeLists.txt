@@ -12,6 +12,5 @@ target_link_libraries(
 		comp_util
 		comp_multi
 	)
-	target_include_directories(comp_pluto PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-	target_include_directories(comp_pluto INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
-
+target_include_directories(comp_pluto PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(comp_pluto INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})

@@ -42,7 +42,7 @@ DEBUG_GET_ONCE_LOG_OPTION(log, "XRT_COMPOSITOR_LOG", U_LOGGING_INFO)
  */
 
 static struct vk_bundle *
-get_vk(struct null_compositor *c)
+get_vk(struct pluto_compositor *c)
 {
 	return &c->base.vk;
 }
@@ -133,7 +133,7 @@ static const char *optional_device_extensions[] = {
 };
 
 static VkResult
-select_instances_extensions(struct null_compositor *c, struct u_string_list *required, struct u_string_list *optional)
+select_instances_extensions(struct pluto_compositor *c, struct u_string_list *required, struct u_string_list *optional)
 {
 #ifdef VK_EXT_display_surface_counter
 	u_string_list_append(optional, VK_EXT_DISPLAY_SURFACE_COUNTER_EXTENSION_NAME);
@@ -143,7 +143,7 @@ select_instances_extensions(struct null_compositor *c, struct u_string_list *req
 }
 
 static bool
-compositor_init_vulkan(struct null_compositor *c)
+compositor_init_vulkan(struct pluto_compositor *c)
 {
 	struct vk_bundle *vk = get_vk(c);
 	VkResult ret;
@@ -220,7 +220,7 @@ compositor_init_vulkan(struct null_compositor *c)
  */
 
 static bool
-compositor_init_pacing(struct null_compositor *c)
+compositor_init_pacing(struct pluto_compositor *c)
 {
 	xrt_result_t xret = u_pc_fake_create(c->settings.frame_interval_ns, os_monotonic_get_ns(), &c->upc);
 	if (xret != XRT_SUCCESS) {
@@ -232,7 +232,7 @@ compositor_init_pacing(struct null_compositor *c)
 }
 
 static bool
-compositor_init_info(struct null_compositor *c)
+compositor_init_info(struct pluto_compositor *c)
 {
 	struct xrt_compositor_info *info = &c->base.base.base.info;
 
@@ -245,7 +245,7 @@ compositor_init_info(struct null_compositor *c)
 }
 
 static bool
-compositor_init_sys_info(struct null_compositor *c, struct xrt_device *xdev)
+compositor_init_sys_info(struct pluto_compositor *c, struct xrt_device *xdev)
 {
 	struct xrt_system_compositor_info *sys_info = &c->sys_info;
 
@@ -299,9 +299,9 @@ compositor_init_sys_info(struct null_compositor *c, struct xrt_device *xdev)
  */
 
 static xrt_result_t
-null_compositor_begin_session(struct xrt_compositor *xc, enum xrt_view_type type)
+pluto_compositor_begin_session(struct xrt_compositor *xc, enum xrt_view_type type)
 {
-	struct null_compositor *c = null_compositor(xc);
+	struct pluto_compositor *c = pluto_compositor(xc);
 	NULL_DEBUG(c, "BEGIN_SESSION");
 
 	/*
@@ -313,9 +313,9 @@ null_compositor_begin_session(struct xrt_compositor *xc, enum xrt_view_type type
 }
 
 static xrt_result_t
-null_compositor_end_session(struct xrt_compositor *xc)
+pluto_compositor_end_session(struct xrt_compositor *xc)
 {
-	struct null_compositor *c = null_compositor(xc);
+	struct pluto_compositor *c = pluto_compositor(xc);
 	NULL_DEBUG(c, "END_SESSION");
 
 	/*
@@ -327,7 +327,7 @@ null_compositor_end_session(struct xrt_compositor *xc)
 }
 
 static xrt_result_t
-null_compositor_predict_frame(struct xrt_compositor *xc,
+pluto_compositor_predict_frame(struct xrt_compositor *xc,
                               int64_t *out_frame_id,
                               uint64_t *out_wake_time_ns,
                               uint64_t *out_predicted_gpu_time_ns,
@@ -336,7 +336,7 @@ null_compositor_predict_frame(struct xrt_compositor *xc,
 {
 	COMP_TRACE_MARKER();
 
-	struct null_compositor *c = null_compositor(xc);
+	struct pluto_compositor *c = pluto_compositor(xc);
 	NULL_TRACE(c, "PREDICT_FRAME");
 
 	uint64_t now_ns = os_monotonic_get_ns();
@@ -359,14 +359,14 @@ null_compositor_predict_frame(struct xrt_compositor *xc,
 }
 
 static xrt_result_t
-null_compositor_mark_frame(struct xrt_compositor *xc,
+pluto_compositor_mark_frame(struct xrt_compositor *xc,
                            int64_t frame_id,
                            enum xrt_compositor_frame_point point,
                            uint64_t when_ns)
 {
 	COMP_TRACE_MARKER();
 
-	struct null_compositor *c = null_compositor(xc);
+	struct pluto_compositor *c = pluto_compositor(xc);
 	NULL_TRACE(c, "MARK_FRAME %i", point);
 
 	switch (point) {
@@ -380,9 +380,9 @@ null_compositor_mark_frame(struct xrt_compositor *xc,
 }
 
 static xrt_result_t
-null_compositor_begin_frame(struct xrt_compositor *xc, int64_t frame_id)
+pluto_compositor_begin_frame(struct xrt_compositor *xc, int64_t frame_id)
 {
-	struct null_compositor *c = null_compositor(xc);
+	struct pluto_compositor *c = pluto_compositor(xc);
 	NULL_TRACE(c, "BEGIN_FRAME");
 
 	/*
@@ -394,9 +394,9 @@ null_compositor_begin_frame(struct xrt_compositor *xc, int64_t frame_id)
 }
 
 static xrt_result_t
-null_compositor_discard_frame(struct xrt_compositor *xc, int64_t frame_id)
+pluto_compositor_discard_frame(struct xrt_compositor *xc, int64_t frame_id)
 {
-	struct null_compositor *c = null_compositor(xc);
+	struct pluto_compositor *c = pluto_compositor(xc);
 	NULL_TRACE(c, "DISCARD_FRAME");
 
 	// Shouldn't be called.
@@ -406,11 +406,11 @@ null_compositor_discard_frame(struct xrt_compositor *xc, int64_t frame_id)
 }
 
 static xrt_result_t
-null_compositor_layer_commit(struct xrt_compositor *xc, int64_t frame_id, xrt_graphics_sync_handle_t sync_handle)
+pluto_compositor_layer_commit(struct xrt_compositor *xc, int64_t frame_id, xrt_graphics_sync_handle_t sync_handle)
 {
 	COMP_TRACE_MARKER();
 
-	struct null_compositor *c = null_compositor(xc);
+	struct pluto_compositor *c = pluto_compositor(xc);
 	NULL_TRACE(c, "LAYER_COMMIT");
 
 	/*
@@ -445,9 +445,9 @@ null_compositor_layer_commit(struct xrt_compositor *xc, int64_t frame_id, xrt_gr
 }
 
 static xrt_result_t
-null_compositor_poll_events(struct xrt_compositor *xc, union xrt_compositor_event *out_xce)
+pluto_compositor_poll_events(struct xrt_compositor *xc, union xrt_compositor_event *out_xce)
 {
-	struct null_compositor *c = null_compositor(xc);
+	struct pluto_compositor *c = pluto_compositor(xc);
 	NULL_TRACE(c, "POLL_EVENTS");
 
 	/*
@@ -488,9 +488,9 @@ null_compositor_poll_events(struct xrt_compositor *xc, union xrt_compositor_even
 }
 
 static void
-null_compositor_destroy(struct xrt_compositor *xc)
+pluto_compositor_destroy(struct xrt_compositor *xc)
 {
-	struct null_compositor *c = null_compositor(xc);
+	struct pluto_compositor *c = pluto_compositor(xc);
 	struct vk_bundle *vk = get_vk(c);
 
 	NULL_DEBUG(c, "NULL_COMP_DESTROY");
@@ -531,19 +531,19 @@ null_compositor_destroy(struct xrt_compositor *xc)
  */
 
 xrt_result_t
-null_compositor_create_system(struct xrt_device *xdev, struct xrt_system_compositor **out_xsysc)
+pluto_compositor_create_system(struct xrt_device *xdev, struct xrt_system_compositor **out_xsysc)
 {
-	struct null_compositor *c = U_TYPED_CALLOC(struct null_compositor);
+	struct pluto_compositor *c = U_TYPED_CALLOC(struct pluto_compositor);
 
-	c->base.base.base.begin_session = null_compositor_begin_session;
-	c->base.base.base.end_session = null_compositor_end_session;
-	c->base.base.base.predict_frame = null_compositor_predict_frame;
-	c->base.base.base.mark_frame = null_compositor_mark_frame;
-	c->base.base.base.begin_frame = null_compositor_begin_frame;
-	c->base.base.base.discard_frame = null_compositor_discard_frame;
-	c->base.base.base.layer_commit = null_compositor_layer_commit;
-	c->base.base.base.poll_events = null_compositor_poll_events;
-	c->base.base.base.destroy = null_compositor_destroy;
+	c->base.base.base.begin_session = pluto_compositor_begin_session;
+	c->base.base.base.end_session = pluto_compositor_end_session;
+	c->base.base.base.predict_frame = pluto_compositor_predict_frame;
+	c->base.base.base.mark_frame = pluto_compositor_mark_frame;
+	c->base.base.base.begin_frame = pluto_compositor_begin_frame;
+	c->base.base.base.discard_frame = pluto_compositor_discard_frame;
+	c->base.base.base.layer_commit = pluto_compositor_layer_commit;
+	c->base.base.base.poll_events = pluto_compositor_poll_events;
+	c->base.base.base.destroy = pluto_compositor_destroy;
 	c->settings.log_level = debug_get_log_option_log();
 	c->frame.waited.id = -1;
 	c->frame.rendering.id = -1;

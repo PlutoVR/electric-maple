@@ -87,7 +87,7 @@ struct null_comp_frame
  * @implements xrt_compositor_native, comp_base.
  * @ingroup comp_null
  */
-struct null_compositor
+struct pluto_compositor
 {
 	struct comp_base base;
 
@@ -128,22 +128,22 @@ struct null_compositor
  */
 
 /*!
- * Convenience function to convert a xrt_compositor to a null_compositor.
+ * Convenience function to convert a xrt_compositor to a pluto_compositor.
  * (Down-cast helper.)
  *
- * @private @memberof null_compositor
+ * @private @memberof pluto_compositor
  * @ingroup comp_null
  */
-static inline struct null_compositor *
-null_compositor(struct xrt_compositor *xc)
+static inline struct pluto_compositor *
+pluto_compositor(struct xrt_compositor *xc)
 {
-	return (struct null_compositor *)xc;
+	return (struct pluto_compositor *)xc;
 }
 
 /*!
  * Spew level logging.
  *
- * @relates null_compositor
+ * @relates pluto_compositor
  * @ingroup comp_null
  */
 #define NULL_TRACE(c, ...) U_LOG_IFL_T(c->settings.log_level, __VA_ARGS__);
@@ -151,14 +151,14 @@ null_compositor(struct xrt_compositor *xc)
 /*!
  * Debug level logging.
  *
- * @relates null_compositor
+ * @relates pluto_compositor
  */
 #define NULL_DEBUG(c, ...) U_LOG_IFL_D(c->settings.log_level, __VA_ARGS__);
 
 /*!
  * Info level logging.
  *
- * @relates null_compositor
+ * @relates pluto_compositor
  * @ingroup comp_null
  */
 #define NULL_INFO(c, ...) U_LOG_IFL_I(c->settings.log_level, __VA_ARGS__);
@@ -166,7 +166,7 @@ null_compositor(struct xrt_compositor *xc)
 /*!
  * Warn level logging.
  *
- * @relates null_compositor
+ * @relates pluto_compositor
  * @ingroup comp_null
  */
 #define NULL_WARN(c, ...) U_LOG_IFL_W(c->settings.log_level, __VA_ARGS__);
@@ -174,7 +174,7 @@ null_compositor(struct xrt_compositor *xc)
 /*!
  * Error level logging.
  *
- * @relates null_compositor
+ * @relates pluto_compositor
  * @ingroup comp_null
  */
 #define NULL_ERROR(c, ...) U_LOG_IFL_E(c->settings.log_level, __VA_ARGS__);

@@ -193,8 +193,6 @@ run_comms_thread(struct pluto_hmd *ph_ptr)
 		    pb_decode_ex(&our_istream, pluto_TrackingMessage_fields, &message, PB_DECODE_NULLTERMINATED);
 #endif
 
-
-
 		if (!result) {
 			U_LOG_E("Error! %s", PB_GET_ERROR(&our_istream));
 			continue;
