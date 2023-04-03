@@ -22,11 +22,6 @@ if(NOT DISABLE_COLORED_OUTPUT)
 	endif()
 endif()
 
-# Interestingly there's a CMake builtin for this, which feels pretty cursed compared to just finding CMake files on your system the normal way.
-# Works fine though. https://cmake.org/cmake/help/latest/module/FindProtobuf.html
-include(FindProtobuf)
-find_package(Protobuf REQUIRED)
-
 # Get Monado's CMake modules
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/monado/cmake")
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/monado/cmake/sanitizers")
@@ -112,7 +107,8 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 
 set(XRT_OXR_RUNTIME_SUFFIX pluto_server)
 
-add_subdirectory(monado)
-add_subdirectory(proto)
+add_subdirectory(../monado ${CMAKE_CURRENT_BINARY_DIR}/monado)
+
+add_subdirectory(../proto ${CMAKE_CURRENT_BINARY_DIR}/proto)
 
 add_subdirectory(src)
