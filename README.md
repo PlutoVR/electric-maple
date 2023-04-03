@@ -7,12 +7,13 @@ This repo has _two_ main projects:
 
 * `client` - an Android-only Gradle/CMake project. (It should take maybe a couple hours to port to desktop Linux.) To do development on the client, open the `client` folder with Android Studio and let it do its thing.
 
-We also have 
+Also, both projects use the `monado` and `proto` folders (via CMake add_subdirectory) for general dependencies and message encoding/decoding.
 
 
-For now, use adb port *reversing*. It's way easier than hardcoding your IP into the code, and you need a cable to keep your Quest charged. Run this:
+## ADB port reversing
+For now, we're going to assume everybody's debugging this with a Quest over ADB. The client and server are hard-coded (for now) to port `61943`, so if you run this:
 ```
 adb reverse tcp:61943 tcp:61943
 ```
-and your Quest should be able to connect to the server on your PC.
+your Quest should be able to connect to the server on your PC and you should be able to get going :)
 
