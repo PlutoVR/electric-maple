@@ -1,5 +1,5 @@
 // Copyright 2023, Pluto VR, Inc.
-// SPDX-License-Identifier: BSL-1.0
+// SPDX-License-Identifier: MIT
 /*!
  * @file
  * @brief Very simple shader program to display a triangle. Safe to remove once we have something more interesting to

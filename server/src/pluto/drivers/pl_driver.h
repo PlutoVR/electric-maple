@@ -1,5 +1,5 @@
 // Copyright 2020-2023, Collabora, Ltd.
-// SPDX-License-Identifier: BSL-1.0
+// SPDX-License-Identifier: MIT
 /*!
  * @file
  * @brief Pluto HMD device

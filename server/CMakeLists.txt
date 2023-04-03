@@ -1,5 +1,5 @@
 # Copyright 2018-2022, Collabora, Ltd.
-# SPDX-License-Identifier: BSL-1.0
+# SPDX-License-Identifier: MIT
 
 cmake_minimum_required(VERSION 3.10.2)
 project(linux-streaming VERSION 0.0.1)
