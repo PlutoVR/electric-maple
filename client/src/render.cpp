@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: MIT
 /*!
  * @file
- * @brief Very simple GLES3 renderer
- * render.
+ * @brief Very simple GLES3 renderer for WebRTC client.
  * @author Moshi Turner <moses@collabora.com>
  */
 
