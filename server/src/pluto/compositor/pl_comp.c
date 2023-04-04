@@ -328,11 +328,11 @@ pluto_compositor_end_session(struct xrt_compositor *xc)
 
 static xrt_result_t
 pluto_compositor_predict_frame(struct xrt_compositor *xc,
-                              int64_t *out_frame_id,
-                              uint64_t *out_wake_time_ns,
-                              uint64_t *out_predicted_gpu_time_ns,
-                              uint64_t *out_predicted_display_time_ns,
-                              uint64_t *out_predicted_display_period_ns)
+                               int64_t *out_frame_id,
+                               uint64_t *out_wake_time_ns,
+                               uint64_t *out_predicted_gpu_time_ns,
+                               uint64_t *out_predicted_display_time_ns,
+                               uint64_t *out_predicted_display_period_ns)
 {
 	COMP_TRACE_MARKER();
 
@@ -360,9 +360,9 @@ pluto_compositor_predict_frame(struct xrt_compositor *xc,
 
 static xrt_result_t
 pluto_compositor_mark_frame(struct xrt_compositor *xc,
-                           int64_t frame_id,
-                           enum xrt_compositor_frame_point point,
-                           uint64_t when_ns)
+                            int64_t frame_id,
+                            enum xrt_compositor_frame_point point,
+                            uint64_t when_ns)
 {
 	COMP_TRACE_MARKER();
 
@@ -432,6 +432,11 @@ pluto_compositor_layer_commit(struct xrt_compositor *xc, int64_t frame_id, xrt_g
 		u_pc_mark_point(c->upc, U_TIMING_POINT_BEGIN, frame_id, now_ns);
 	}
 
+	// We want to render here. comp_base filled c->base.slot.layers for us.
+	U_LOG_E("We have %d layers.", c->base.slot.layer_count);
+	for (uint32_t i = 0; i < c->base.slot.layer_count; i++) {
+		U_LOG_E("Looking at layer %u", i);
+	}
 	// When we are submitting to the GPU.
 	{
 		uint64_t now_ns = os_monotonic_get_ns();
@@ -441,6 +446,18 @@ pluto_compositor_layer_commit(struct xrt_compositor *xc, int64_t frame_id, xrt_g
 	// Now is a good point to garbage collect.
 	comp_swapchain_garbage_collect(&c->base.cscgc);
 
+	return XRT_SUCCESS;
+}
+
+static xrt_result_t
+pluto_compositor_layer_stereo_projection(struct xrt_compositor *xc,
+                                         struct xrt_device *xdev,
+                                         struct xrt_swapchain *l_xsc,
+                                         struct xrt_swapchain *r_xsc,
+                                         const struct xrt_layer_data *data)
+{
+	// no-op
+	U_LOG_E("HELLO I EXIST");
 	return XRT_SUCCESS;
 }
 
@@ -544,25 +561,18 @@ pluto_compositor_create_system(struct xrt_device *xdev, struct xrt_system_compos
 	c->base.base.base.layer_commit = pluto_compositor_layer_commit;
 	c->base.base.base.poll_events = pluto_compositor_poll_events;
 	c->base.base.base.destroy = pluto_compositor_destroy;
+	
+	// Note that we don't want to set eg. layer_stereo_projection - comp_base handles that stuff for us.
 	c->settings.log_level = debug_get_log_option_log();
 	c->frame.waited.id = -1;
 	c->frame.rendering.id = -1;
 	c->state = PLUTO_COMP_COMP_STATE_READY;
-	c->settings.frame_interval_ns = U_TIME_1S_IN_NS / 20; // 20 FPS
+	c->settings.frame_interval_ns = xdev->hmd->screens[0].nominal_frame_interval_ns;
 	c->xdev = xdev;
 
 	PLUTO_COMP_DEBUG(c, "Doing init %p", (void *)c);
 
-	PLUTO_COMP_INFO(c,
-	          "\n"
-	          "################################################################################\n"
-	          "# Null compositor starting, if you intended to use the null compositor (for CI #\n"
-	          "# integration) then everything is mostly likely setup correctly. But if you    #\n"
-	          "# intended to use Monado with real hardware it you probably built Monado       #\n"
-	          "# without the main compositor, please check your build config and make sure    #\n"
-	          "# that the main compositor is being built. Also make sure that the environment #\n"
-	          "# variable XRT_COMPOSITOR_NULL is not set.                                     #\n"
-	          "################################################################################");
+	PLUTO_COMP_INFO(c, "Starting Pluto remote compositor!");
 
 	// Do this as early as possible
 	comp_base_init(&c->base);
