@@ -12,6 +12,7 @@
 #pragma once
 
 #include "xrt/xrt_compiler.h"
+#include "pl_server_internal.h"
 
 
 #ifdef __cplusplus
@@ -22,13 +23,15 @@ extern "C" {
 struct xrt_device;
 struct xrt_system_compositor;
 
+// pluto_compositor_create_system(struct xrt_device *xdev, struct xrt_system_compositor **out_xsysc);
+
 /*!
  * Creates a @ref pluto_compositor.
  *
  * @ingroup comp_null
  */
 xrt_result_t
-pluto_compositor_create_system(struct xrt_device *xdev, struct xrt_system_compositor **out_xsysc);
+pluto_compositor_create_system(pluto_program &pp, struct xrt_system_compositor **out_xsysc);
 
 
 #ifdef __cplusplus

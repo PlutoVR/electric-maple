@@ -169,21 +169,22 @@ compositor_init_vulkan(struct pluto_compositor *c)
 	struct u_string_list *optional_device_extension_list =
 	    u_string_list_create_from_array(optional_device_extensions, ARRAY_SIZE(optional_device_extensions));
 
-	struct comp_vulkan_arguments vk_args = {
-	    .get_instance_proc_address = vkGetInstanceProcAddr,
-	    .required_instance_version = VK_MAKE_VERSION(1, 0, 0),
-	    .required_instance_extensions = required_instance_ext_list,
-	    .optional_instance_extensions = optional_instance_ext_list,
-	    .required_device_extensions = required_device_extension_list,
-	    .optional_device_extensions = optional_device_extension_list,
-	    .log_level = c->settings.log_level,
-	    .only_compute_queue = false, // Regular GFX
-	    .selected_gpu_index = -1,    // Auto
-	    .client_gpu_index = -1,      // Auto
-	    .timeline_semaphore = true,  // Flag is optional, not a hard requirement.
-	};
+	struct comp_vulkan_arguments vk_args = {};
 
-	struct comp_vulkan_results vk_res = {0};
+	vk_args.get_instance_proc_address = vkGetInstanceProcAddr;
+	vk_args.required_instance_version = VK_MAKE_VERSION(1, 0, 0);
+	vk_args.required_instance_extensions = required_instance_ext_list;
+	vk_args.optional_instance_extensions = optional_instance_ext_list;
+	vk_args.required_device_extensions = required_device_extension_list;
+	vk_args.optional_device_extensions = optional_device_extension_list;
+	vk_args.log_level = c->settings.log_level;
+	vk_args.only_compute_queue = false; // Regular GFX
+	vk_args.selected_gpu_index = -1;    // Auto
+	vk_args.client_gpu_index = -1;      // Auto
+	vk_args.timeline_semaphore = true;  // Flag is optional, not a hard requirement.
+
+
+	struct comp_vulkan_results vk_res = {};
 	bool bundle_ret = comp_vulkan_init_bundle(vk, &vk_args, &vk_res);
 
 	u_string_list_destroy(&required_instance_ext_list);
@@ -236,7 +237,7 @@ compositor_init_info(struct pluto_compositor *c)
 {
 	struct xrt_compositor_info *info = &c->base.base.base.info;
 
-	struct comp_vulkan_formats formats = {0};
+	struct comp_vulkan_formats formats = {};
 	comp_vulkan_formats_check(get_vk(c), &formats);
 	comp_vulkan_formats_copy_to_info(&formats, info);
 	comp_vulkan_formats_log(c->settings.log_level, &formats);
@@ -449,17 +450,17 @@ pluto_compositor_layer_commit(struct xrt_compositor *xc, int64_t frame_id, xrt_g
 	return XRT_SUCCESS;
 }
 
-static xrt_result_t
-pluto_compositor_layer_stereo_projection(struct xrt_compositor *xc,
-                                         struct xrt_device *xdev,
-                                         struct xrt_swapchain *l_xsc,
-                                         struct xrt_swapchain *r_xsc,
-                                         const struct xrt_layer_data *data)
-{
-	// no-op
-	U_LOG_E("HELLO I EXIST");
-	return XRT_SUCCESS;
-}
+// static xrt_result_t
+// pluto_compositor_layer_stereo_projection(struct xrt_compositor *xc,
+//                                          struct xrt_device *xdev,
+//                                          struct xrt_swapchain *l_xsc,
+//                                          struct xrt_swapchain *r_xsc,
+//                                          const struct xrt_layer_data *data)
+// {
+// 	// no-op
+// 	U_LOG_E("HELLO I EXIST");
+// 	return XRT_SUCCESS;
+// }
 
 static xrt_result_t
 pluto_compositor_poll_events(struct xrt_compositor *xc, union xrt_compositor_event *out_xce)
@@ -548,7 +549,7 @@ pluto_compositor_destroy(struct xrt_compositor *xc)
  */
 
 xrt_result_t
-pluto_compositor_create_system(struct xrt_device *xdev, struct xrt_system_compositor **out_xsysc)
+pluto_compositor_create_system(pluto_program &pp, struct xrt_system_compositor **out_xsysc)
 {
 	struct pluto_compositor *c = U_TYPED_CALLOC(struct pluto_compositor);
 
@@ -561,12 +562,15 @@ pluto_compositor_create_system(struct xrt_device *xdev, struct xrt_system_compos
 	c->base.base.base.layer_commit = pluto_compositor_layer_commit;
 	c->base.base.base.poll_events = pluto_compositor_poll_events;
 	c->base.base.base.destroy = pluto_compositor_destroy;
-	
+
 	// Note that we don't want to set eg. layer_stereo_projection - comp_base handles that stuff for us.
 	c->settings.log_level = debug_get_log_option_log();
 	c->frame.waited.id = -1;
 	c->frame.rendering.id = -1;
 	c->state = PLUTO_COMP_COMP_STATE_READY;
+
+	xrt_device *xdev = pp.xsysd_base.roles.head;
+
 	c->settings.frame_interval_ns = xdev->hmd->screens[0].nominal_frame_interval_ns;
 	c->xdev = xdev;
 

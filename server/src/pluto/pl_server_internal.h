@@ -15,7 +15,8 @@
 #include "util/u_pacing.h"
 #include "util/u_logging.h"
 
-#include "../../compositor/pl_comp.h"
+#include "pl_comp.h"
+#include "pl_driver.h"
 
 
 #ifdef __cplusplus
@@ -29,6 +30,11 @@ struct pluto_program
 
 	//! System devices base.
 	struct xrt_system_devices xsysd_base;
+
+	// owned by xsysd_base - convenience
+	struct xrt_device *head;
+
+	
 
 	//! Space overseer, implemented for now using helper code.
 	struct xrt_space_overseer *xso;
