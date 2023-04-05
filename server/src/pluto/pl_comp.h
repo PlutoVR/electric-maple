@@ -91,6 +91,9 @@ struct pluto_compositor
 {
 	struct comp_base base;
 
+	// This thing should outlive us
+	struct pluto_program *program;
+
 	//! The device we are displaying to.
 	struct xrt_device *xdev;
 

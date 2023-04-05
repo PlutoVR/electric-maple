@@ -58,6 +58,9 @@ struct pluto_hmd
 
 	struct xrt_pose pose;
 
+	// Should outlive us
+	struct pluto_program *program;
+
 	// renameto: bind_sockfd
 	int server_socket_fd;
 	struct sockaddr_in server_socket_address;
