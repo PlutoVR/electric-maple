@@ -178,4 +178,3 @@ make_connect_socket(struct pluto_program &ph)
 	}
 	// clilen = sizeof(cli_addr);
 }
-

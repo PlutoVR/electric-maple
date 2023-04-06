@@ -497,28 +497,28 @@ pluto_compositor_layer_commit(struct xrt_compositor *xc, int64_t frame_id, xrt_g
 			os_mutex_lock(&vk->cmd_pool_mutex);
 
 
-				VkImageSubresourceRange first_color_level_subresource_range = {
-				    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				    .baseMipLevel = 0,
-				    .levelCount = 1,
-				    .baseArrayLayer = 0,
-				    .layerCount = 1,
-				};
+			VkImageSubresourceRange first_color_level_subresource_range = {
+			    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			    .baseMipLevel = 0,
+			    .levelCount = 1,
+			    .baseArrayLayer = 0,
+			    .layerCount = 1,
+			};
 
-							U_LOG_E("Make scratch buffer a destination!");
+			U_LOG_E("Make scratch buffer a destination!");
 
-				// Barrier to make scratch buffer a destination
-				vk_cmd_image_barrier_locked(              //
-				    vk,                                   // vk_bundle
-				    cmd,                                  // cmdbuffer
-				    wrap->image,                             // image
-				    VK_ACCESS_HOST_READ_BIT,              // srcAccessMask
-				    VK_ACCESS_TRANSFER_WRITE_BIT,         // dstAccessMask
-				    wrap->layout,                         // oldImageLayout
-				    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, // newImageLayout
-				    VK_PIPELINE_STAGE_HOST_BIT,           // srcStageMask
-				    VK_PIPELINE_STAGE_TRANSFER_BIT,       // dstStageMask
-				    first_color_level_subresource_range); // subresourceRange
+			// Barrier to make scratch buffer a destination
+			vk_cmd_image_barrier_locked(              //
+			    vk,                                   // vk_bundle
+			    cmd,                                  // cmdbuffer
+			    wrap->image,                          // image
+			    VK_ACCESS_HOST_READ_BIT,              // srcAccessMask
+			    VK_ACCESS_TRANSFER_WRITE_BIT,         // dstAccessMask
+			    wrap->layout,                         // oldImageLayout
+			    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, // newImageLayout
+			    VK_PIPELINE_STAGE_HOST_BIT,           // srcStageMask
+			    VK_PIPELINE_STAGE_TRANSFER_BIT,       // dstStageMask
+			    first_color_level_subresource_range); // subresourceRange
 
 			for (int view = 0; view < 2; view++) {
 				// Command buffer for the copy command
@@ -534,10 +534,6 @@ pluto_compositor_layer_commit(struct xrt_compositor *xc, int64_t frame_id, xrt_g
 				VkImage srcImage = layer.sc_array[view]->vkic.images[data->sub.image_index].handle;
 				// layer.sc_array[0]->vkic.images[data->sub.image_index].size;
 				VkImage dstImage = wrap->image; // Destination image to copy to
-
-
-
-
 
 
 

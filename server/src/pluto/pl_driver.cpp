@@ -119,7 +119,7 @@ pluto_hmd_get_view_poses(struct xrt_device *xdev,
 
 
 
-// extern "C" 
+// extern "C"
 struct pluto_hmd *
 pluto_hmd_create(pluto_program &pp)
 {
