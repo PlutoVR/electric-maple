@@ -36,9 +36,11 @@
 #define APP_VIEW_W (1920 / 2)
 #define APP_VIEW_H (1080)
 
-#define READBACK_W2 (READBACK_W / 2)
-#define READBACK_W (1920)
-#define READBACK_H (1080)
+#define READBACK_DIV_FACTOR (1)
+
+#define READBACK_W2 (APP_VIEW_W / READBACK_DIV_FACTOR)
+#define READBACK_W (READBACK_W2 * 2)
+#define READBACK_H (APP_VIEW_H / READBACK_DIV_FACTOR)
 
 
 DEBUG_GET_ONCE_LOG_OPTION(log, "XRT_COMPOSITOR_LOG", U_LOGGING_INFO)
@@ -457,8 +459,6 @@ do_the_thing(struct pluto_compositor *c,
 	wrap->base_frame.source_timestamp = wrap->base_frame.timestamp;
 	wrap->base_frame.source_sequence = c->image_sequence++;
 	wrap->base_frame.source_id = 0;
-
-	xrt_frame *frame = &wrap->base_frame;
 	wrap = NULL;
 
 	if (!c->pipeline_playing) {
