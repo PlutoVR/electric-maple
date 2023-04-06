@@ -310,13 +310,7 @@ do_the_thing(struct pluto_compositor *c,
              struct comp_swapchain *lsc,
              struct comp_swapchain *rsc)
 {
-
-	U_LOG_E("lvd->sub.image_index %u rvd->sub.image_index %u", lvd->sub.image_index, rvd->sub.image_index);
-	U_LOG_E("lvd->sub.rect.offset.w %d rvd->sub.rect.offset.w %d", lvd->sub.rect.offset.w, rvd->sub.rect.offset.w);
-	U_LOG_E("lvd->sub.rect.offset.h %d rvd->sub.rect.offset.h %d", lvd->sub.rect.offset.h, rvd->sub.rect.offset.h);
-
-	U_LOG_E("lvd->sub.rect.extent.w %d rvd->sub.rect.extent.w %d", lvd->sub.rect.extent.w, rvd->sub.rect.extent.w);
-	U_LOG_E("lvd->sub.rect.extent.h %d rvd->sub.rect.extent.h %d", lvd->sub.rect.extent.h, rvd->sub.rect.extent.h);
+	VkResult ret;
 
 	if (!u_sink_debug_is_active(&c->hackers_debug_sink)) {
 		return;
@@ -325,22 +319,25 @@ do_the_thing(struct pluto_compositor *c,
 	struct vk_image_readback_to_xf *wrap = NULL;
 	struct vk_bundle *vk = &c->base.vk;
 
-	// Getting fr
-	U_LOG_E("Getting frame!");
+	// Getting frame
 	if (!vk_image_readback_to_xf_pool_get_unused_frame(vk, c->pool, &wrap)) {
-		// WRONG
+		PLUTO_COMP_ERROR(c, "vk_image_readback_to_xf_pool_get_unused_frame: Failed!");
 		return;
 	}
 
-	// layer.sc_array[0]->vkic.images[]
+	// Usefull.
+	xrt_frame *frame = &wrap->base_frame;
 
-	U_LOG_E("Creating command buffer!");
 	VkCommandBuffer cmd = {};
-	vk_cmd_buffer_create_and_begin(vk, &cmd);
+	ret = vk_cmd_buffer_create_and_begin(vk, &cmd);
+	if (ret != VK_SUCCESS) {
+		PLUTO_COMP_ERROR(c, "vk_cmd_buffer_create_and_begin: %s", vk_result_string(ret));
+		xrt_frame_reference(&frame, NULL);
+		return;
+	}
 
 	// For submitting commands.
 	os_mutex_lock(&vk->cmd_pool_mutex);
-
 
 	VkImageSubresourceRange first_color_level_subresource_range = {
 	    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -349,8 +346,6 @@ do_the_thing(struct pluto_compositor *c,
 	    .baseArrayLayer = 0,
 	    .layerCount = 1,
 	};
-
-	U_LOG_E("Make scratch buffer a destination!");
 
 	// Barrier to make scratch buffer a destination
 	vk_cmd_image_barrier_locked(              //
@@ -366,23 +361,13 @@ do_the_thing(struct pluto_compositor *c,
 	    first_color_level_subresource_range); // subresourceRange
 
 	for (int view = 0; view < 2; view++) {
-		// Command buffer for the copy command
-		VkCommandBuffer cmdBuffer = cmd;
-
-		// Source image view to copy from
-		// VkImageView srcImageView =
-		//     *layer.sc_array[0]->images[stereo->l.sub.image_index].views.no_alpha;
 
 		const xrt_layer_projection_view_data *data = (view == 0) ? lvd : rvd;
 		struct comp_swapchain *sc = (view == 0) ? lsc : rsc;
 
-		// will this work?
 		VkImage srcImage = sc->vkic.images[data->sub.image_index].handle;
-		// layer.sc_array[0]->vkic.images[data->sub.image_index].size;
 		VkImage dstImage = wrap->image; // Destination image to copy to
 
-
-		U_LOG_E("Make source a source!");
 		// Barrier to make source a source
 		vk_cmd_image_barrier_locked(                  //
 		    vk,                                       // vk_bundle
@@ -403,9 +388,6 @@ do_the_thing(struct pluto_compositor *c,
 		srcSubresource.baseArrayLayer = data->sub.array_index;
 		srcSubresource.layerCount = 1;
 
-		U_LOG_E("data->sub.array_index %d", data->sub.array_index);
-
-
 		// Specify the destination region to copy to
 		VkImageSubresourceLayers dstSubresource = {};
 		dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -420,6 +402,7 @@ do_the_thing(struct pluto_compositor *c,
 		extent.depth = 1;
 
 		VkImageCopy copyRegion = {};
+		copyRegion.extent = extent;
 		copyRegion.srcSubresource = srcSubresource;
 		copyRegion.srcOffset = {0, 0, 0};
 		copyRegion.dstSubresource = dstSubresource;
@@ -427,11 +410,9 @@ do_the_thing(struct pluto_compositor *c,
 		if (view == 1) {
 			copyRegion.dstOffset.x = 960;
 		}
-		copyRegion.extent = extent;
-		U_LOG_E("vkCmdCopyImage!");
 
 		vk->vkCmdCopyImage(                       //
-		    cmdBuffer,                            //
+		    cmd,                                  //
 		    srcImage,                             //
 		    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, //
 		    dstImage,                             //
@@ -439,7 +420,7 @@ do_the_thing(struct pluto_compositor *c,
 		    1,                                    //
 		    &copyRegion);                         //
 
-		// Barrier to make source back whatit was before
+		// Barrier to make source back what it was before
 		vk_cmd_image_barrier_locked(                  //
 		    vk,                                       // vk_bundle
 		    cmd,                                      // cmdbuffer
@@ -456,44 +437,25 @@ do_the_thing(struct pluto_compositor *c,
 	// Done submitting commands.
 	os_mutex_unlock(&vk->cmd_pool_mutex);
 
-	VkResult ret;
-	U_LOG_E("Submitting command buffer!");
 	// Waits for command to finish.
 	ret = vk_cmd_buffer_submit(vk, cmd);
 	if (ret != VK_SUCCESS) {
-		//! @todo Better handling of error?
-		U_LOG_E("Failed to mirror image");
+		PLUTO_COMP_ERROR(c, "vk_cmd_buffer_submit: %s", vk_result_string(ret));
+		xrt_frame_reference(&frame, NULL);
+		return;
 	}
-
-	U_LOG_E("Done submitting command buffer!");
-
 
 	// HACK
 	wrap->base_frame.source_timestamp = os_monotonic_get_ns();
 	wrap->base_frame.source_id = c->image_sequence++;
-
-	xrt_frame *frame = &wrap->base_frame;
 	wrap = NULL;
 
 	u_sink_debug_push_frame(&c->hackers_debug_sink, frame);
 
 	xrt_sink_push_frame(c->hackers_xfs, frame);
 
-
-
 	// Dereference this frame - by now we should have pushed it.
 	xrt_frame_reference(&frame, NULL);
-
-	// lvd->sub.rect
-	// layer.sc_array[lvd->sub.image_index]
-
-	// c->base.slot.poses[0] = lvd->pose;
-	// c->base.slot.poses[1] = rvd->pose;
-	// c->base.slot.fovs[0] = lvd->fov;
-	// c->base.slot.fovs[1] = rvd->fov;
-
-	// layer.data.stereo_depth.l.sub;
-	// layer.sc_array[0]->images
 }
 
 
