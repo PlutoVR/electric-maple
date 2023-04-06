@@ -60,7 +60,7 @@ run_comms_thread(struct pluto_program *ph_ptr)
 {
 	struct pluto_program &ph = *ph_ptr;
 	accept_client_connection(ph);
-	while (true) {
+	while (!ph.comms_thread_should_stop) {
 
 		pb_byte_t server_message_bytes[8192] = {};
 
