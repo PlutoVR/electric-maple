@@ -36,7 +36,7 @@
 #define APP_VIEW_W (1920 / 2)
 #define APP_VIEW_H (1080)
 
-#define READBACK_DIV_FACTOR (1)
+#define READBACK_DIV_FACTOR (4)
 
 #define READBACK_W2 (APP_VIEW_W / READBACK_DIV_FACTOR)
 #define READBACK_W (READBACK_W2 * 2)
@@ -356,39 +356,41 @@ do_the_thing(struct pluto_compositor *c,
 	    .layerCount = 1,
 	};
 
-	// Barrier to make scratch buffer a destination
+	// Make bounce a target.
 	vk_cmd_image_barrier_locked(              //
 	    vk,                                   // vk_bundle
 	    cmd,                                  // cmdbuffer
-	    wrap->image,                          // image
-	    VK_ACCESS_HOST_READ_BIT,              // srcAccessMask
+	    c->bounce.image,                      // image
+	    VK_ACCESS_TRANSFER_READ_BIT,          // srcAccessMask
 	    VK_ACCESS_TRANSFER_WRITE_BIT,         // dstAccessMask
-	    wrap->layout,                         // oldImageLayout
+	    VK_IMAGE_LAYOUT_UNDEFINED,            // oldImageLayout
 	    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, // newImageLayout
-	    VK_PIPELINE_STAGE_HOST_BIT,           // srcStageMask
+	    VK_PIPELINE_STAGE_TRANSFER_BIT,       // srcStageMask
 	    VK_PIPELINE_STAGE_TRANSFER_BIT,       // dstStageMask
 	    first_color_level_subresource_range); // subresourceRange
 
+	// Copy views into bounce.
 	for (int view = 0; view < 2; view++) {
 
 		const xrt_layer_projection_view_data *data = (view == 0) ? lvd : rvd;
 		struct comp_swapchain *sc = (view == 0) ? lsc : rsc;
 
+		VkImageLayout srcImageOldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 		VkImage srcImage = sc->vkic.images[data->sub.image_index].handle;
-		VkImage dstImage = wrap->image; // Destination image to copy to
+		VkImage dstImage = c->bounce.image; // Destination image to blit to
 
 		// Barrier to make source a source
-		vk_cmd_image_barrier_locked(                  //
-		    vk,                                       // vk_bundle
-		    cmd,                                      // cmdbuffer
-		    srcImage,                                 // image
-		    VK_ACCESS_SHADER_WRITE_BIT,               // srcAccessMask
-		    VK_ACCESS_TRANSFER_READ_BIT,              // dstAccessMask
-		    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, // oldImageLayout
-		    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,     // newImageLayout
-		    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,     // srcStageMask
-		    VK_PIPELINE_STAGE_TRANSFER_BIT,           // dstStageMask
-		    first_color_level_subresource_range);     // subresourceRange
+		vk_cmd_image_barrier_locked(              //
+		    vk,                                   // vk_bundle
+		    cmd,                                  // cmdbuffer
+		    srcImage,                             // image
+		    VK_ACCESS_SHADER_WRITE_BIT,           // srcAccessMask
+		    VK_ACCESS_TRANSFER_READ_BIT,          // dstAccessMask
+		    srcImageOldLayout,                    // oldImageLayout
+		    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, // newImageLayout
+		    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, // srcStageMask
+		    VK_PIPELINE_STAGE_TRANSFER_BIT,       // dstStageMask
+		    first_color_level_subresource_range); // subresourceRange
 
 		// Specify the source region to copy from
 		VkImageSubresourceLayers srcSubresource = {};
@@ -404,21 +406,99 @@ do_the_thing(struct pluto_compositor *c,
 		dstSubresource.baseArrayLayer = 0;
 		dstSubresource.layerCount = 1;
 
+		int w1 = data->sub.rect.offset.w;
+		int h1 = data->sub.rect.offset.h;
+		int w2 = w1 + data->sub.rect.extent.w;
+		int h2 = h1 + data->sub.rect.extent.h;
+
+		VkImageBlit blit_region = {};
+		blit_region.srcSubresource = srcSubresource;
+		blit_region.srcOffsets[0] = {w1, h1, 0};
+		blit_region.srcOffsets[1] = {w2, h2, 1};
+		blit_region.dstSubresource = dstSubresource;
+		blit_region.dstOffsets[0] = {0, 0, 0};
+		blit_region.dstOffsets[1] = {READBACK_W2, READBACK_H, 1};
+		if (view == 1) {
+			blit_region.dstOffsets[0].x += READBACK_W2;
+			blit_region.dstOffsets[1].x += READBACK_W2;
+		}
+
+		vk->vkCmdBlitImage(                       //
+		    cmd,                                  //
+		    srcImage,                             //
+		    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, //
+		    dstImage,                             //
+		    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, //
+		    1,                                    //
+		    &blit_region,                         //
+		    VK_FILTER_LINEAR);                    //
+
+		// Barrier to make source back what it was before
+		vk_cmd_image_barrier_locked(              //
+		    vk,                                   // vk_bundle
+		    cmd,                                  // cmdbuffer
+		    srcImage,                             // image
+		    VK_ACCESS_SHADER_WRITE_BIT,           // srcAccessMask
+		    VK_ACCESS_TRANSFER_READ_BIT,          // dstAccessMask
+		    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, // oldImageLayout
+		    srcImageOldLayout,                    // newImageLayout
+		    VK_PIPELINE_STAGE_TRANSFER_BIT,       // srcStageMask
+		    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, // dstStageMask
+		    first_color_level_subresource_range); // subresourceRange
+	}
+
+	// Copy bounce to destination.
+	{
+		VkImageLayout srcImageOldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+		VkImage srcImage = c->bounce.image;
+		VkImageLayout dstImageOldLayout = wrap->layout;
+		VkImage dstImage = wrap->image;
+
+		// Barrier to make scratch buffer a destination
+		vk_cmd_image_barrier_locked(              //
+		    vk,                                   // vk_bundle
+		    cmd,                                  // cmdbuffer
+		    dstImage,                             // image
+		    VK_ACCESS_TRANSFER_WRITE_BIT,         // srcAccessMask
+		    VK_ACCESS_TRANSFER_READ_BIT,          // dstAccessMask
+		    srcImageOldLayout,                    // oldImageLayout
+		    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, // newImageLayout
+		    VK_PIPELINE_STAGE_TRANSFER_BIT,       // srcStageMask
+		    VK_PIPELINE_STAGE_TRANSFER_BIT,       // dstStageMask
+		    first_color_level_subresource_range); // subresourceRange
+
+		// Barrier to make dst buffer a destination
+		vk_cmd_image_barrier_locked(              //
+		    vk,                                   // vk_bundle
+		    cmd,                                  // cmdbuffer
+		    dstImage,                             // image
+		    VK_ACCESS_HOST_READ_BIT,              // srcAccessMask
+		    VK_ACCESS_TRANSFER_WRITE_BIT,         // dstAccessMask
+		    dstImageOldLayout,                    // oldImageLayout
+		    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, // newImageLayout
+		    VK_PIPELINE_STAGE_HOST_BIT,           // srcStageMask
+		    VK_PIPELINE_STAGE_TRANSFER_BIT,       // dstStageMask
+		    first_color_level_subresource_range); // subresourceRange
+
+		// Specify the destination region to copy to
+		VkImageSubresourceLayers subresource = {};
+		subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		subresource.mipLevel = 0;
+		subresource.baseArrayLayer = 0;
+		subresource.layerCount = 1;
+
 		// Specify the region to copy
 		VkExtent3D extent = {};
-		extent.width = READBACK_W2; // Width of the region to copy
+		extent.width = READBACK_W;  // Width of the region to copy
 		extent.height = READBACK_H; // Height of the region to copy
 		extent.depth = 1;
 
 		VkImageCopy copyRegion = {};
 		copyRegion.extent = extent;
-		copyRegion.srcSubresource = srcSubresource;
+		copyRegion.srcSubresource = subresource;
 		copyRegion.srcOffset = {0, 0, 0};
-		copyRegion.dstSubresource = dstSubresource;
+		copyRegion.dstSubresource = subresource;
 		copyRegion.dstOffset = {0, 0, 0};
-		if (view == 1) {
-			copyRegion.dstOffset.x = READBACK_W2;
-		}
 
 		vk->vkCmdCopyImage(                       //
 		    cmd,                                  //
@@ -428,19 +508,6 @@ do_the_thing(struct pluto_compositor *c,
 		    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, //
 		    1,                                    //
 		    &copyRegion);                         //
-
-		// Barrier to make source back what it was before
-		vk_cmd_image_barrier_locked(                  //
-		    vk,                                       // vk_bundle
-		    cmd,                                      // cmdbuffer
-		    srcImage,                                 // image
-		    VK_ACCESS_SHADER_WRITE_BIT,               // srcAccessMask
-		    VK_ACCESS_TRANSFER_READ_BIT,              // dstAccessMask
-		    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,     // oldImageLayout
-		    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, // newImageLayout
-		    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,     // srcStageMask
-		    VK_PIPELINE_STAGE_TRANSFER_BIT,           // dstStageMask
-		    first_color_level_subresource_range);     // subresourceRange
 	}
 
 	// Done submitting commands.
@@ -813,6 +880,24 @@ pluto_compositor_create_system(pluto_program &pp, struct xrt_system_compositor *
 	    &c->hackers_xfs);                //
 
 
+	// Bounce image for scaling.
+	{
+		VkFormat format = VK_FORMAT_R8G8B8A8_SRGB;
+		VkImageUsageFlags usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+		VkExtent2D extent = {READBACK_W, READBACK_H};
+		VkResult ret;
+
+		ret = vk_create_image_simple( //
+		    &c->base.vk,              // vk_bundle
+		    extent,                   // extent
+		    format,                   // format
+		    usage,                    // usage
+		    &c->bounce.device_memory, // out_mem
+		    &c->bounce.image);        // out_image
+		if (ret != VK_SUCCESS) {
+			PLUTO_COMP_DEBUG(c, "vk_create_image_simple: %s", vk_result_string(ret));
+		}
+	}
 
 	PLUTO_COMP_DEBUG(c, "Done %p", (void *)c);
 

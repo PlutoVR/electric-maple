@@ -136,6 +136,12 @@ struct pluto_compositor
 	int image_sequence;
 	struct u_sink_debug hackers_debug_sink;
 
+	struct
+	{
+		VkDeviceMemory device_memory;
+		VkImage image;
+	} bounce;
+
 	bool pipeline_playing = false;
 	struct gstreamer_pipeline *hackers_gstreamer_pipeline;
 	struct gstreamer_sink *hackers_gstreamer_sink;
