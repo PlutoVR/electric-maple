@@ -469,11 +469,18 @@ do_the_thing(struct pluto_compositor *c,
 
 
 	// HACK
-	wrap->base_frame.source_timestamp = os_monotonic_get_ns();
-	wrap->base_frame.source_id = c->image_sequence++;
+	wrap->base_frame.timestamp = os_monotonic_get_ns();
+	wrap->base_frame.source_timestamp = wrap->base_frame.timestamp;
+	wrap->base_frame.source_sequence = c->image_sequence++;
+	wrap->base_frame.source_id = 0;
 
 	xrt_frame *frame = &wrap->base_frame;
 	wrap = NULL;
+
+	if (!c->pipeline_playing) {
+	gstreamer_pipeline_play(c->hackers_gstreamer_pipeline);
+c->pipeline_playing = true;
+	}
 
 	u_sink_debug_push_frame(&c->hackers_debug_sink, frame);
 
@@ -829,7 +836,6 @@ pluto_compositor_create_system(pluto_program &pp, struct xrt_system_compositor *
 	gstreamer_sink_create_with_pipeline(c->hackers_gstreamer_pipeline, 1920, 1080, XRT_FORMAT_R8G8B8X8, "Meow",
 	                                    &c->hackers_gstreamer_sink, &c->hackers_xfs);
 
-	gstreamer_pipeline_play(c->hackers_gstreamer_pipeline);
 
 
 	PLUTO_COMP_DEBUG(c, "Done %p", (void *)c);

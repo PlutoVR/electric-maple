@@ -136,6 +136,7 @@ struct pluto_compositor
 	int image_sequence;
 	struct u_sink_debug hackers_debug_sink;
 
+	bool pipeline_playing = false;
 	struct gstreamer_pipeline *hackers_gstreamer_pipeline;
 	struct gstreamer_sink *hackers_gstreamer_sink;
 	struct xrt_frame_sink *hackers_xfs;
