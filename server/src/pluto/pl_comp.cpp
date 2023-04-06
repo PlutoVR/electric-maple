@@ -793,6 +793,8 @@ pluto_compositor_destroy(struct xrt_compositor *xc)
 	// Make sure we don't have anything to destroy.
 	comp_swapchain_garbage_collect(&c->base.cscgc);
 
+	vk_image_readback_to_xf_pool_destroy(vk, &c->pool);
+
 	if (c->bounce.image != VK_NULL_HANDLE) {
 		vk->vkDestroyImage(vk->device, c->bounce.image, NULL);
 		vk->vkFreeMemory(vk->device, c->bounce.device_memory, NULL);
