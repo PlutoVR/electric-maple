@@ -27,6 +27,7 @@
 
 #include "vk/vk_image_readback_to_xf_pool.h"
 
+
 #include "pl_comp.h"
 
 #include <stdio.h>
@@ -476,6 +477,8 @@ do_the_thing(struct pluto_compositor *c,
 
 	u_sink_debug_push_frame(&c->hackers_debug_sink, frame);
 
+	xrt_sink_push_frame(c->hackers_xfs, frame);
+
 
 
 	// Dereference this frame - by now we should have pushed it.
@@ -821,6 +824,12 @@ pluto_compositor_create_system(pluto_program &pp, struct xrt_system_compositor *
 
 	u_var_add_root(c, "Pluto compositor!", 0);
 	u_var_add_sink_debug(c, &c->hackers_debug_sink, "Meow!");
+
+	gstreamer_pipeline_create_autovideo_sink(&c->xfctx, "Meow", &c->hackers_gstreamer_pipeline);
+	gstreamer_sink_create_with_pipeline(c->hackers_gstreamer_pipeline, 1920, 1080, XRT_FORMAT_R8G8B8X8, "Meow",
+	                                    &c->hackers_gstreamer_sink, &c->hackers_xfs);
+
+	gstreamer_pipeline_play(c->hackers_gstreamer_pipeline);
 
 
 	PLUTO_COMP_DEBUG(c, "Done %p", (void *)c);

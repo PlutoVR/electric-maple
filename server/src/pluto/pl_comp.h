@@ -27,6 +27,10 @@
 
 #include "util/comp_base.h"
 
+#include "gstreamer/gst_pipeline.h"
+#include "gstreamer/gst_sink.h"
+
+
 #include "pl_server_internal.h"
 
 #ifdef __cplusplus
@@ -126,9 +130,15 @@ struct pluto_compositor
 	} frame;
 
 
+	struct xrt_frame_context xfctx = {};
+
 	struct vk_image_readback_to_xf_pool *pool = nullptr;
 	int image_sequence;
 	struct u_sink_debug hackers_debug_sink;
+
+	struct gstreamer_pipeline *hackers_gstreamer_pipeline;
+	struct gstreamer_sink *hackers_gstreamer_sink;
+	struct xrt_frame_sink *hackers_xfs;
 };
 
 
