@@ -1,3 +1,3 @@
 [submodule "monado"]
 	path = monado
-	url = https://gitlab.freedesktop.org/monado/monado.git
+	url = git@gitlab.freedesktop.org:slitcch/monado.git
