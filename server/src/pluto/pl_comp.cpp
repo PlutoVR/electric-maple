@@ -26,7 +26,6 @@
 #include "multi/comp_multi_interface.h"
 
 #include "pl_comp.h"
-#include "pl_comp_interface.h"
 
 #include <stdio.h>
 #include <stdarg.h>

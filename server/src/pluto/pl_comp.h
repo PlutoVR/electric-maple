@@ -25,6 +25,7 @@
 
 #include "util/comp_base.h"
 
+#include "pl_server_internal.h"
 
 #ifdef __cplusplus
 extern "C" {

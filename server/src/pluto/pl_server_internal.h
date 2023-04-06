@@ -15,13 +15,36 @@
 #include "util/u_pacing.h"
 #include "util/u_logging.h"
 
-#include "pl_comp.h"
-#include "pl_driver.h"
+// #include "pl_comp.h"
+// #include "pl_driver.h"
+
+#include <stdio.h>
+
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+
+#include <thread>
 
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+
+struct pluto_program;
+struct pluto_hmd;
+
+struct pluto_hmd
+{
+	struct xrt_device base;
+
+	struct xrt_pose pose;
+
+	// Should outlive us
+	struct pluto_program *program;
+
+
+
+	enum u_logging_level log_level;
+};
 
 struct pluto_program
 {
@@ -31,28 +54,54 @@ struct pluto_program
 	//! System devices base.
 	struct xrt_system_devices xsysd_base;
 
-	// owned by xsysd_base - convenience
-	struct xrt_device *head;
+	// convenience
+	struct pluto_hmd *head;
 
-	
+
 
 	//! Space overseer, implemented for now using helper code.
 	struct xrt_space_overseer *xso;
+
+
+
+	// renameto: bind_sockfd
+	int server_socket_fd;
+	struct sockaddr_in server_socket_address;
+
+	// renameto: client_sockfd
+	int client_socket_fd;
+	struct sockaddr_in client_socket_address;
+
+	bool comms_thread_should_stop = false;
+	std::thread comms_thread = {};
 };
 
 
-static inline struct pluto_program *
-from_xinst(struct xrt_instance *xinst)
-{
-	return container_of(xinst, struct pluto_program, xinst_base);
-}
+// compositor interface functions
 
-static inline struct pluto_program *
-from_xsysd(struct xrt_system_devices *xsysd)
-{
-	return container_of(xsysd, struct pluto_program, xsysd_base);
-}
 
-#ifdef __cplusplus
-}
-#endif
+/*!
+ * Creates a @ref pluto_compositor.
+ *
+ * @ingroup comp_null
+ */
+xrt_result_t
+pluto_compositor_create_system(pluto_program &pp, struct xrt_system_compositor **out_xsysc);
+
+
+// driver interface functions
+
+struct pluto_hmd *
+pluto_hmd_create(pluto_program &pp);
+
+
+// communications interface functions
+
+
+
+void
+make_connect_socket(struct pluto_program &ph);
+
+
+void
+run_comms_thread(struct pluto_program *ph_ptr);

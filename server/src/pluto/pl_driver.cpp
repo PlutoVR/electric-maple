@@ -26,20 +26,18 @@
 #include "util/u_logging.h"
 #include "util/u_distortion_mesh.h"
 
-#include <stdio.h>
 
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-
-#include <thread>
 
 #include "pluto.pb.h"
 #include "pb_decode.h"
 
+#include "pl_server_internal.h"
 
-extern "C" {
+#include "stdio.h"
+
+#include <thread>
+
+
 
 /*
  *
@@ -52,27 +50,7 @@ extern "C" {
  *
  * @implements xrt_device
  */
-struct pluto_hmd
-{
-	struct xrt_device base;
 
-	struct xrt_pose pose;
-
-	// Should outlive us
-	struct pluto_program *program;
-
-	// renameto: bind_sockfd
-	int server_socket_fd;
-	struct sockaddr_in server_socket_address;
-
-	// renameto: client_sockfd
-	int client_socket_fd;
-	struct sockaddr_in client_socket_address;
-
-	std::thread aaaaa = {};
-
-	enum u_logging_level log_level;
-};
 
 
 /// Casting helper function
@@ -139,153 +117,19 @@ pluto_hmd_get_view_poses(struct xrt_device *xdev,
 	                        out_poses);
 }
 
-void
-accept_client_connection(struct pluto_hmd &ph)
-{
-	socklen_t clilen = sizeof(ph.client_socket_address);
-
-	U_LOG_E("Waiting for client connection...");
-
-	ph.client_socket_fd = accept(ph.server_socket_fd, (struct sockaddr *)&ph.client_socket_address, &clilen);
-	U_LOG_E("Got client connection!");
-}
 
 
-//!@todo So cursed
-void
-run_comms_thread(struct pluto_hmd *ph_ptr)
-{
-	struct pluto_hmd &ph = *ph_ptr;
-	accept_client_connection(ph);
-	while (true) {
-
-		pb_byte_t server_message_bytes[8192] = {};
-
-
-
-		int n = recv(ph.client_socket_fd, server_message_bytes, 8192 - 1, 0);
-
-		if (n == 0) {
-			U_LOG_E("Client disconnected!");
-			accept_client_connection(ph);
-		}
-
-
-		// !!!HACK!!! TCP SOCK_STREAM sockets don't guarantee any delineation between messages, it's just
-		// emergent behaviour that we usually get one packet at a time.
-		// There's no guarantee this'll work; it just usually does on eg. home networks. We have to figure out
-		// how to do this correctly once we're on the WebRTC data_channel.
-		if (n != pluto_TrackingMessage_size) {
-			U_LOG_E("Message of wrong size %d! Expected %d! You probably have bad network conditions.", n,
-			        pluto_TrackingMessage_size);
-			continue;
-		}
-
-		pluto_TrackingMessage message = pluto_TrackingMessage_init_default;
-
-		pb_istream_t our_istream = pb_istream_from_buffer(server_message_bytes, n);
-
-
-#if 0
-		// Seems to always fail with `zero tag`.
-		bool result = pb_decode(&our_istream, pluto_TrackingMessage_fields, &message);
-#else
-		// I don't understand why this works and not the above. I don't think I asked for it to be
-		// null-terminated on the client side, so really confused.
-		bool result =
-		    pb_decode_ex(&our_istream, pluto_TrackingMessage_fields, &message, PB_DECODE_NULLTERMINATED);
-#endif
-
-		if (!result) {
-			U_LOG_E("Error! %s", PB_GET_ERROR(&our_istream));
-			continue;
-		}
-
-		ph.pose.position.x = message.P_localSpace_viewSpace.position.x;
-		ph.pose.position.y = message.P_localSpace_viewSpace.position.y;
-		ph.pose.position.z = message.P_localSpace_viewSpace.position.z;
-
-		ph.pose.orientation.w = message.P_localSpace_viewSpace.orientation.w;
-		ph.pose.orientation.x = message.P_localSpace_viewSpace.orientation.x;
-		ph.pose.orientation.y = message.P_localSpace_viewSpace.orientation.y;
-		ph.pose.orientation.z = message.P_localSpace_viewSpace.orientation.z;
-	}
-}
-
-
-void
-make_connect_socket(struct pluto_hmd &ph)
-{
-
-#if 0
-	const char *HARDCODED_IP = "192.168.69.168";
-#else
-	const char *HARDCODED_IP = "127.0.0.1";
-#endif
-
-
-	socklen_t clilen;
-	// char *buffer = (char *)malloc(BUFSIZE);
-
-	// struct sockaddr_in serv_addr, cli_addr;
-	// int n;
-#if 1
-	ph.server_socket_fd = socket(AF_INET, SOCK_STREAM, 0);
-#else
-	// Doesn't work :(
-	ph.server_socket_fd = socket(PF_INET, SOCK_SEQPACKET, IPPROTO_SCTP);
-#endif
-
-	if (ph.server_socket_fd < 0) {
-		perror("socket");
-		exit(1);
-	}
-
-	int flag = 1;
-	// SO_REUSEADDR makes the OS reap this socket right after we quit.
-	setsockopt(ph.server_socket_fd, SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(flag));
-	if (ph.server_socket_fd < 0) {
-		perror("setsockopt");
-		exit(1);
-	}
-
-	socklen_t addrlen = sizeof(ph.server_socket_address);
-
-
-	ph.server_socket_address.sin_family = AF_INET;
-	ph.server_socket_address.sin_port = htons(61943); // Randomly chosen, doesn't mean anything
-
-
-	if (inet_pton(AF_INET, HARDCODED_IP, &ph.server_socket_address.sin_addr) <= 0) {
-		perror("inet_pton");
-		exit(1);
-	}
-
-
-	if (bind(ph.server_socket_fd, (struct sockaddr *)&ph.server_socket_address, addrlen) < 0) {
-		perror("bind");
-		exit(1);
-	}
-
-
-	//!@todo This allows for 128 pending connections. We only really need one.
-	if (listen(ph.server_socket_fd, 128) < 0) {
-		perror("listen");
-		exit(1);
-	}
-	// clilen = sizeof(cli_addr);
-}
-
-
-
-struct xrt_device *
-pluto_hmd_create(void)
+// extern "C" 
+struct pluto_hmd *
+pluto_hmd_create(pluto_program &pp)
 {
 	// This indicates you won't be using Monado's built-in tracking algorithms.
 	enum u_device_alloc_flags flags =
 	    (enum u_device_alloc_flags)(U_DEVICE_ALLOC_HMD | U_DEVICE_ALLOC_TRACKING_NONE);
 
 	struct pluto_hmd *ph = U_DEVICE_ALLOCATE(struct pluto_hmd, flags, 1, 0);
+
+	ph->program = &pp;
 
 	// This list should be ordered, most preferred first.
 	size_t idx = 0;
@@ -365,11 +209,10 @@ pluto_hmd_create(void)
 	u_var_add_pose(ph, &ph->pose, "pose");
 	u_var_add_log_level(ph, &ph->log_level, "log_level");
 
-	make_connect_socket(*ph);
+	// make_connect_socket(*ph);
 
-	ph->aaaaa = std::thread(run_comms_thread, ph);
+	// ph->aaaaa = std::thread(run_comms_thread, ph);
 
 
-	return &ph->base;
+	return ph;
 }
-} // extern "C"
