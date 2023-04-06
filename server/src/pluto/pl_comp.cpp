@@ -384,7 +384,7 @@ do_the_thing(struct pluto_compositor *c,
 		    vk,                                   // vk_bundle
 		    cmd,                                  // cmdbuffer
 		    srcImage,                             // image
-		    VK_ACCESS_SHADER_WRITE_BIT,           // srcAccessMask
+		    VK_ACCESS_SHADER_READ_BIT,            // srcAccessMask
 		    VK_ACCESS_TRANSFER_READ_BIT,          // dstAccessMask
 		    srcImageOldLayout,                    // oldImageLayout
 		    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, // newImageLayout
@@ -438,8 +438,8 @@ do_the_thing(struct pluto_compositor *c,
 		    vk,                                   // vk_bundle
 		    cmd,                                  // cmdbuffer
 		    srcImage,                             // image
-		    VK_ACCESS_SHADER_WRITE_BIT,           // srcAccessMask
-		    VK_ACCESS_TRANSFER_READ_BIT,          // dstAccessMask
+		    VK_ACCESS_TRANSFER_READ_BIT,          // srcAccessMask
+		    VK_ACCESS_SHADER_READ_BIT,            // dstAccessMask
 		    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, // oldImageLayout
 		    srcImageOldLayout,                    // newImageLayout
 		    VK_PIPELINE_STAGE_TRANSFER_BIT,       // srcStageMask
@@ -458,7 +458,7 @@ do_the_thing(struct pluto_compositor *c,
 		vk_cmd_image_barrier_locked(              //
 		    vk,                                   // vk_bundle
 		    cmd,                                  // cmdbuffer
-		    dstImage,                             // image
+		    srcImage,                             // image
 		    VK_ACCESS_TRANSFER_WRITE_BIT,         // srcAccessMask
 		    VK_ACCESS_TRANSFER_READ_BIT,          // dstAccessMask
 		    srcImageOldLayout,                    // oldImageLayout
@@ -889,7 +889,7 @@ pluto_compositor_create_system(pluto_program &pp, struct xrt_system_compositor *
 	// Bounce image for scaling.
 	{
 		VkFormat format = VK_FORMAT_R8G8B8A8_SRGB;
-		VkImageUsageFlags usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+		VkImageUsageFlags usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 		VkExtent2D extent = {READBACK_W, READBACK_H};
 		VkResult ret;
 
