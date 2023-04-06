@@ -33,6 +33,13 @@
 #include <stdio.h>
 #include <stdarg.h>
 
+#define APP_VIEW_W (1920 / 2)
+#define APP_VIEW_H (1080)
+
+#define READBACK_W2 (READBACK_W / 2)
+#define READBACK_W (1920)
+#define READBACK_H (1080)
+
 
 DEBUG_GET_ONCE_LOG_OPTION(log, "XRT_COMPOSITOR_LOG", U_LOGGING_INFO)
 
@@ -264,15 +271,15 @@ compositor_init_sys_info(struct pluto_compositor *c, struct xrt_device *xdev)
 	// clang-format off
 
 	// These seem to control the 
-	sys_info->views[0].recommended.width_pixels  = 960;
-	sys_info->views[0].recommended.height_pixels = 1080;
+	sys_info->views[0].recommended.width_pixels  = APP_VIEW_W;
+	sys_info->views[0].recommended.height_pixels = APP_VIEW_H;
 	sys_info->views[0].recommended.sample_count  = 1;
 	sys_info->views[0].max.width_pixels          = 2048;
 	sys_info->views[0].max.height_pixels         = 2048;
 	sys_info->views[0].max.sample_count          = 1;
 
-	sys_info->views[1].recommended.width_pixels  = 960;
-	sys_info->views[1].recommended.height_pixels = 1080;
+	sys_info->views[1].recommended.width_pixels  = APP_VIEW_W;
+	sys_info->views[1].recommended.height_pixels = APP_VIEW_H;
 	sys_info->views[1].recommended.sample_count  = 1;
 	sys_info->views[1].max.width_pixels          = 2048;
 	sys_info->views[1].max.height_pixels         = 2048;
@@ -397,8 +404,8 @@ do_the_thing(struct pluto_compositor *c,
 
 		// Specify the region to copy
 		VkExtent3D extent = {};
-		extent.width = 960;   // Width of the region to copy
-		extent.height = 1080; // Height of the region to copy
+		extent.width = READBACK_W2; // Width of the region to copy
+		extent.height = READBACK_H; // Height of the region to copy
 		extent.depth = 1;
 
 		VkImageCopy copyRegion = {};
@@ -408,7 +415,7 @@ do_the_thing(struct pluto_compositor *c,
 		copyRegion.dstSubresource = dstSubresource;
 		copyRegion.dstOffset = {0, 0, 0};
 		if (view == 1) {
-			copyRegion.dstOffset.x = 960;
+			copyRegion.dstOffset.x = READBACK_W2;
 		}
 
 		vk->vkCmdCopyImage(                       //
@@ -787,9 +794,8 @@ pluto_compositor_create_system(pluto_program &pp, struct xrt_system_compositor *
 	}
 
 	VkExtent2D readback_extent = {};
-
-	readback_extent.height = 1080;
-	readback_extent.width = 1920;
+	readback_extent.height = READBACK_H;
+	readback_extent.width = READBACK_W;
 
 	vk_image_readback_to_xf_pool_create(&c->base.vk, readback_extent, &c->pool, XRT_FORMAT_R8G8B8X8);
 
@@ -797,8 +803,14 @@ pluto_compositor_create_system(pluto_program &pp, struct xrt_system_compositor *
 	u_var_add_sink_debug(c, &c->hackers_debug_sink, "Meow!");
 
 	gstreamer_pipeline_create_autovideo_sink(&c->xfctx, "Meow", &c->hackers_gstreamer_pipeline);
-	gstreamer_sink_create_with_pipeline(c->hackers_gstreamer_pipeline, 1920, 1080, XRT_FORMAT_R8G8B8X8, "Meow",
-	                                    &c->hackers_gstreamer_sink, &c->hackers_xfs);
+	gstreamer_sink_create_with_pipeline( //
+	    c->hackers_gstreamer_pipeline,   //
+	    READBACK_W,                      //
+	    READBACK_H,                      //
+	    XRT_FORMAT_R8G8B8X8,             //
+	    "Meow",                          //
+	    &c->hackers_gstreamer_sink,      //
+	    &c->hackers_xfs);                //
 
 
 
