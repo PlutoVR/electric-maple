@@ -375,7 +375,7 @@ do_the_thing(struct pluto_compositor *c,
 		const xrt_layer_projection_view_data *data = (view == 0) ? lvd : rvd;
 		struct comp_swapchain *sc = (view == 0) ? lsc : rsc;
 
-		VkImageLayout srcImageOldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+		VkImageLayout srcImageOldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		VkImage srcImage = sc->vkic.images[data->sub.image_index].handle;
 		VkImage dstImage = c->bounce.image; // Destination image to blit to
 
@@ -508,6 +508,19 @@ do_the_thing(struct pluto_compositor *c,
 		    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, //
 		    1,                                    //
 		    &copyRegion);                         //
+
+		// Barrier transfer image to host so we can safely read back.
+		vk_cmd_image_barrier_locked(              //
+		    vk,                                   // vk_bundle
+		    cmd,                                  // cmdbuffer
+		    dstImage,                             // image
+		    VK_ACCESS_TRANSFER_WRITE_BIT,         // srcAccessMask
+		    VK_ACCESS_HOST_READ_BIT,              // dstAccessMask
+		    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, // oldImageLayout
+		    VK_IMAGE_LAYOUT_GENERAL,              // newImageLayout
+		    VK_PIPELINE_STAGE_TRANSFER_BIT,       // srcStageMask
+		    VK_PIPELINE_STAGE_HOST_BIT,           // dstStageMask
+		    first_color_level_subresource_range); // subresourceRange
 	}
 
 	// Done submitting commands.
