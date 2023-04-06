@@ -48,8 +48,37 @@ accept_client_connection(struct pluto_program &ph)
 	socklen_t clilen = sizeof(ph.client_socket_address);
 
 	U_LOG_E("Waiting for client connection...");
+	fd_set set;
+	int ret = 0;
+
+	while (!ph.comms_thread_should_stop && ret == 0) {
+		// Get the socket.
+		int socket = ph.server_socket_fd;
+
+		// Select can modify timeout, reset each loop.
+		struct timeval timeout = {};
+		timeout.tv_sec = 1;
+		timeout.tv_usec = 0;
+
+		// Reset each loop.
+		FD_ZERO(&set);
+		FD_SET(socket, &set);
+
+		ret = select(socket + 1, &set, NULL, NULL, &timeout);
+	}
+
+	if (ret < 0) {
+		U_LOG_E("select: %i", ret);
+		return;
+	} else if (ret > 0) {
+		// Ok!
+	} else {
+		U_LOG_E("select: %i", ret);
+		return;
+	}
 
 	ph.client_socket_fd = accept(ph.server_socket_fd, (struct sockaddr *)&ph.client_socket_address, &clilen);
+
 	U_LOG_E("Got client connection!");
 }
 
