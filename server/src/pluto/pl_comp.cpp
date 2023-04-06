@@ -25,6 +25,8 @@
 
 #include "multi/comp_multi_interface.h"
 
+#include "vk/vk_image_readback_to_xf_pool.h"
+
 #include "pl_comp.h"
 
 #include <stdio.h>
@@ -259,18 +261,20 @@ compositor_init_sys_info(struct pluto_compositor *c, struct xrt_device *xdev)
 	(void)sys_info->client_d3d_deviceLUID_valid;
 
 	// clang-format off
-	sys_info->views[0].recommended.width_pixels  = 128;
-	sys_info->views[0].recommended.height_pixels = 128;
+
+	// These seem to control the 
+	sys_info->views[0].recommended.width_pixels  = 960;
+	sys_info->views[0].recommended.height_pixels = 1080;
 	sys_info->views[0].recommended.sample_count  = 1;
-	sys_info->views[0].max.width_pixels          = 1024;
-	sys_info->views[0].max.height_pixels         = 1024;
+	sys_info->views[0].max.width_pixels          = 2048;
+	sys_info->views[0].max.height_pixels         = 2048;
 	sys_info->views[0].max.sample_count          = 1;
 
-	sys_info->views[1].recommended.width_pixels  = 128;
-	sys_info->views[1].recommended.height_pixels = 128;
+	sys_info->views[1].recommended.width_pixels  = 960;
+	sys_info->views[1].recommended.height_pixels = 1080;
 	sys_info->views[1].recommended.sample_count  = 1;
-	sys_info->views[1].max.width_pixels          = 1024;
-	sys_info->views[1].max.height_pixels         = 1024;
+	sys_info->views[1].max.width_pixels          = 2048;
+	sys_info->views[1].max.height_pixels         = 2048;
 	sys_info->views[1].max.sample_count          = 1;
 	// clang-format on
 
@@ -435,7 +439,215 @@ pluto_compositor_layer_commit(struct xrt_compositor *xc, int64_t frame_id, xrt_g
 	// We want to render here. comp_base filled c->base.slot.layers for us.
 	U_LOG_E("We have %d layers.", c->base.slot.layer_count);
 	for (uint32_t i = 0; i < c->base.slot.layer_count; i++) {
-		U_LOG_E("Looking at layer %u", i);
+		comp_layer &layer = c->base.slot.layers[i];
+		U_LOG_E("Looking at layer %u. Type is %d", i, layer.data.type);
+
+		if (layer.data.type != XRT_LAYER_STEREO_PROJECTION_DEPTH) {
+			U_LOG_E("Got layer type %d, wanted %d", layer.data.type, XRT_LAYER_STEREO_PROJECTION_DEPTH);
+			continue;
+		}
+
+
+
+		const struct xrt_layer_stereo_projection_depth_data *stereo = &layer.data.stereo_depth;
+
+		const struct xrt_layer_projection_view_data *lvd = &stereo->l;
+		const struct xrt_layer_projection_view_data *rvd = &stereo->r;
+
+		U_LOG_E("lvd->sub.image_index %u rvd->sub.image_index %u", lvd->sub.image_index, rvd->sub.image_index);
+
+		struct comp_swapchain_image *left;
+		struct comp_swapchain_image *right;
+
+		left = &layer.sc_array[0]->images[stereo->l.sub.image_index];
+		right = &layer.sc_array[1]->images[stereo->r.sub.image_index];
+
+		U_LOG_E("lvd->sub.rect.offset.w %d rvd->sub.rect.offset.w %d", lvd->sub.rect.offset.w,
+		        rvd->sub.rect.offset.w);
+		U_LOG_E("lvd->sub.rect.offset.h %d rvd->sub.rect.offset.h %d", lvd->sub.rect.offset.h,
+		        rvd->sub.rect.offset.h);
+
+		U_LOG_E("lvd->sub.rect.extent.w %d rvd->sub.rect.extent.w %d", lvd->sub.rect.extent.w,
+		        rvd->sub.rect.extent.w);
+		U_LOG_E("lvd->sub.rect.extent.h %d rvd->sub.rect.extent.h %d", lvd->sub.rect.extent.h,
+		        rvd->sub.rect.extent.h);
+
+
+
+		if (u_sink_debug_is_active(&c->hackers_debug_sink)) {
+
+
+			struct vk_image_readback_to_xf *wrap = NULL;
+			struct vk_bundle *vk = &c->base.vk;
+
+			// Getting fr
+			U_LOG_E("Getting frame!");
+			if (!vk_image_readback_to_xf_pool_get_unused_frame(vk, c->pool, &wrap)) {
+				// WRONG
+				return XRT_SUCCESS;
+			}
+
+			// layer.sc_array[0]->vkic.images[]
+
+			U_LOG_E("Creating command buffer!");
+			VkCommandBuffer cmd = {};
+			vk_cmd_buffer_create_and_begin(vk, &cmd);
+
+			// For submitting commands.
+			os_mutex_lock(&vk->cmd_pool_mutex);
+
+
+				VkImageSubresourceRange first_color_level_subresource_range = {
+				    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				    .baseMipLevel = 0,
+				    .levelCount = 1,
+				    .baseArrayLayer = 0,
+				    .layerCount = 1,
+				};
+
+							U_LOG_E("Make scratch buffer a destination!");
+
+				// Barrier to make scratch buffer a destination
+				vk_cmd_image_barrier_locked(              //
+				    vk,                                   // vk_bundle
+				    cmd,                                  // cmdbuffer
+				    wrap->image,                             // image
+				    VK_ACCESS_HOST_READ_BIT,              // srcAccessMask
+				    VK_ACCESS_TRANSFER_WRITE_BIT,         // dstAccessMask
+				    wrap->layout,                         // oldImageLayout
+				    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, // newImageLayout
+				    VK_PIPELINE_STAGE_HOST_BIT,           // srcStageMask
+				    VK_PIPELINE_STAGE_TRANSFER_BIT,       // dstStageMask
+				    first_color_level_subresource_range); // subresourceRange
+
+			for (int view = 0; view < 2; view++) {
+				// Command buffer for the copy command
+				VkCommandBuffer cmdBuffer = cmd;
+
+				// Source image view to copy from
+				// VkImageView srcImageView =
+				//     *layer.sc_array[0]->images[stereo->l.sub.image_index].views.no_alpha;
+
+				const xrt_layer_projection_view_data *data = (view == 0) ? &stereo->l : &stereo->r;
+
+				// will this work?
+				VkImage srcImage = layer.sc_array[view]->vkic.images[data->sub.image_index].handle;
+				// layer.sc_array[0]->vkic.images[data->sub.image_index].size;
+				VkImage dstImage = wrap->image; // Destination image to copy to
+
+
+
+
+
+
+
+				U_LOG_E("Make source a source!");
+				// Barrier to make source a source
+				vk_cmd_image_barrier_locked(                  //
+				    vk,                                       // vk_bundle
+				    cmd,                                      // cmdbuffer
+				    srcImage,                                 // image
+				    VK_ACCESS_SHADER_WRITE_BIT,               // srcAccessMask
+				    VK_ACCESS_TRANSFER_READ_BIT,              // dstAccessMask
+				    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, // oldImageLayout
+				    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,     // newImageLayout
+				    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,     // srcStageMask
+				    VK_PIPELINE_STAGE_TRANSFER_BIT,           // dstStageMask
+				    first_color_level_subresource_range);     // subresourceRange
+
+				// Specify the source region to copy from
+				VkImageSubresourceLayers srcSubresource = {};
+				srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+				srcSubresource.mipLevel = 0;
+				srcSubresource.baseArrayLayer = data->sub.array_index;
+				srcSubresource.layerCount = 1;
+
+				U_LOG_E("data->sub.array_index %d", data->sub.array_index);
+
+
+				// Specify the destination region to copy to
+				VkImageSubresourceLayers dstSubresource = {};
+				dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+				dstSubresource.mipLevel = 0;
+				dstSubresource.baseArrayLayer = 0;
+				dstSubresource.layerCount = 1;
+
+				// Specify the region to copy
+				VkExtent3D extent = {};
+				extent.width = 960;   // Width of the region to copy
+				extent.height = 1080; // Height of the region to copy
+				extent.depth = 1;
+
+				VkImageCopy copyRegion = {};
+				copyRegion.srcSubresource = srcSubresource;
+				copyRegion.srcOffset = {0, 0, 0};
+				copyRegion.dstSubresource = dstSubresource;
+				copyRegion.dstOffset = {0, 0, 0};
+				if (view == 1) {
+					copyRegion.dstOffset.x = 960;
+				}
+				copyRegion.extent = extent;
+				U_LOG_E("vkCmdCopyImage!");
+
+				vk->vkCmdCopyImage(cmdBuffer, srcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dstImage,
+				                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
+
+
+
+				// Barrier to make source back whatit was before
+				vk_cmd_image_barrier_locked(                  //
+				    vk,                                       // vk_bundle
+				    cmd,                                      // cmdbuffer
+				    srcImage,                                 // image
+				    VK_ACCESS_SHADER_WRITE_BIT,               // srcAccessMask
+				    VK_ACCESS_TRANSFER_READ_BIT,              // dstAccessMask
+				    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,     // oldImageLayout
+				    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, // newImageLayout
+				    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,     // srcStageMask
+				    VK_PIPELINE_STAGE_TRANSFER_BIT,           // dstStageMask
+				    first_color_level_subresource_range);     // subresourceRange
+			}
+
+			// Done submitting commands.
+			os_mutex_unlock(&vk->cmd_pool_mutex);
+
+			VkResult ret;
+			U_LOG_E("Submitting command buffer!");
+			// Waits for command to finish.
+			ret = vk_cmd_buffer_submit(vk, cmd);
+			if (ret != VK_SUCCESS) {
+				//! @todo Better handling of error?
+				U_LOG_E("Failed to mirror image");
+			}
+
+			U_LOG_E("Done submitting command buffer!");
+
+
+			// HACK
+			wrap->base_frame.source_timestamp = os_monotonic_get_ns();
+			wrap->base_frame.source_id = c->image_sequence++;
+
+			xrt_frame *frame = &wrap->base_frame;
+			wrap = NULL;
+
+			u_sink_debug_push_frame(&c->hackers_debug_sink, frame);
+
+
+
+			// Dereference this frame - by now we should have pushed it.
+			xrt_frame_reference(&frame, NULL);
+		}
+
+		// lvd->sub.rect
+		// layer.sc_array[lvd->sub.image_index]
+
+		// c->base.slot.poses[0] = lvd->pose;
+		// c->base.slot.poses[1] = rvd->pose;
+		// c->base.slot.fovs[0] = lvd->fov;
+		// c->base.slot.fovs[1] = rvd->fov;
+
+		// layer.data.stereo_depth.l.sub;
+		// layer.sc_array[0]->images
 	}
 	// When we are submitting to the GPU.
 	{
@@ -449,17 +661,6 @@ pluto_compositor_layer_commit(struct xrt_compositor *xc, int64_t frame_id, xrt_g
 	return XRT_SUCCESS;
 }
 
-// static xrt_result_t
-// pluto_compositor_layer_stereo_projection(struct xrt_compositor *xc,
-//                                          struct xrt_device *xdev,
-//                                          struct xrt_swapchain *l_xsc,
-//                                          struct xrt_swapchain *r_xsc,
-//                                          const struct xrt_layer_data *data)
-// {
-// 	// no-op
-// 	U_LOG_E("HELLO I EXIST");
-// 	return XRT_SUCCESS;
-// }
 
 static xrt_result_t
 pluto_compositor_poll_events(struct xrt_compositor *xc, union xrt_compositor_event *out_xce)
@@ -594,6 +795,16 @@ pluto_compositor_create_system(pluto_program &pp, struct xrt_system_compositor *
 
 		return XRT_ERROR_VULKAN;
 	}
+
+	VkExtent2D readback_extent = {};
+
+	readback_extent.height = 1080;
+	readback_extent.width = 1920;
+
+	vk_image_readback_to_xf_pool_create(&c->base.vk, readback_extent, &c->pool, XRT_FORMAT_R8G8B8X8);
+
+	u_var_add_root(c, "Pluto compositor!", 0);
+	u_var_add_sink_debug(c, &c->hackers_debug_sink, "Meow!");
 
 
 	PLUTO_COMP_DEBUG(c, "Done %p", (void *)c);

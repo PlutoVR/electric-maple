@@ -22,6 +22,8 @@
 #include "util/u_threading.h"
 #include "util/u_logging.h"
 #include "util/u_pacing.h"
+#include "util/u_var.h"
+#include "util/u_sink.h"
 
 #include "util/comp_base.h"
 
@@ -122,6 +124,11 @@ struct pluto_compositor
 		struct null_comp_frame waited;
 		struct null_comp_frame rendering;
 	} frame;
+
+
+	struct vk_image_readback_to_xf_pool *pool = nullptr;
+	int image_sequence;
+	struct u_sink_debug hackers_debug_sink;
 };
 
 
