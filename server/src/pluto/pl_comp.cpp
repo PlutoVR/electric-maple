@@ -782,6 +782,21 @@ pluto_compositor_poll_events(struct xrt_compositor *xc, union xrt_compositor_eve
 	return XRT_SUCCESS;
 }
 
+static xrt_result_t
+pluto_compositor_get_swapchain_create_properties(struct xrt_compositor *xc,
+                                                 const struct xrt_swapchain_create_info *info,
+                                                 struct xrt_swapchain_create_properties *xsccp)
+{
+	xrt_result_t xret = comp_swapchain_get_create_properties(info, xsccp);
+	if (xret != XRT_SUCCESS) {
+		return xret;
+	}
+
+	xsccp->extra_bits = (enum xrt_swapchain_usage_bits)(XRT_SWAPCHAIN_USAGE_TRANSFER_SRC | xsccp->extra_bits);
+
+	return XRT_SUCCESS;
+}
+
 static void
 pluto_compositor_destroy(struct xrt_compositor *xc)
 {
@@ -838,6 +853,12 @@ pluto_compositor_create_system(pluto_program &pp, struct xrt_system_compositor *
 {
 	struct pluto_compositor *c = U_TYPED_CALLOC(struct pluto_compositor);
 
+	PLUTO_COMP_DEBUG(c, "Doing init %p", (void *)c);
+
+	// Needs to be done before functions are set as override function(s).
+	comp_base_init(&c->base);
+
+	c->base.base.base.get_swapchain_create_properties = pluto_compositor_get_swapchain_create_properties;
 	c->base.base.base.begin_session = pluto_compositor_begin_session;
 	c->base.base.base.end_session = pluto_compositor_end_session;
 	c->base.base.base.predict_frame = pluto_compositor_predict_frame;
@@ -859,12 +880,7 @@ pluto_compositor_create_system(pluto_program &pp, struct xrt_system_compositor *
 	c->settings.frame_interval_ns = xdev->hmd->screens[0].nominal_frame_interval_ns;
 	c->xdev = xdev;
 
-	PLUTO_COMP_DEBUG(c, "Doing init %p", (void *)c);
-
 	PLUTO_COMP_INFO(c, "Starting Pluto remote compositor!");
-
-	// Do this as early as possible
-	comp_base_init(&c->base);
 
 
 	/*
