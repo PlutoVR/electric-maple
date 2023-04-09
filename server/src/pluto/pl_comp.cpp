@@ -322,10 +322,6 @@ do_the_thing(struct pluto_compositor *c,
 {
 	VkResult ret;
 
-	if (!u_sink_debug_is_active(&c->hackers_debug_sink)) {
-		return;
-	}
-
 	struct vk_image_readback_to_xf *wrap = NULL;
 	struct vk_bundle *vk = &c->base.vk;
 
