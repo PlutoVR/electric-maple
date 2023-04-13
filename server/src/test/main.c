@@ -256,21 +256,18 @@ webrtc_client_disconnected_cb (MssHttpServer *server, MssClientId client_id,
 
   webrtcbin = get_webrtcbin_for_client (pipeline, client_id);
 
-  // What does this dooooo???
+  if (webrtcbin) {
+    GstPad *sinkpad;
 
-  // if (webrtcbin) {
-  //   GstPad *sinkpad;
+    sinkpad = gst_element_get_static_pad (webrtcbin, "sink_0");
+    if (sinkpad) {
+      gst_pad_add_probe (GST_PAD_PEER (sinkpad),
+          GST_PAD_PROBE_TYPE_BLOCK_DOWNSTREAM,
+          remove_webrtcbin_probe_cb, webrtcbin, gst_object_unref);
 
-  //   if (sinkpad) {
-  //     sinkpad = gst_element_get_static_pad (webrtcbin, "sink_0");
-
-  //     gst_pad_add_probe (GST_PAD_PEER (sinkpad),
-  //         GST_PAD_PROBE_TYPE_BLOCK_DOWNSTREAM,
-  //         remove_webrtcbin_probe_cb, webrtcbin, gst_object_unref);
-
-  //     gst_clear_object (&sinkpad);
-  //   }
-  // }
+      gst_clear_object (&sinkpad);
+    }
+  }
 }
 
 struct RestartData {
