@@ -375,7 +375,7 @@ int main (int argc, char *argv[])
   http_server = mss_http_server_new ();
 
   pipeline_str = g_strdup_printf (
-      "videotestsrc ! x264enc tune=zerolatency ! video/x-h264,profile=baseline ! queue !"
+      "videotestsrc is-live=1 ! x264enc tune=zerolatency ! video/x-h264,profile=baseline ! queue !"
       " h264parse ! rtph264pay config-interval=1 ! application/x-rtp,payload=96 ! tee name=webrtctee allow-not-linked=true ");
 
   printf("%s\n\n\n\n", pipeline_str);
