@@ -36,6 +36,19 @@ if(NOT MSVC)
 endif()
 
 
+find_package(PkgConfig REQUIRED)
+
+pkg_check_modules(GLIB REQUIRED glib-2.0)
+
+pkg_check_modules(GST_SDP REQUIRED gstreamer-sdp-1.0)
+pkg_check_modules(GST_WEBRTC REQUIRED gstreamer-webrtc-1.0)
+
+
+pkg_check_modules(LIBSOUP REQUIRED libsoup-2.4)
+pkg_check_modules(JSONGLIB REQUIRED json-glib-1.0)
+pkg_check_modules(GIO REQUIRED gio-2.0)
+
+
 # Default to PIC code
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 

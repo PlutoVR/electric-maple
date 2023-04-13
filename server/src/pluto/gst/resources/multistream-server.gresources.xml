@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+  <gresource prefix="/">
+    <file>index.html</file>
+    <file>mss.js</file>
+    <file>style.css</file>
+    <file>COLLABORA_01_MONO.png</file>
+    <file>gStreamer.svg</file>
+    <file>hls.js</file>
+    <file>webrtc-adapter.js</file>
+  </gresource>
+</gresources>

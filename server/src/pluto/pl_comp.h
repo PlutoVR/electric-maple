@@ -29,6 +29,7 @@
 
 #include "gstreamer/gst_pipeline.h"
 #include "gstreamer/gst_sink.h"
+#include "gst/gst_webrtc_interface.h"
 
 
 #include "pl_server_internal.h"

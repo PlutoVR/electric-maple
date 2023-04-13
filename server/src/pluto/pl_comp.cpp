@@ -473,7 +473,7 @@ do_the_thing(struct pluto_compositor *c,
 	wrap = NULL;
 
 	if (!c->pipeline_playing) {
-		gstreamer_pipeline_play(c->hackers_gstreamer_pipeline);
+		gstreamer_webrtc_pipeline_play(c->hackers_gstreamer_pipeline);
 		c->pipeline_playing = true;
 	}
 
@@ -837,7 +837,7 @@ pluto_compositor_create_system(pluto_program &pp, struct xrt_system_compositor *
 	u_var_add_root(c, "Pluto compositor!", 0);
 	u_var_add_sink_debug(c, &c->hackers_debug_sink, "Meow!");
 
-	gstreamer_pipeline_create_autovideo_sink(&c->xfctx, "Meow", &c->hackers_gstreamer_pipeline);
+	gstreamer_pipeline_create_webrtc_sink(&c->xfctx, "Meow", &c->hackers_gstreamer_pipeline);
 	gstreamer_sink_create_with_pipeline( //
 	    c->hackers_gstreamer_pipeline,   //
 	    READBACK_W,                      //

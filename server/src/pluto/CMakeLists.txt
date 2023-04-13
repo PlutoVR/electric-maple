@@ -1,6 +1,8 @@
 # Copyright 2019-2022, Collabora, Ltd.
 # SPDX-License-Identifier: BSL-1.0
 
+add_subdirectory(gst)
+
 add_library(comp_pluto STATIC pl_comp.cpp pl_comp.h)
 target_link_libraries(
 	comp_pluto
@@ -11,6 +13,7 @@ target_link_libraries(
 		aux_vk
 		comp_util
 		comp_multi
+		pl_gst
 	)
 target_include_directories(comp_pluto PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(comp_pluto INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
