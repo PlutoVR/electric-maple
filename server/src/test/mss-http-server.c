@@ -87,40 +87,6 @@ http_cb (SoupServer *server, SoupMessage *msg, const char *path,
 }
 
 static void
-hls_cb (SoupServer *server, SoupMessage *msg, const char *path,
-  GHashTable *query, SoupClientContext *client, gpointer user_data)
-{
-  gchar *file_name;
-  gchar *file_path;
-  gchar *buf;
-  gsize buf_len;
-  GError *error = NULL;
-  MssHttpServer *self = MSS_HTTP_SERVER(user_data);
-
-  file_name = g_path_get_basename (path);
-  file_path = g_build_filename (self->hls_dir, file_name, NULL);
-
-  if (g_file_get_contents (file_path, &buf, &buf_len, &error)) {
-    SoupBuffer *buffer;
-
-    buffer = soup_buffer_new_take ((guchar *) buf, buf_len);
-    soup_message_body_append_buffer (msg->response_body, buffer);
-    soup_buffer_free (buffer);
-
-    if (g_str_has_suffix(path, ".m3u8")) {
-      soup_message_headers_append(msg->response_headers,
-          "Content-Type", "application/vnd.apple.mpegurl");
-    }
-
-    soup_message_set_status (msg, SOUP_STATUS_OK);
-  } else {
-    g_warning (error->message);
-    g_clear_error (&error);
-    soup_message_set_status (msg, SOUP_STATUS_NOT_FOUND);
-  }
-}
-
-static void
 mss_http_server_handle_message (MssHttpServer *server,
   SoupWebsocketConnection *connection, GBytes *message)
 {
@@ -232,7 +198,7 @@ mss_http_server_init (MssHttpServer *server)
   g_assert_no_error (error);
 
   soup_server_add_handler (server->soup_server, NULL, http_cb, server, NULL);
-  soup_server_add_handler (server->soup_server, "/hls/", hls_cb, server, NULL);
+  // soup_server_add_handler (server->soup_server, "/hls/", hls_cb, server, NULL);
   soup_server_add_websocket_handler (server->soup_server, "/ws", NULL, NULL,
       websocket_cb, server, NULL);
 

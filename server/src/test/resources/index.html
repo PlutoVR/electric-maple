@@ -5,17 +5,17 @@
     <link rel="stylesheet" href="style.css">
   </head>
   <body>
-    <script src="hls.js"></script>
+    <!-- <script src="hls.js"></script> -->
     <script src="webrtc-adapter.js"></script>
 
     <header>
       <img src="COLLABORA_01_MONO.png">
     </header>
     <div id="videos">
-      <div class="display_container">
+      <!-- <div class="display_container">
         <video id="hls_video" autoplay controls></video>
         <div>HLS</div>
-      </div>
+      </div> -->
       <div class="display_container">
         <video id="webrtc_video" autoplay controls></video>
         <div>WebRTC</div>
@@ -28,7 +28,7 @@
     <script type="module">
       import * as mss from './mss.js'
 
-      var hls = new mss.HLSStream(document.getElementById("hls_video"))
+      // var hls = new mss.HLSStream(document.getElementById("hls_video"))
       var webrtc = new mss.WebRTCStream(document.getElementById("webrtc_video"))
     </script>
   </body>

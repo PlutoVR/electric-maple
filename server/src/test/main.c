@@ -255,19 +255,22 @@ webrtc_client_disconnected_cb (MssHttpServer *server, MssClientId client_id,
   GstElement *webrtcbin;
 
   webrtcbin = get_webrtcbin_for_client (pipeline, client_id);
-  if (webrtcbin) {
-    GstPad *sinkpad;
 
-    if (sinkpad) {
-      sinkpad = gst_element_get_static_pad (webrtcbin, "sink_0");
+  // What does this dooooo???
 
-      gst_pad_add_probe (GST_PAD_PEER (sinkpad),
-          GST_PAD_PROBE_TYPE_BLOCK_DOWNSTREAM,
-          remove_webrtcbin_probe_cb, webrtcbin, gst_object_unref);
+  // if (webrtcbin) {
+  //   GstPad *sinkpad;
 
-      gst_clear_object (&sinkpad);
-    }
-  }
+  //   if (sinkpad) {
+  //     sinkpad = gst_element_get_static_pad (webrtcbin, "sink_0");
+
+  //     gst_pad_add_probe (GST_PAD_PEER (sinkpad),
+  //         GST_PAD_PROBE_TYPE_BLOCK_DOWNSTREAM,
+  //         remove_webrtcbin_probe_cb, webrtcbin, gst_object_unref);
+
+  //     gst_clear_object (&sinkpad);
+  //   }
+  // }
 }
 
 struct RestartData {
@@ -407,13 +410,13 @@ int main (int argc, char *argv[])
       srt_uri,
       rist_addresses);
 
-  src = gst_bin_get_by_name (GST_BIN (pipeline), "src");
-  srcpad = gst_element_get_static_pad (src, "src");
-  gst_pad_add_probe (srcpad, GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM, src_event_cb,
-      pipeline, NULL);
-  g_timeout_add (1000, print_stats, src);
-  gst_object_unref (srcpad);
-  gst_object_unref (src);
+  // src = gst_bin_get_by_name (GST_BIN (pipeline), "src");
+  // srcpad = gst_element_get_static_pad (src, "src");
+  // gst_pad_add_probe (srcpad, GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM, src_event_cb,
+  //     pipeline, NULL);
+  // g_timeout_add (1000, print_stats, src);
+  // gst_object_unref (srcpad);
+  // gst_object_unref (src);
 
   ret = gst_element_set_state (pipeline, GST_STATE_PLAYING);
   g_assert (ret != GST_STATE_CHANGE_FAILURE);
