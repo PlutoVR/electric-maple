@@ -375,18 +375,16 @@ int main (int argc, char *argv[])
   http_server = mss_http_server_new ();
 
   pipeline_str = g_strdup_printf (
-      "videotestsrc ! tee name=t "
-      "t. ! queue ! rtpmp2tpay ! ristsink bonding-addresses=%s "
-      "t. ! queue leaky=downstream max-size-buffers=400 ! srtsink uri=srt://:7002?mode=listener async=0 "
-      "t. ! queue ! tsdemux latency=50 ! tee name=h264_t "
+      "videotestsrc ! x264enc tune=zerolatency ! video/x-h264,profile=baseline ! tee name=t "
+      "t. ! queue !  tee name=h264_t "
         "h264_t. ! queue ! decodebin ! videoconvert ! " DEFAULT_VIDEOSINK " "
         "h264_t. ! queue ! h264parse ! video/x-h264, alignment=au ! "
           "hlssink2 location=%s/segment%%05d.ts playlist-location=%s/playlist.m3u8 send-keyframe-requests=0 target-duration=1 playlist-length=5 "
         "h264_t. ! queue ! h264parse ! rtph264pay config-interval=1 ! application/x-rtp,payload=96 ! tee name=webrtctee allow-not-linked=true ",
-      srt_uri,
-      rist_addresses,
       mss_http_server_get_hls_dir (http_server),
       mss_http_server_get_hls_dir (http_server));
+
+  printf("%s\n\n\n\n", pipeline_str);
 
   gst_init (&argc, &argv);
   pipeline = gst_parse_launch (pipeline_str, &error);
