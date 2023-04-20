@@ -12,6 +12,7 @@
 #include <assert.h>
 
 #include "common.hpp"
+//#include "vf/vf_interface.h"
 
 static state_t state = {};
 

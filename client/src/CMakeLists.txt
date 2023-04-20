@@ -34,5 +34,7 @@ target_link_libraries(
 	openxr_loader
 	pluto_proto
 	aux_util
+	# drv_includes
+	# drv_vf
 	# delete-me-nanopb
 	)
