@@ -1,3 +1,5 @@
+add_subdirectory(vf)
+
 # build native_app_glue as a static lib
 set(${CMAKE_C_FLAGS}, "${CMAKE_C_FLAGS}")
 add_library(
@@ -34,5 +36,8 @@ target_link_libraries(
 	openxr_loader
 	pluto_proto
 	aux_util
+	pluto_vf
+	# drv_includes
+	# drv_vf
 	# delete-me-nanopb
 	)

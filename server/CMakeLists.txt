@@ -1,7 +1,7 @@
 # Copyright 2023, Pluto VR, Inc.
 # SPDX-License-Identifier: MIT
 
-cmake_minimum_required(VERSION 3.26.0)
+cmake_minimum_required(VERSION 3.20.0)
 project(linux-streaming VERSION 0.0.1)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -116,7 +116,7 @@ setforce(XRT_BUILD_DRIVER_REMOTE OFF)
 setforce(XRT_BUILD_DRIVER_RIFT_S OFF)
 setforce(XRT_BUILD_DRIVER_SURVIVE OFF)
 setforce(XRT_BUILD_DRIVER_ULV2 OFF)
-setforce(XRT_BUILD_DRIVER_VF OFF)
+setforce(XRT_BUILD_DRIVER_VF ON)
 setforce(XRT_BUILD_DRIVER_VIVE OFF)
 setforce(XRT_BUILD_DRIVER_WMR OFF)
 setforce(XRT_BUILD_DRIVER_SIMULAVR OFF)

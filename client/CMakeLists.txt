@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10.2)
+cmake_minimum_required(VERSION 3.12)
 
 project("plutovr_webrtc_client" VERSION 0.0.1)
 
@@ -68,7 +68,7 @@ setforce(XRT_BUILD_DRIVER_REMOTE OFF)
 setforce(XRT_BUILD_DRIVER_RIFT_S OFF)
 setforce(XRT_BUILD_DRIVER_SURVIVE OFF)
 setforce(XRT_BUILD_DRIVER_ULV2 OFF)
-setforce(XRT_BUILD_DRIVER_VF OFF)
+setforce(XRT_BUILD_DRIVER_VF OFF) # Hi!
 setforce(XRT_BUILD_DRIVER_VIVE OFF)
 setforce(XRT_BUILD_DRIVER_WMR OFF)
 setforce(XRT_BUILD_DRIVER_SIMULAVR OFF)
@@ -96,5 +96,51 @@ set_property(
 		IMPORTED_LOCATION
 		${OCULUS_OPENXR_MOBILE_SDK}/OpenXR/Libs/Android/${ANDROID_ABI}/${CMAKE_BUILD_TYPE}/libopenxr_loader.so
 	)
+
+include(FetchContent)
+
+FetchContent_Declare(
+	gstreamer_android
+	URL https://gstreamer.freedesktop.org/data/pkg/android/1.22.2/gstreamer-1.0-android-universal-1.22.2.tar.xz
+	    DOWNLOAD_EXTRACT_TIMESTAMP
+	    TRUE
+	    PREFIX
+	    ${CMAKE_CURRENT_BINARY_DIR}/external
+	)
+
+
+# if(NOT gstreamer_android_POPULATED)
+# 	# Fetch the content using previously declared details
+# 	FetchContent_Populate(gstreamer_android)
+
+# 	# Set custom variables, policies, etc.
+# 	# ...
+
+# 	# Bring the populated content into the build
+# 	# add_subdirectory(${gstreamer_android_SOURCE_DIR} ${gstreamer_android_BINARY_DIR})
+
+
+# endif()
+
+FetchContent_MakeAvailable(gstreamer_android)
+
+set(GST_LIBRARIES
+# Order matters for gobject, gmodule, glib.
+${gstreamer_android_SOURCE_DIR}/arm64/lib/libgobject-2.0.a
+${gstreamer_android_SOURCE_DIR}/arm64/lib/libgmodule-2.0.a
+${gstreamer_android_SOURCE_DIR}/arm64/lib/libglib-2.0.a
+# Doesn't seem like order matters for the stuff after this.
+${gstreamer_android_SOURCE_DIR}/arm64/lib/libgstreamer-1.0.a
+${gstreamer_android_SOURCE_DIR}/arm64/lib/libgstbase-1.0.a
+${gstreamer_android_SOURCE_DIR}/arm64/lib/libgstapp-1.0.a
+${gstreamer_android_SOURCE_DIR}/arm64/lib/libgstvideo-1.0.a
+${gstreamer_android_SOURCE_DIR}/arm64/lib/libiconv.a
+${gstreamer_android_SOURCE_DIR}/arm64/lib/libintl.a
+${gstreamer_android_SOURCE_DIR}/arm64/lib/libffi.a
+${gstreamer_android_SOURCE_DIR}/arm64/lib/libpcre2-8.a
+${gstreamer_android_SOURCE_DIR}/arm64/lib/liborc-0.4.a
+)
+set(GST_INCLUDE_DIRS ${gstreamer_android_SOURCE_DIR}/arm64/include/gstreamer-1.0/ )
+set(GLIB_INCLUDE_DIRS ${gstreamer_android_SOURCE_DIR}/arm64/include/glib-2.0 ${gstreamer_android_SOURCE_DIR}/arm64/lib/glib-2.0/include/)
 
 add_subdirectory(src)
