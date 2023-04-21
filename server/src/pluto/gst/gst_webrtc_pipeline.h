@@ -25,9 +25,9 @@ void
 gstreamer_webrtc_pipeline_stop(struct gstreamer_pipeline *gp);
 
 void
-gstreamer_pipeline_create_webrtc_sink(struct xrt_frame_context *xfctx,
-                                      const char *appsrc_name,
-                                      struct gstreamer_pipeline **out_gp);
+gstreamer_pipeline_webrtc_create(struct xrt_frame_context *xfctx,
+                                 const char *appsrc_name,
+                                 struct gstreamer_pipeline **out_gp);
 
 #ifdef __cplusplus
 }
