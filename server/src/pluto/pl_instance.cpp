@@ -14,13 +14,30 @@
 #include "util/u_builders.h"
 #include "util/u_trace_marker.h"
 
-#include "pl_server_internal.h"
-#include "../../drivers/pl_driver.h"
-#include <assert.h>
 
 #include "main/comp_main_interface.h"
 
+#include "pl_server_internal.h"
+
+#include <assert.h>
+
+
 extern "C" {
+
+
+static inline struct pluto_program *
+from_xinst(struct xrt_instance *xinst)
+{
+	return container_of(xinst, struct pluto_program, xinst_base);
+}
+
+static inline struct pluto_program *
+from_xsysd(struct xrt_system_devices *xsysd)
+{
+	return container_of(xsysd, struct pluto_program, xsysd_base);
+}
+
+
 
 /*
  *
@@ -87,7 +104,9 @@ pluto_instance_create_system(struct xrt_instance *xinst,
 	// Pluto-compositor :)
 
 	if (xret == XRT_SUCCESS && xsysc == NULL) {
-		xret = comp_main_create_system_compositor(sp->xsysd_base.roles.head, NULL, &xsysc);
+		// xret = comp_main_create_system_compositor(sp->xsysd_base.roles.head, NULL, &xsysc);
+		// xret = pluto_compositor_create_system(*sp, sp->xsysd_base.roles.head, &xsysc);
+		xret = pluto_compositor_create_system(*sp, &xsysc);
 	}
 
 	*out_xsysc = xsysc;
@@ -99,6 +118,10 @@ static void
 pluto_instance_destroy(struct xrt_instance *xinst)
 {
 	struct pluto_program *sp = from_xinst(xinst);
+
+	sp->comms_thread_should_stop = true;
+
+	sp->comms_thread.join();
 
 	delete sp;
 }
@@ -116,7 +139,10 @@ pluto_system_devices_init(struct pluto_program *sp)
 	sp->xsysd_base.destroy = pluto_system_devices_destroy;
 
 
-	struct xrt_device *head = pluto_hmd_create();
+	struct pluto_hmd *ph = pluto_hmd_create(*sp);
+	sp->head = ph;
+
+	struct xrt_device *head = &ph->base;
 
 	// Setup the device base as the only device.
 	sp->xsysd_base.xdevs[0] = head;
@@ -143,6 +169,10 @@ xrt_instance_create(struct xrt_instance_info *ii, struct xrt_instance **out_xins
 
 	pluto_system_devices_init(sp);
 	pluto_instance_init(sp);
+
+	make_connect_socket(*sp);
+
+	sp->comms_thread = std::thread(run_comms_thread, sp);
 
 	*out_xinst = &sp->xinst_base;
 

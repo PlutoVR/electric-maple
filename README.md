@@ -17,3 +17,11 @@ adb reverse tcp:61943 tcp:61943
 ```
 your Quest should be able to connect to the server on your PC and you should be able to get going :)
 
+## Native WebRTC test
+
+Right now, we have a native WebRTC receiver test at `server/test/webrtc_client`. All it does is set up the stream and shove video into an autovideosink.
+
+Not all of the state tracking is set up yet, so the only way it'll work is if you do things in this order:
+* Launch pluto_streaming_server
+* Launch an OpenXR application (to trigger the GStreamer pipeline and webserver to start up)
+* Launch the WebRTC client
