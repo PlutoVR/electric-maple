@@ -6,12 +6,18 @@
  * @author Moshi Turner <moses@collabora.com>
  */
 
-
+#include <cmath>
+#include <cstdlib>
+#include <ctime>
+#include <array>
 #include <errno.h>
 
 #include <assert.h>
 
 #include "common.hpp"
+#include "vf/vf_interface.h"
+
+
 
 static state_t state = {};
 
@@ -70,7 +76,7 @@ really_make_socket(struct state_t &st)
 static void
 hmd_pose(struct state_t &st)
 {
-
+	return;
 	XrResult result = XR_SUCCESS;
 
 
@@ -294,13 +300,36 @@ mainloop_one(struct state_t &state)
 		U_LOG_E("Failed to wait for swapchain image (%d)", result);
 	}
 
+	//    if (state.xf) {
+	if (false) {
+		U_LOG_E("meow!");
+		glBindTexture(GL_TEXTURE_2D, state.frame_tex);
+		glPixelStorei(GL_UNPACK_ROW_LENGTH, state.xf->stride / 4);
+
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, state.xf->width, state.xf->height, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+		             state.xf->data);
+
+		//        glPixelStorei(GL_UNPACK_ROW_LENGTH, state.xf->stride / 4);
+		//    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, state.xf->width, state.xf->height, 0, GL_RGBA,
+		//    GL_UNSIGNED_BYTE, state.xf->data);
+		glBindTexture(GL_TEXTURE_2D, 0);
+		xrt_frame_reference(&state.xf, NULL);
+	}
+
 
 	glBindFramebuffer(GL_FRAMEBUFFER, state.framebuffers[imageIndex]);
 
+	glViewport(0, 0, state.width * 2, state.height);
+
+
+	glClearColor(0.0f, 1.0f, 0.0f, 1.0f);
+	//    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
 	// Just display purple nothingness
 	for (uint32_t eye = 0; eye < 2; eye++) {
-		glViewport(eye * state.width, 0, state.width, state.height);
-		drawTriangle(state.shader_program);
+		glViewport(360, 360, 720, 720);
+		draw(state.framebuffers[imageIndex], state.frame_tex);
+		break;
 	}
 
 	// Release
@@ -326,6 +355,101 @@ mainloop_one(struct state_t &state)
 }
 
 void
+sink_push_frame(struct xrt_frame_sink *xfs, struct xrt_frame *xf)
+{
+	if (!xf) {
+		U_LOG_E("what??");
+		return;
+	}
+	struct state_t *st = container_of(xfs, struct state_t, frame_sink);
+	if (!st->xf) {
+		//		xrt_frame_reference(&xf, st->xf);
+		xrt_frame_reference(&st->xf, xf);
+	}
+	U_LOG_E("Called! %d %p %u %u %zu", st->frame_tex, xf->data, xf->width, xf->height, xf->stride);
+}
+
+GLuint
+generateRandomTexture(GLsizei width, GLsizei height)
+{
+	// Seed the random number generator
+	std::srand(std::time(0));
+
+	// Allocate memory for the texture data
+	GLubyte *data = new GLubyte[width * height * 4];
+
+#if 0
+
+    // Fill the texture data with random values
+    for (GLsizei i = 0; i < width * height * 4; i++) {
+        data[i] = std::rand() % 256;
+    }
+
+#elif 1
+	int tileSize = 100;
+	for (GLsizei y = 0; y < height; y++) {
+		for (GLsizei x = 0; x < width; x++) {
+			GLsizei tileX = x / tileSize;
+			GLsizei tileY = y / tileSize;
+
+			GLubyte color = ((tileX + tileY) % 2 == 0) ? 255 : 0;
+			GLsizei index = (y * width + x) * 4;
+
+			data[index] = color;
+			data[index + 1] = color;
+			data[index + 2] = color;
+			data[index + 3] = 255;
+		}
+	}
+#else
+	// Define the colors for the rainbow checkerboard
+	std::array<GLubyte[4], 7> colors = {{
+	    {255, 0, 0, 255},   // Red
+	    {255, 127, 0, 255}, // Orange
+	    {255, 255, 0, 255}, // Yellow
+	    {0, 255, 0, 255},   // Green
+	    {0, 0, 255, 255},   // Blue
+	    {75, 0, 130, 255},  // Indigo
+	    {148, 0, 211, 255}  // Violet
+	}};
+	int tileSize = 100;
+	for (GLsizei y = 0; y < height; y++) {
+		for (GLsizei x = 0; x < width; x++) {
+			GLsizei tileX = x / tileSize;
+			GLsizei tileY = y / tileSize;
+
+			GLsizei tileIndex = (tileX + tileY) % colors.size();
+			GLsizei index = (y * width + x) * 4;
+
+			data[index] = colors[tileIndex][0];
+			data[index + 1] = colors[tileIndex][1];
+			data[index + 2] = colors[tileIndex][2];
+			data[index + 3] = colors[tileIndex][3];
+		}
+	}
+#endif
+
+	// Create the texture
+	GLuint texture;
+	glGenTextures(1, &texture);
+	glBindTexture(GL_TEXTURE_2D, texture);
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	// Free the texture data
+	delete[] data;
+
+	return texture;
+}
+
+void
 android_main(struct android_app *app)
 {
 
@@ -334,6 +458,8 @@ android_main(struct android_app *app)
 	app->onAppCmd = onAppCmd;
 
 	initializeEGL(state);
+
+	state.xf = nullptr;
 
 
 
@@ -413,6 +539,22 @@ android_main(struct android_app *app)
 	state.width = viewInfo[0].recommendedImageRectWidth;
 	state.height = viewInfo[0].recommendedImageRectHeight;
 
+	state.frame_tex = generateRandomTexture(state.width, state.height);
+	//    state.frame_tex = generateRandomTexture(320, 240);
+
+
+	//    GLint w = 1;
+	//    GLint h = 1;
+
+
+	state.frame_sink.push_frame = sink_push_frame;
+
+	struct xrt_frame_context xfctx = {};
+	struct xrt_fs *blah = vf_fs_videotestsource(&xfctx, state.width, state.height);
+
+	xrt_fs_stream_start(blah, &state.frame_sink, XRT_FS_CAPTURE_TYPE_TRACKING, 0);
+
+
 	// OpenXR session
 
 	PFN_xrGetOpenGLESGraphicsRequirementsKHR xrGetOpenGLESGraphicsRequirementsKHR = NULL;
@@ -464,6 +606,16 @@ android_main(struct android_app *app)
 
 	glGenFramebuffers(state.imageCount, state.framebuffers);
 
+
+	if (state.xf) {
+		glBindTexture(GL_TEXTURE_2D, state.frame_tex);
+		glPixelStorei(GL_UNPACK_ROW_LENGTH, state.xf->stride / 4);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, state.xf->width, state.xf->height, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+		             state.xf->data);
+		glBindTexture(GL_TEXTURE_2D, 0);
+	}
+
+
 	for (uint32_t i = 0; i < state.imageCount; i++) {
 		glBindFramebuffer(GL_FRAMEBUFFER, state.framebuffers[i]);
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, state.images[i].image, 0);
@@ -476,7 +628,7 @@ android_main(struct android_app *app)
 
 	create_spaces(state);
 
-	state.shader_program = makeShaderProgram();
+	setupRender();
 
 	really_make_socket(state);
 
