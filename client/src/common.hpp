@@ -81,4 +81,3 @@ void
 drawTriangle(GLuint shader_program);
 
 //
-

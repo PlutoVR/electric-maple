@@ -35,6 +35,24 @@ if(NOT MSVC)
 	set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -Wl,--no-undefined")
 endif()
 
+option(PL_LIBSOUP2 "Use libsoup2.4 instead of libsoup3.0" OFF)
+
+# pkgconfig!
+find_package(PkgConfig REQUIRED)
+
+# GLib packages we'll need
+pkg_check_modules(GLIB REQUIRED glib-2.0)
+pkg_check_modules(GST_SDP REQUIRED gstreamer-sdp-1.0)
+pkg_check_modules(GST_WEBRTC REQUIRED gstreamer-webrtc-1.0)
+
+if(PL_LIBSOUP2)
+	pkg_check_modules(LIBSOUP REQUIRED libsoup-2.4)
+else()
+	pkg_check_modules(LIBSOUP REQUIRED libsoup-3.0)
+endif()
+
+pkg_check_modules(JSONGLIB REQUIRED json-glib-1.0)
+pkg_check_modules(GIO REQUIRED gio-2.0)
 
 # Default to PIC code
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -45,69 +63,72 @@ set(MONADO_SRC_XRT ${CMAKE_CURRENT_SOURCE_DIR}/monado/src/xrt)
 
 # Helper to obey CMP0077 and work around warnings.
 function(setForce NAME VALUE)
-	set(${NAME} ${VALUE} CACHE INTERNAL "" FORCE)
+	set(${NAME}
+	    ${VALUE}
+	    CACHE INTERNAL "" FORCE
+		)
 endfunction()
 
 # Let's use this for now: Monado's main compositor is really good and is an
 #easy way to see that things are working.
-setForce(XRT_FEATURE_COMPOSITOR_MAIN ON)
+setforce(XRT_FEATURE_COMPOSITOR_MAIN ON)
 
 # No reason to disable this
-setForce(XRT_FEATURE_COMPOSITOR_NULL ON)
+setforce(XRT_FEATURE_COMPOSITOR_NULL ON)
 
 # It looks like we can use Monado's normal out-of-proc OpenXR instance as-is. We'll see.
-setForce(XRT_FEATURE_OPENXR ON)
+setforce(XRT_FEATURE_OPENXR ON)
 
-setForce(XRT_FEATURE_RENDERDOC OFF) # we are not using this
-setForce(XRT_FEATURE_STEAMVR_PLUGIN OFF) # we are not using this
-setForce(XRT_FEATURE_TRACING OFF) # we are not using this yet
-setForce(XRT_FEATURE_SLAM OFF) # we are not using this
+setforce(XRT_FEATURE_RENDERDOC OFF) # we are not using this
+setforce(XRT_FEATURE_STEAMVR_PLUGIN OFF) # we are not using this
+setforce(XRT_FEATURE_TRACING OFF) # we are not using this yet
+setforce(XRT_FEATURE_SLAM OFF) # we are not using this
 
-setForce(XRT_FEATURE_CLIENT_DEBUG_GUI OFF) # we are not using this
+setforce(XRT_FEATURE_CLIENT_DEBUG_GUI OFF) # we are not using this
 
-setForce(XRT_MODULE_MONADO_CLI OFF) # we are not using this
-setForce(XRT_MODULE_MONADO_GUI OFF) # we are not using this
-setForce(XRT_MODULE_MERCURY_HANDTRACKING OFF)
+setforce(XRT_MODULE_MONADO_CLI OFF) # we are not using this
+setforce(XRT_MODULE_MONADO_GUI OFF) # we are not using this
+setforce(XRT_MODULE_MERCURY_HANDTRACKING OFF)
 
-setForce(XRT_HAVE_D3D11 OFF)
-setForce(XRT_HAVE_D3D12 OFF)
-setForce(XRT_HAVE_OPENCV OFF)
+setforce(XRT_HAVE_D3D11 OFF)
+setforce(XRT_HAVE_D3D12 OFF)
+setforce(XRT_HAVE_OPENCV OFF)
 
 # No drivers!
-setForce(XRT_BUILD_DRIVER_ANDROID OFF)
-setForce(XRT_BUILD_DRIVER_ARDUINO OFF)
-setForce(XRT_BUILD_DRIVER_DAYDREAM OFF)
-setForce(XRT_BUILD_DRIVER_DEPTHAI OFF)
-setForce(XRT_BUILD_DRIVER_EUROC OFF)
-setForce(XRT_BUILD_DRIVER_HANDTRACKING OFF)
-setForce(XRT_BUILD_DRIVER_TWRAP OFF)
-setForce(XRT_BUILD_DRIVER_HDK OFF)
-setForce(XRT_BUILD_DRIVER_HYDRA OFF)
-setForce(XRT_BUILD_DRIVER_ILLIXR OFF)
-setForce(XRT_BUILD_DRIVER_NS OFF)
-setForce(XRT_BUILD_DRIVER_OHMD OFF)
-setForce(XRT_BUILD_DRIVER_OPENGLOVES OFF)
-setForce(XRT_BUILD_DRIVER_PSMV OFF)
-setForce(XRT_BUILD_DRIVER_PSVR OFF)
-setForce(XRT_BUILD_DRIVER_QWERTY OFF)
-setForce(XRT_BUILD_DRIVER_REALSENSE OFF)
-setForce(XRT_BUILD_DRIVER_REMOTE OFF)
-setForce(XRT_BUILD_DRIVER_RIFT_S OFF)
-setForce(XRT_BUILD_DRIVER_SURVIVE OFF)
-setForce(XRT_BUILD_DRIVER_ULV2 OFF)
-setForce(XRT_BUILD_DRIVER_VF OFF)
-setForce(XRT_BUILD_DRIVER_VIVE OFF)
-setForce(XRT_BUILD_DRIVER_WMR OFF)
-setForce(XRT_BUILD_DRIVER_SIMULAVR OFF)
+setforce(XRT_BUILD_DRIVER_ANDROID OFF)
+setforce(XRT_BUILD_DRIVER_ARDUINO OFF)
+setforce(XRT_BUILD_DRIVER_DAYDREAM OFF)
+setforce(XRT_BUILD_DRIVER_DEPTHAI OFF)
+setforce(XRT_BUILD_DRIVER_EUROC OFF)
+setforce(XRT_BUILD_DRIVER_HANDTRACKING OFF)
+setforce(XRT_BUILD_DRIVER_TWRAP OFF)
+setforce(XRT_BUILD_DRIVER_HDK OFF)
+setforce(XRT_BUILD_DRIVER_HYDRA OFF)
+setforce(XRT_BUILD_DRIVER_ILLIXR OFF)
+setforce(XRT_BUILD_DRIVER_NS OFF)
+setforce(XRT_BUILD_DRIVER_OHMD OFF)
+setforce(XRT_BUILD_DRIVER_OPENGLOVES OFF)
+setforce(XRT_BUILD_DRIVER_PSMV OFF)
+setforce(XRT_BUILD_DRIVER_PSVR OFF)
+setforce(XRT_BUILD_DRIVER_QWERTY OFF)
+setforce(XRT_BUILD_DRIVER_REALSENSE OFF)
+setforce(XRT_BUILD_DRIVER_REMOTE OFF)
+setforce(XRT_BUILD_DRIVER_RIFT_S OFF)
+setforce(XRT_BUILD_DRIVER_SURVIVE OFF)
+setforce(XRT_BUILD_DRIVER_ULV2 OFF)
+setforce(XRT_BUILD_DRIVER_VF OFF)
+setforce(XRT_BUILD_DRIVER_VIVE OFF)
+setforce(XRT_BUILD_DRIVER_WMR OFF)
+setforce(XRT_BUILD_DRIVER_SIMULAVR OFF)
 
 # There is no clean way to disable the prober/builders (as far as I can see?)
 # So we enable one driver so that the legacy builder does not die
-setForce(XRT_BUILD_DRIVER_SIMULATED ON)
+setforce(XRT_BUILD_DRIVER_SIMULATED ON)
 
-setForce(XRT_BUILD_SAMPLES OFF)
+setforce(XRT_BUILD_SAMPLES OFF)
 
-setForce(BUILD_TESTING OFF)
-setForce(BUILD_DOC OFF)
+setforce(BUILD_TESTING OFF)
+setforce(BUILD_DOC OFF)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 
