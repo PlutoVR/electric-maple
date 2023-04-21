@@ -27,6 +27,7 @@
 #include <gst/gst.h>
 
 #define GST_USE_UNSTABLE_API
+#include <gst/webrtc/datachannel.h>
 #include <gst/webrtc/rtcsessiondescription.h>
 
 #include <stdio.h>
@@ -158,11 +159,11 @@ on_offer_created(GstPromise *promise, GstElement *webrtcbin)
 	connect_webrtc_to_tee(webrtcbin);
 }
 
-// static void
-// webrtc_on_data_channel_cb(GstElement *webrtcbin, GObject *data_channel, struct gstreamer_webrtc_pipeline *gwp)
-// {
-// 	U_LOG_E("called!!!!");
-// }
+static void
+webrtc_on_data_channel_cb(GstElement *webrtcbin, GObject *data_channel, struct gstreamer_webrtc_pipeline *gwp)
+{
+	U_LOG_E("called!!!!");
+}
 
 
 
@@ -174,42 +175,46 @@ webrtc_on_ice_candidate_cb(GstElement *webrtcbin, guint mlineindex, gchar *candi
 }
 
 
-// static void
-// data_channel_error_cb(GstWebRTCDataChannel *datachannel, struct gstreamer_webrtc_pipeline *gwp)
-// {
-// 	U_LOG_E("error\n");
-// }
+static void
+data_channel_error_cb(GstWebRTCDataChannel *datachannel, struct gstreamer_webrtc_pipeline *gwp)
+{
+	U_LOG_E("error\n");
+}
 
-// gboolean
-// datachannel_send_message(GstWebRTCDataChannel *datachannel)
-// {
-// 	g_signal_emit_by_name(datachannel, "send-string", "Hi! from Pluto server");
+gboolean
+datachannel_send_message(GstWebRTCDataChannel *datachannel)
+{
+	g_signal_emit_by_name(datachannel, "send-string", "Hi! from Pluto server");
 
-// 	return G_SOURCE_CONTINUE;
-// }
+	char buf[] = "PlutoServer";
+	GBytes *b = g_bytes_new_static(buf, ARRAY_SIZE(buf));
+	gst_webrtc_data_channel_send_data(datachannel, b);
 
-// static void
-// data_channel_open_cb(GstWebRTCDataChannel *datachannel, struct gstreamer_webrtc_pipeline *gwp)
-// {
-// 	U_LOG_E("data channel opened\n");
+	return G_SOURCE_CONTINUE;
+}
 
-// 	gwp->timeout_src_id = g_timeout_add_seconds(3, G_SOURCE_FUNC (datachannel_send_message), datachannel);
-// }
+static void
+data_channel_open_cb(GstWebRTCDataChannel *datachannel, struct gstreamer_webrtc_pipeline *gwp)
+{
+	U_LOG_E("data channel opened\n");
 
-// static void
-// data_channel_close_cb(GstWebRTCDataChannel *datachannel, struct gstreamer_webrtc_pipeline *gwp)
-// {
-// 	U_LOG_E("data channel closed\n");
+	gwp->timeout_src_id = g_timeout_add_seconds(3, G_SOURCE_FUNC(datachannel_send_message), datachannel);
+}
 
-// 	g_clear_handle_id (&gwp->timeout_src_id, g_source_remove);
-// 	g_clear_object (&gwp->data_channel);
-// }
+static void
+data_channel_close_cb(GstWebRTCDataChannel *datachannel, struct gstreamer_webrtc_pipeline *gwp)
+{
+	U_LOG_E("data channel closed\n");
 
-// static void
-// data_channel_message_string_cb(GstWebRTCDataChannel *datachannel, gchar *str, struct gstreamer_webrtc_pipeline *gwp)
-// {
-// 	U_LOG_E("Received data channel message: %s\n", str);
-// }
+	g_clear_handle_id(&gwp->timeout_src_id, g_source_remove);
+	g_clear_object(&gwp->data_channel);
+}
+
+static void
+data_channel_message_string_cb(GstWebRTCDataChannel *datachannel, gchar *str, struct gstreamer_webrtc_pipeline *gwp)
+{
+	U_LOG_E("Received data channel message: %s\n", str);
+}
 
 
 static void
@@ -232,23 +237,23 @@ webrtc_client_connected_cb(MssHttpServer *server, MssClientId client_id, struct 
 	ret = gst_element_set_state(webrtcbin, GST_STATE_READY);
 	g_assert(ret != GST_STATE_CHANGE_FAILURE);
 
-	// g_signal_connect(webrtcbin, "on-data-channel", G_CALLBACK(webrtc_on_data_channel_cb), NULL);
+	g_signal_connect(webrtcbin, "on-data-channel", G_CALLBACK(webrtc_on_data_channel_cb), NULL);
 
-	// // I also think this would work if the pipeline state is READY but /shrug
-	// g_signal_emit_by_name(webrtcbin, "create-data-channel", "channel", NULL, &gwp->data_channel);
+	// I also think this would work if the pipeline state is READY but /shrug
+	g_signal_emit_by_name(webrtcbin, "create-data-channel", "channel", NULL, &gwp->data_channel);
 
-	// if (!gwp->data_channel) {
-	// 	U_LOG_E("Couldn't make datachannel!");
-	// 	assert(false);
-	// } else {
-	// 	U_LOG_E("Successfully created datachannel!");
+	if (!gwp->data_channel) {
+		U_LOG_E("Couldn't make datachannel!");
+		assert(false);
+	} else {
+		U_LOG_E("Successfully created datachannel!");
 
-	// 	g_signal_connect(gwp->data_channel, "on-open", G_CALLBACK(data_channel_open_cb), gwp);
-	// 	g_signal_connect(gwp->data_channel, "on-close", G_CALLBACK(data_channel_close_cb), gwp);
-	// 	g_signal_connect(gwp->data_channel, "on-error", G_CALLBACK(data_channel_error_cb), gwp);
-	// 	g_signal_connect(gwp->data_channel, "on-message-string", G_CALLBACK(data_channel_message_string_cb),
-	// 	                 gwp);
-	// }
+		g_signal_connect(gwp->data_channel, "on-open", G_CALLBACK(data_channel_open_cb), gwp);
+		g_signal_connect(gwp->data_channel, "on-close", G_CALLBACK(data_channel_close_cb), gwp);
+		g_signal_connect(gwp->data_channel, "on-error", G_CALLBACK(data_channel_error_cb), gwp);
+		g_signal_connect(gwp->data_channel, "on-message-string", G_CALLBACK(data_channel_message_string_cb),
+		                 gwp);
+	}
 
 	ret = gst_element_set_state(webrtcbin, GST_STATE_PLAYING);
 	g_assert(ret != GST_STATE_CHANGE_FAILURE);
