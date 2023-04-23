@@ -1,7 +1,7 @@
 # Copyright 2023, Pluto VR, Inc.
 # SPDX-License-Identifier: MIT
 
-cmake_minimum_required(VERSION 3.20.0)
+cmake_minimum_required(VERSION 3.10.2)
 project(linux-streaming VERSION 0.0.1)
 
 set(CMAKE_CXX_STANDARD 17)

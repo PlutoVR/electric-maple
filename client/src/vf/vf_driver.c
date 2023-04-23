@@ -520,7 +520,7 @@ vf_fs_videotestsource(struct xrt_frame_context *xfctx, uint32_t width, uint32_t 
 {
 	gst_init(0, NULL);
 
-	enum xrt_format format = XRT_FORMAT_R8G8B8;
+	enum xrt_format format = XRT_FORMAT_R8G8B8A8;
 	enum xrt_stereo_format stereo_format = XRT_STEREO_FORMAT_NONE;
 
 	gchar *pipeline_string = g_strdup_printf(
@@ -528,7 +528,7 @@ vf_fs_videotestsource(struct xrt_frame_context *xfctx, uint32_t width, uint32_t 
 	    "clockoverlay ! "
 	    "videoconvert ! "
 	    "videoscale ! "
-	    "video/x-raw,format=RGB,width=%u,height=%u ! "
+	    "video/x-raw,format=RGBA,width=%u,height=%u ! "
 	    "appsink name=testsink",
 	    width, height);
 

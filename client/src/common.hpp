@@ -65,6 +65,11 @@ struct state_t
 
 	int socket_fd;
 	struct sockaddr_in socket_addr;
+
+	struct {
+		uint32_t w,h;
+		uint32_t id;
+	}tex;
 };
 
 

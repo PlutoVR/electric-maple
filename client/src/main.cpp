@@ -337,9 +337,7 @@ android_main(struct android_app *app)
 	initializeEGL(state);
 
 
-	struct xrt_frame_context xfctx = {};
-	struct xrt_fs * blah =	vf_fs_videotestsource(&xfctx, 128, 128);
-	(void)blah;
+
 
 
 	// Initialize OpenXR loader
@@ -417,6 +415,7 @@ android_main(struct android_app *app)
 
 	state.width = viewInfo[0].recommendedImageRectWidth;
 	state.height = viewInfo[0].recommendedImageRectHeight;
+
 
 	// OpenXR session
 
