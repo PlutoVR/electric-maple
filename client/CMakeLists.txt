@@ -1,6 +1,6 @@
-cmake_minimum_required(VERSION 3.20.0)
+cmake_minimum_required(VERSION 3.10.2)
 
-project("plutovr_webrtc_client")
+project("plutovr_webrtc_client" VERSION 0.0.1)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -95,16 +95,14 @@ set_property(
 		${OCULUS_OPENXR_MOBILE_SDK}/OpenXR/Libs/Android/${ANDROID_ABI}/${CMAKE_BUILD_TYPE}/libopenxr_loader.so
 	)
 
-include(FetchContent)
+# include(FetchContent)
 
-FetchContent_Declare(
-	gstreamer_android
-	URL https://gstreamer.freedesktop.org/data/pkg/android/1.22.2/gstreamer-1.0-android-universal-1.22.2.tar.xz
-	    DOWNLOAD_EXTRACT_TIMESTAMP
-	    TRUE
-	    PREFIX
-	    ${CMAKE_CURRENT_BINARY_DIR}/external
-	)
+# FetchContent_Declare(
+# 	gstreamer_android
+# 	URL https://gstreamer.freedesktop.org/data/pkg/android/1.22.2/gstreamer-1.0-android-universal-1.22.2.tar.xz
+# 	DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+# 	PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
+# 	)
 
 
 # if(NOT gstreamer_android_POPULATED)
@@ -120,7 +118,11 @@ FetchContent_Declare(
 
 # endif()
 
-FetchContent_MakeAvailable(gstreamer_android)
+
+
+# FetchContent_MakeAvailable(gstreamer_android)
+
+set(gstreamer_android_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/gstreamer_android")
 
 set(GST_LIBRARIES
 # Order matters for gobject, gmodule, glib.
@@ -140,5 +142,8 @@ ${gstreamer_android_SOURCE_DIR}/arm64/lib/liborc-0.4.a
 )
 set(GST_INCLUDE_DIRS ${gstreamer_android_SOURCE_DIR}/arm64/include/gstreamer-1.0/ )
 set(GLIB_INCLUDE_DIRS ${gstreamer_android_SOURCE_DIR}/arm64/include/glib-2.0 ${gstreamer_android_SOURCE_DIR}/arm64/lib/glib-2.0/include/)
+
+message(gstreamer_android_SOURCE_DIR)
+message(GST_LIBRARIES)
 
 add_subdirectory(src)
