@@ -549,10 +549,7 @@ vf_fs_videotestsource(struct xrt_frame_context *xfctx, uint32_t width, uint32_t 
 	gchar *pipeline_string = g_strdup_printf(
 	    "videotestsrc is-live=1  name=source ! " // pattern=ball pattern=spokes
 		"video/x-raw,width=%u,height=%u !"
-//	    "clockoverlay ! "
 	    "videoconvertscale ! "
-//	    "videoscale ! "
-//	    "video/x-raw,format=RGBx,width=%u,height=%u,pixel_stride=4 name=meow2 ! "
 	    "appsink name=testsink caps=video/x-raw,format=RGBx,width=%u,height=%u",
 		width, height, width, height);
 
