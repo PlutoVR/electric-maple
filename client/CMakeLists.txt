@@ -15,7 +15,7 @@ find_package(Vulkan REQUIRED)
 find_package(OpenXR REQUIRED)
 
 # Default to PIC code
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE OFF)
 
 ### Set configuration options for Monado
 
@@ -185,7 +185,7 @@ ${gstreamer_android_SOURCE_DIR}/arm64/lib/libglib-2.0.a
 ${gstreamer_android_SOURCE_DIR}/arm64/lib/libgstinsertbin-1.0.a
 ${gstreamer_android_SOURCE_DIR}/arm64/lib/libcairo.a
 ${gstreamer_android_SOURCE_DIR}/arm64/lib/libgstisoff-1.0.a
-${gstreamer_android_SOURCE_DIR}/arm64/lib/libvorbisidec.a
+# ${gstreamer_android_SOURCE_DIR}/arm64/lib/libvorbisidec.a
 ${gstreamer_android_SOURCE_DIR}/arm64/lib/libgstsctp-1.0.a
 ${gstreamer_android_SOURCE_DIR}/arm64/lib/libkate.a
 ${gstreamer_android_SOURCE_DIR}/arm64/lib/libdca.a
@@ -264,7 +264,7 @@ ${gstreamer_android_SOURCE_DIR}/arm64/lib/gstreamer-1.0/libgstogg.a
 ${gstreamer_android_SOURCE_DIR}/arm64/lib/gstreamer-1.0/libgstfieldanalysis.a
 ${gstreamer_android_SOURCE_DIR}/arm64/lib/gstreamer-1.0/libgstvideobox.a
 ${gstreamer_android_SOURCE_DIR}/arm64/lib/gstreamer-1.0/libgstwavenc.a
-${gstreamer_android_SOURCE_DIR}/arm64/lib/gstreamer-1.0/libgstamrnb.a
+# ${gstreamer_android_SOURCE_DIR}/arm64/lib/gstreamer-1.0/libgstamrnb.a
 ${gstreamer_android_SOURCE_DIR}/arm64/lib/gstreamer-1.0/libgstadaptivedemux2.a
 ${gstreamer_android_SOURCE_DIR}/arm64/lib/gstreamer-1.0/libgstrealmedia.a
 ${gstreamer_android_SOURCE_DIR}/arm64/lib/gstreamer-1.0/libgstopenh264.a
@@ -300,7 +300,7 @@ ${gstreamer_android_SOURCE_DIR}/arm64/lib/gstreamer-1.0/libgstasfmux.a
 ${gstreamer_android_SOURCE_DIR}/arm64/lib/gstreamer-1.0/libgstaudiofxbad.a
 ${gstreamer_android_SOURCE_DIR}/arm64/lib/gstreamer-1.0/libgstopus.a
 ${gstreamer_android_SOURCE_DIR}/arm64/lib/gstreamer-1.0/libgsttaglib.a
-${gstreamer_android_SOURCE_DIR}/arm64/lib/gstreamer-1.0/libgstamrwbdec.a
+# ${gstreamer_android_SOURCE_DIR}/arm64/lib/gstreamer-1.0/libgstamrwbdec.a
 ${gstreamer_android_SOURCE_DIR}/arm64/lib/gstreamer-1.0/libgstmpegtsmux.a
 ${gstreamer_android_SOURCE_DIR}/arm64/lib/gstreamer-1.0/libgsta52dec.a
 ${gstreamer_android_SOURCE_DIR}/arm64/lib/gstreamer-1.0/libgstwebrtc.a
@@ -337,7 +337,7 @@ ${gstreamer_android_SOURCE_DIR}/arm64/lib/gstreamer-1.0/libgstmxf.a
 ${gstreamer_android_SOURCE_DIR}/arm64/lib/gstreamer-1.0/libgstvideoconvertscale.a
 ${gstreamer_android_SOURCE_DIR}/arm64/lib/gstreamer-1.0/libgstspeex.a
 ${gstreamer_android_SOURCE_DIR}/arm64/lib/gstreamer-1.0/libgstopengl.a
-${gstreamer_android_SOURCE_DIR}/arm64/lib/gstreamer-1.0/libgstivorbisdec.a
+# ${gstreamer_android_SOURCE_DIR}/arm64/lib/gstreamer-1.0/libgstivorbisdec.a
 ${gstreamer_android_SOURCE_DIR}/arm64/lib/gstreamer-1.0/libgstjpeg.a
 ${gstreamer_android_SOURCE_DIR}/arm64/lib/gstreamer-1.0/libgstshapewipe.a
 ${gstreamer_android_SOURCE_DIR}/arm64/lib/gstreamer-1.0/libgstalaw.a
@@ -446,7 +446,7 @@ ${gstreamer_android_SOURCE_DIR}/arm64/lib/libavutil.a
 ${gstreamer_android_SOURCE_DIR}/arm64/lib/libgstadaptivedemux-1.0.a
 ${gstreamer_android_SOURCE_DIR}/arm64/lib/libvo-aacenc.a
 ${gstreamer_android_SOURCE_DIR}/arm64/lib/libsbc.a
-${gstreamer_android_SOURCE_DIR}/arm64/lib/libopencore-amrnb.a
+# ${gstreamer_android_SOURCE_DIR}/arm64/lib/libopencore-amrnb.a
 ${gstreamer_android_SOURCE_DIR}/arm64/lib/libgstrtspserver-1.0.a
 ${gstreamer_android_SOURCE_DIR}/arm64/lib/libgsttag-1.0.a
 ${gstreamer_android_SOURCE_DIR}/arm64/lib/libpsl.a
@@ -462,8 +462,27 @@ ${gstreamer_android_SOURCE_DIR}/arm64/lib/libturbojpeg.a
 
 )
 
+# ${GLIB_LIBRARIES}
+# ${LIBSOUP_LIBRARIES}
+# ${JSONGLIB_LIBRARIES}
+# ${GIO_LIBRARIES}
+
+
+# set(GLIB_LIBRARY_DIRS ${gstreamer_android_SOURCE_DIR}/arm64/lib)
+# set(LIBSOUP_LIBRARY_DIRS ${gstreamer_android_SOURCE_DIR}/arm64/lib)
+set(JSONGLIB_LIBRARIES ${gstreamer_android_SOURCE_DIR}/arm64/lib/libjson-glib-1.0.a)
+# set(GIO_LIBRARY_DIRS ${gstreamer_android_SOURCE_DIR}/arm64/lib)
+
+# find_library(GLIB_LIBRARIES glib-2.0 HINTS ${GLIB_LIBRARY_DIRS})
+# find_library(LIBSOUP_LIBRARIES soup-2.4 HINTS ${LIBSOUP_LIBRARY_DIRS})
+# find_library(JSONGLIB_LIBRARIES json-glib-1.0 HINTS ${JSONGLIB_LIBRARY_DIRS})
+# find_library(GIO_LIBRARIES gio-2.0 HINTS ${GIO_LIBRARY_DIRS})
+
 set(GST_INCLUDE_DIRS ${gstreamer_android_SOURCE_DIR}/arm64/include/gstreamer-1.0/ )
 set(GLIB_INCLUDE_DIRS ${gstreamer_android_SOURCE_DIR}/arm64/include/glib-2.0 ${gstreamer_android_SOURCE_DIR}/arm64/lib/glib-2.0/include/)
+set(LIBSOUP_INCLUDE_DIRS ${gstreamer_android_SOURCE_DIR}/arm64/include/libsoup-2.4/)
+set(JSONGLIB_INCLUDE_DIRS ${gstreamer_android_SOURCE_DIR}/arm64/include/json-glib-1.0)
+set(GIO_INCLUDE_DIRS ${gstreamer_android_SOURCE_DIR}/arm64/include/glib-2.0/ ${gstreamer_android_SOURCE_DIR}/arm64/lib/gio-unix-2.0/)
 
 
 # These two don't seem to help

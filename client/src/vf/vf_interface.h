@@ -16,6 +16,8 @@
 extern "C" {
 #endif
 
+static const char *dotfilepath = "mrow";
+
 /*!
  * @defgroup drv_vf Video Fileframeserver driver
  * @ingroup drv

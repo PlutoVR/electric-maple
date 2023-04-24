@@ -14,6 +14,7 @@ Also, both projects use the `monado` and `proto` folders (via CMake add_subdirec
 For now, we're going to assume everybody's debugging this with a Quest over ADB. The client and server are hard-coded (for now) to port `61943`, so if you run this:
 ```
 adb reverse tcp:61943 tcp:61943
+adb reverse tcp:8080 tcp:8080
 ```
 your Quest should be able to connect to the server on your PC and you should be able to get going :)
 
