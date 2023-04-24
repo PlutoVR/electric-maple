@@ -6,13 +6,17 @@
  * @author Moshi Turner <moses@collabora.com>
  */
 
-
+#include <cmath>
+#include <cstdlib>
+#include <ctime>
 #include <errno.h>
 
 #include <assert.h>
 
 #include "common.hpp"
 #include "vf/vf_interface.h"
+
+
 
 static state_t state = {};
 
@@ -71,7 +75,7 @@ really_make_socket(struct state_t &st)
 static void
 hmd_pose(struct state_t &st)
 {
-
+    return;
 	XrResult result = XR_SUCCESS;
 
 
@@ -298,10 +302,16 @@ mainloop_one(struct state_t &state)
 
 	glBindFramebuffer(GL_FRAMEBUFFER, state.framebuffers[imageIndex]);
 
+    glViewport(0, 0, state.width*2, state.height);
+
+
+        glClearColor(0.0f, 1.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
 	// Just display purple nothingness
 	for (uint32_t eye = 0; eye < 2; eye++) {
 		glViewport(eye * state.width, 0, state.width, state.height);
-		drawTriangle(state.shader_program);
+		draw(state.frame_tex, state.framebuffers[imageIndex]);
 	}
 
 	// Release
@@ -324,6 +334,47 @@ mainloop_one(struct state_t &state)
 	hmd_pose(state);
 
 	xrEndFrame(state.session, &endInfo);
+}
+
+void sink_push_frame(struct xrt_frame_sink *xfs, struct xrt_frame *xf) {
+    struct state_t *st = container_of(xfs, struct state_t, frame_sink);
+    U_LOG_E("Called! %d", st->frame_tex);
+//    glBindTexture(GL_TEXTURE_2D, st->frame_tex);
+//    glPixelStorei(GL_UNPACK_ROW_LENGTH, xf->stride / 4);
+//    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, xf->width, xf->height, 0, GL_RGBA, GL_UNSIGNED_BYTE, xf->data);
+//    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+GLuint generateRandomTexture(GLsizei width, GLsizei height) {
+    // Seed the random number generator
+    std::srand(std::time(0));
+
+    // Allocate memory for the texture data
+    GLubyte* data = new GLubyte[width * height * 4];
+
+    // Fill the texture data with random values
+    for (GLsizei i = 0; i < width * height * 4; i++) {
+        data[i] = std::rand() % 256;
+    }
+
+    // Create the texture
+    GLuint texture;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    // Free the texture data
+    delete[] data;
+
+    return texture;
 }
 
 void
@@ -416,6 +467,24 @@ android_main(struct android_app *app)
 	state.width = viewInfo[0].recommendedImageRectWidth;
 	state.height = viewInfo[0].recommendedImageRectHeight;
 
+    state.frame_tex = generateRandomTexture(state.width, state.height);
+
+
+//    GLint w = 1;
+//    GLint h = 1;
+    struct xrt_colour_rgb_u8 pink = {255, 0, 255};
+
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, (int32_t)state.width, (int32_t)state.height, 0, GL_RGB, GL_UNSIGNED_BYTE, &pink.r);
+
+//    glBindTexture(GL_TEXTURE_2D, 0);
+
+    state.frame_sink.push_frame = sink_push_frame;
+
+    struct xrt_frame_context xfctx = {};
+    struct xrt_fs * blah =	vf_fs_videotestsource(&xfctx, state.width, state.height);
+
+    xrt_fs_stream_start(blah, &state.frame_sink, XRT_FS_CAPTURE_TYPE_TRACKING, 0);
+
 
 	// OpenXR session
 
@@ -480,7 +549,7 @@ android_main(struct android_app *app)
 
 	create_spaces(state);
 
-	state.shader_program = makeShaderProgram();
+	setupRender();
 
 	really_make_socket(state);
 

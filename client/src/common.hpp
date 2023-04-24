@@ -11,6 +11,7 @@
 #define XR_USE_PLATFORM_ANDROID
 #define XR_USE_GRAPHICS_API_OPENGL_ES
 
+#include "xrt/xrt_frame.h"
 #include "util/u_logging.h"
 #include "util/u_time.h"
 #include "os/os_time.h"
@@ -66,10 +67,10 @@ struct state_t
 	int socket_fd;
 	struct sockaddr_in socket_addr;
 
-	struct {
-		uint32_t w,h;
-		uint32_t id;
-	}tex;
+    // this is bad, we want an xrt_frame_node etc.
+
+    struct xrt_frame_sink frame_sink;
+	GLuint frame_tex;
 };
 
 
@@ -79,10 +80,12 @@ struct state_t
 void
 initializeEGL(struct state_t &state);
 
-GLuint
-makeShaderProgram();
+void
+setupRender();
 
 void
-drawTriangle(GLuint shader_program);
+draw(GLuint framebuffer, GLuint texture);
+
+
 
 //
