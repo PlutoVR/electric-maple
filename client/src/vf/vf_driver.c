@@ -547,9 +547,7 @@ vf_fs_videotestsource(struct xrt_frame_context *xfctx, uint32_t width, uint32_t 
 	enum xrt_stereo_format stereo_format = XRT_STEREO_FORMAT_NONE;
 
 	gchar *pipeline_string = g_strdup_printf(
-	    "videotestsrc is-live=1  name=source ! " // pattern=ball pattern=spokes
-		"video/x-raw,width=%u,height=%u !"
-	    "videoconvertscale ! "
+	    "videotestsrc is-live=1 name=source ! "
 	    "appsink name=testsink caps=video/x-raw,format=RGBx,width=%u,height=%u",
 		width, height, width, height);
 
