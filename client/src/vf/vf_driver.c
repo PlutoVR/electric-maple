@@ -547,13 +547,10 @@ vf_fs_videotestsource(struct xrt_frame_context *xfctx, uint32_t width, uint32_t 
 	enum xrt_stereo_format stereo_format = XRT_STEREO_FORMAT_NONE;
 
 	gchar *pipeline_string = g_strdup_printf(
-	    "videotestsrc is-live=1 pattern=ball name=source ! "
+	    "videotestsrc is-live=1  name=source ! " // pattern=ball pattern=spokes
 	    "video/x-raw,width=%u,height=%u !"
-	    //	    "clockoverlay ! "
-	    "videoconvert ! "
-	    "videoscale ! "
-	    "video/x-raw,format=RGBA,width=%u,height=%u name=meow2 ! "
-	    "appsink name=testsink",
+	    "videoconvertscale ! "
+	    "appsink name=testsink caps=video/x-raw,format=RGBx,width=%u,height=%u",
 	    width, height, width, height);
 
 	return alloc_and_init_common(xfctx, format, stereo_format, pipeline_string);
