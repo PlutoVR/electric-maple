@@ -69,6 +69,9 @@ struct state_t
 
 	// this is bad, we want an xrt_frame_node etc.
 
+	int way;
+	int frame_idx;
+
 	struct xrt_frame_sink frame_sink;
 	xrt_frame *xf = NULL;
 	GLuint frame_tex;

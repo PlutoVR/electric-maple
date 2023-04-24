@@ -551,7 +551,7 @@ vf_fs_videotestsource(struct xrt_frame_context *xfctx, uint32_t width, uint32_t 
 	    "video/x-raw,width=%u,height=%u !"
 	    //	    "clockoverlay ! "
 	    "videoconvert ! "
-	    //	    "videoscale ! "
+	    "videoscale ! "
 	    "video/x-raw,format=RGBA,width=%u,height=%u name=meow2 ! "
 	    "appsink name=testsink",
 	    width, height, width, height);
