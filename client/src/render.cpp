@@ -173,6 +173,8 @@ void setupShaders() {
 
 void setupQuadVertexData() {
     // Set up the quad vertex data
+#if 1
+// old, chatgpt
     GLfloat quadVertices[] = {
             // Positions    // UVs
             -1.0f,  1.0f, 0.0f, 0.0f, 1.0f,
@@ -180,6 +182,16 @@ void setupQuadVertexData() {
             1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
             1.0f,  1.0f, 0.0f, 1.0f, 1.0f
     };
+#else
+	// also chatgpt
+	GLfloat quadVertices[] = {
+			// Positions    // Texture Coords
+			-1.0f, -1.0f,    0.0f, 0.0f,
+			1.0f, -1.0f,    1.0f, 0.0f,
+			1.0f,  1.0f,    1.0f, 1.0f,
+			-1.0f,  1.0f,    0.0f, 1.0f
+	};
+#endif
 
     glGenVertexArrays(1, &quadVAO);
     glGenBuffers(1, &quadVBO);
@@ -220,6 +232,32 @@ void draw(GLuint framebuffer, GLuint texture) {
     glBindVertexArray(quadVAO);
     glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
     glBindVertexArray(0);
+
+    GLenum err;
+    while ((err = glGetError()) != GL_NO_ERROR) {
+        const char *errorStr;
+        switch (err) {
+            case GL_INVALID_ENUM:
+                errorStr = "GL_INVALID_ENUM";
+                break;
+            case GL_INVALID_VALUE:
+                errorStr = "GL_INVALID_VALUE";
+                break;
+            case GL_INVALID_OPERATION:
+                errorStr = "GL_INVALID_OPERATION";
+                break;
+            case GL_INVALID_FRAMEBUFFER_OPERATION:
+                errorStr = "GL_INVALID_FRAMEBUFFER_OPERATION";
+                break;
+            case GL_OUT_OF_MEMORY:
+                errorStr = "GL_OUT_OF_MEMORY";
+                break;
+            default:
+                errorStr = "Unknown error";
+                break;
+        }
+        U_LOG_E("error! %s", errorStr);
+    }
 
     // Unbind the framebuffer
 //    glBindFramebuffer(GL_FRAMEBUFFER, 0);
