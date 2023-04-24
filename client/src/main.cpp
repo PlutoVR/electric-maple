@@ -440,7 +440,7 @@ mainloop_one(struct state_t &state)
                     const uint8_t *src = state.xf->data;
                     uint8_t *dst = (uint8_t*)global_data;
 
-                    src = src + (y * state.xf->stride / 2) + (x*8);
+                    src = src + (y * state.xf->stride ) + (x*4);
                     dst = dst + (y * width*4) + (x * 4);
                     dst[0] = src[0];
                     dst[1] = src[1];
@@ -454,7 +454,7 @@ mainloop_one(struct state_t &state)
 
 		U_LOG_E("meow!");
 		glBindTexture(GL_TEXTURE_2D, state.frame_tex);
-		glPixelStorei(GL_UNPACK_ROW_LENGTH, 11520/4);
+		glPixelStorei(GL_UNPACK_ROW_LENGTH, 1440);
 //            glPixelStorei(GL_UNPACK_ALIGNMENT, 2); // Set to 1 for tightly packed data
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 1440, 1584, GL_RGBA, GL_UNSIGNED_BYTE, global_data);
 
