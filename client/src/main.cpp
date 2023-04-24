@@ -325,9 +325,8 @@ mainloop_one(struct state_t &state)
 
 	// Just display purple nothingness
 	for (uint32_t eye = 0; eye < 2; eye++) {
-		glViewport(360, 360, 720, 720);
+		glViewport(eye * state.width, 0, state.width, state.height);
 		draw( state.framebuffers[imageIndex], state.frame_tex);
-        break;
 	}
 
 	// Release
