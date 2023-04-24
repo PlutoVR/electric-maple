@@ -94,137 +94,133 @@ initializeEGL(struct state_t &state)
 	}
 }
 
-// These two functions aren't important, just draw a triangle. We will remove them later
+// Vertex shader source code
+const GLchar* vertexShaderSource = R"(
+    #version 300 es
+    in vec3 position;
+    in vec2 uv;
+    out vec2 frag_uv;
 
-GLuint
-makeShaderProgram()
-{
-	// Vertex shader program
-	const char *vertex_shader_source =
-	    "#version 300 es\n"
-	    "in vec3 position;\n"
-	    "in vec4 color;\n"
-	    "out vec4 vertex_color;\n"
-	    "void main()\n"
-	    "{\n"
-	    "    gl_Position = vec4(position, 1.0);\n"
-	    "    vertex_color = color;\n"
-	    "}\n";
+    void main() {
+        gl_Position = vec4(position, 1.0);
+        frag_uv = uv;
+    }
+)";
 
-	// Fragment shader program
-	const char *fragment_shader_source =
-	    "#version 300 es\n"
-	    "precision mediump float;\n"
-	    "in vec4 vertex_color;\n"
-	    "out vec4 frag_color;\n"
-	    "void main()\n"
-	    "{\n"
-	    "    frag_color = vertex_color;\n"
-	    "}\n";
+// Fragment shader source code
+const GLchar* fragmentShaderSource = R"(
+    #version 300 es
+    precision lowp float;
 
+    in vec2 frag_uv;
+    out vec4 frag_color;
+    uniform sampler2D textureSampler;
 
-	// Create the vertex shader object
-	GLuint vertex_shader = glCreateShader(GL_VERTEX_SHADER);
+    void main() {
+        frag_color = texture(textureSampler, frag_uv);
+    }
+)";
 
-	// Attach the vertex shader source code and compile it
-	glShaderSource(vertex_shader, 1, &vertex_shader_source, NULL);
-	glCompileShader(vertex_shader);
+GLuint shaderProgram;
+GLuint quadVAO, quadVBO;
 
-	// Check for any compile errors
-	GLint success;
-	glGetShaderiv(vertex_shader, GL_COMPILE_STATUS, &success);
-	if (!success) {
-		char info_log[512];
-		glGetShaderInfoLog(vertex_shader, 512, NULL, info_log);
-		U_LOG_E("Vertex shader compilation failed: %s\n", info_log);
-	}
-
-	// Create the fragment shader object
-	GLuint fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
-
-	// Attach the fragment shader source code and compile it
-	glShaderSource(fragment_shader, 1, &fragment_shader_source, NULL);
-	glCompileShader(fragment_shader);
-
-	// Check for any compile errors
-	glGetShaderiv(fragment_shader, GL_COMPILE_STATUS, &success);
-	if (!success) {
-		char info_log[512];
-		glGetShaderInfoLog(fragment_shader, 512, NULL, info_log);
-		U_LOG_E("Fragment shader compilation failed: %s\n", info_log);
-	}
-
-	// Create the shader program object
-	GLuint shader_program = glCreateProgram();
-
-	// Attach the vertex and fragment shaders to the program and link it
-	glAttachShader(shader_program, vertex_shader);
-	glAttachShader(shader_program, fragment_shader);
-	glLinkProgram(shader_program);
-
-	// Check for any link errors
-	glGetProgramiv(shader_program, GL_LINK_STATUS, &success);
-	if (!success) {
-		char info_log[512];
-		glGetProgramInfoLog(shader_program, 512, NULL, info_log);
-		U_LOG_E("Shader program linking failed: %s\n", info_log);
-	}
-
-	// Clean up the shader objects
-	glDeleteShader(vertex_shader);
-	glDeleteShader(fragment_shader);
-	return shader_program;
+// Function to check shader compilation errors
+void checkShaderCompilation(GLuint shader) {
+    GLint success;
+    GLchar infoLog[512];
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+    if (!success) {
+        glGetShaderInfoLog(shader, 512, NULL, infoLog);
+        U_LOG_E("Shader compilation failed: %s\n", infoLog);
+    }
 }
 
+// Function to check shader program linking errors
+void checkProgramLinking(GLuint program) {
+    GLint success;
+    GLchar infoLog[512];
+    glGetProgramiv(program, GL_LINK_STATUS, &success);
+    if (!success) {
+        glGetProgramInfoLog(program, 512, NULL, infoLog);
+        U_LOG_E("Shader program linking failed: %s\n", infoLog);
+    }
+}
 
-void
-drawTriangle(GLuint shader_program)
-{
-	// Define the vertices of the triangle
-	GLfloat vertices[] = {
-	    0.0f,  0.5f,  0.0f, // top
-	    -0.5f, -0.5f, 0.0f, // bottom left
-	    0.5f,  -0.5f, 0.0f  // bottom right
-	};
+void setupShaders() {
+    // Compile the vertex shader
+    GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
+    glCompileShader(vertexShader);
+    checkShaderCompilation(vertexShader);
 
-	// Define the colors of the vertices
-	GLfloat colors[] = {
-	    1.0f, 0.0f, 0.0f, 1.0f, // top vertex is red
-	    0.0f, 1.0f, 0.0f, 1.0f, // bottom left vertex is green
-	    0.0f, 0.0f, 1.0f, 1.0f  // bottom right vertex is blue
-	};
+    // Compile the fragment shader
+    GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
+    glCompileShader(fragmentShader);
+    checkShaderCompilation(fragmentShader);
 
-	// Use the shader program
-	glUseProgram(shader_program);
+    // Create and link the shader program
+    shaderProgram = glCreateProgram();
+    glAttachShader(shaderProgram, vertexShader);
+    glAttachShader(shaderProgram, fragmentShader);
+    glLinkProgram(shaderProgram);
+    checkProgramLinking(shaderProgram);
 
-	// Create vertex buffer objects for the vertices and colors
-	GLuint vbo[2];
-	glGenBuffers(2, vbo);
+    // Clean up the shaders as they're no longer needed
+    glDeleteShader(vertexShader);
+    glDeleteShader(fragmentShader);
+}
 
-	// Bind the vertex buffer for the vertices
-	glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+void setupQuadVertexData() {
+    // Set up the quad vertex data
+    GLfloat quadVertices[] = {
+            // Positions    // UVs
+            -1.0f,  1.0f, 0.0f, 0.0f, 1.0f,
+            -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
+            1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
+            1.0f,  1.0f, 0.0f, 1.0f, 1.0f
+    };
 
-	// Bind the vertex buffer for the colors
-	glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(colors), colors, GL_STATIC_DRAW);
+    glGenVertexArrays(1, &quadVAO);
+    glGenBuffers(1, &quadVBO);
 
-	// Enable the vertex attribute for the vertices
-	glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+    glBindVertexArray(quadVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
 
-	// Enable the vertex attribute for the colors
-	glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
-	glEnableVertexAttribArray(1);
-	glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 0, 0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), (GLvoid*)0);
+    glEnableVertexAttribArray(0);
 
-	// Draw the triangle
-	glDrawArrays(GL_TRIANGLES, 0, 3);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), (GLvoid*)(3 * sizeof(GLfloat)));
+    glEnableVertexAttribArray(1);
 
-	// Check for errors
-	GLenum error = glGetError();
-	if (error != GL_NO_ERROR) {
-		U_LOG_E("OpenGL error: %d\n", error);
-	}
+    glBindVertexArray(0);
+}
+
+void setupRender() {
+    setupShaders();
+    setupQuadVertexData();
+}
+
+void draw(GLuint framebuffer, GLuint texture) {
+//    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+
+    // Clear the framebuffer
+
+
+    // Use the shader program
+    glUseProgram(shaderProgram);
+
+    // Bind the texture
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glUniform1i(glGetUniformLocation(shaderProgram, "textureSampler"), 0);
+
+    // Draw the quad
+    glBindVertexArray(quadVAO);
+    glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+    glBindVertexArray(0);
+
+    // Unbind the framebuffer
+//    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }

@@ -29,6 +29,7 @@
 #include <glib.h>
 #include <gst/gst.h>
 #include <gst/app/gstappsink.h>
+#include <gst/gstelement.h>
 #include <gst/video/video-frame.h>
 
 /*
@@ -434,6 +435,13 @@ vf_fs_node_destroy(struct xrt_frame_node *node)
  *
  */
 
+
+GST_PLUGIN_STATIC_DECLARE(app); // Definitely needed
+GST_PLUGIN_STATIC_DECLARE(coreelements);
+GST_PLUGIN_STATIC_DECLARE(videotestsrc); // Definitely needed
+GST_PLUGIN_STATIC_DECLARE(videoconvertscale);
+GST_PLUGIN_STATIC_DECLARE(overlaycomposition);
+
 static struct xrt_fs *
 alloc_and_init_common(struct xrt_frame_context *xfctx,      //
                       enum xrt_format format,               //
@@ -447,6 +455,12 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 
 	GstBus *bus = NULL;
 
+    GST_PLUGIN_STATIC_REGISTER(app);
+    GST_PLUGIN_STATIC_REGISTER(coreelements);
+    GST_PLUGIN_STATIC_REGISTER(videotestsrc);
+    GST_PLUGIN_STATIC_REGISTER(videoconvertscale);
+    GST_PLUGIN_STATIC_REGISTER(overlaycomposition);
+
 	int ret = os_thread_helper_init(&vid->play_thread);
 	if (ret < 0) {
 		VF_ERROR(vid, "Failed to init thread");
@@ -458,11 +472,14 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 	vid->loop = g_main_loop_new(NULL, FALSE);
 	VF_DEBUG(vid, "Pipeline: %s", pipeline_string);
 
-	vid->source = gst_parse_launch(pipeline_string, NULL);
+    GError *error = NULL;
+
+	vid->source = gst_parse_launch(pipeline_string, &error);
 	g_free(pipeline_string);
 
 	if (vid->source == NULL) {
 		VF_ERROR(vid, "Bad source");
+        VF_ERROR(vid, "%s", error->message);
 		g_main_loop_unref(vid->loop);
 		free(vid);
 		return NULL;
@@ -486,7 +503,13 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 
 	// We need one sample to determine frame size.
 	VF_DEBUG(vid, "Waiting for frame");
-	gst_element_set_state(vid->source, GST_STATE_PLAYING);
+    {
+        GstStateChangeReturn ret = gst_element_set_state(vid->source, GST_STATE_PLAYING);
+
+        if (ret == GST_STATE_CHANGE_FAILURE) {
+            VF_ERROR(vid, "WHAT.");
+        }
+    }
 	while (!vid->got_sample) {
 		os_nanosleep(100 * 1000 * 1000);
 	}
@@ -525,10 +548,10 @@ vf_fs_videotestsource(struct xrt_frame_context *xfctx, uint32_t width, uint32_t 
 
 	gchar *pipeline_string = g_strdup_printf(
 	    "videotestsrc name=source ! "
-	    "clockoverlay ! "
-	    "videoconvert ! "
-	    "videoscale ! "
-	    "video/x-raw,format=RGBA,width=%u,height=%u ! "
+//	    "clockoverlay ! "
+	    "videoconvertscale name=meow ! "
+//	    "videoscale ! "
+	    "video/x-raw,format=RGBA,width=%u,height=%u name=meow2 ! "
 	    "appsink name=testsink",
 	    width, height);
 
