@@ -18,6 +18,8 @@
 #include "vf/vf_interface.h"
 
 
+static GLuint global_data[1440*1584*4];
+
 
 static state_t state = {};
 
@@ -44,6 +46,8 @@ sink_push_frame(struct xrt_frame_sink *xfs, struct xrt_frame *xf)
 		return;
 	}
 	struct state_t *st = container_of(xfs, struct state_t, frame_sink);
+
+    // This can cause a segfault if we hold onto one frame for too long so OH.
 	if (!st->xf) {
 		//		xrt_frame_reference(&xf, st->xf);
 		xrt_frame_reference(&st->xf, xf);
@@ -149,7 +153,7 @@ generateRandomTextureOld(GLsizei width, GLsizei height, int way, GLuint *handle)
 	// This call is definitely what's crashing, which is real confusing.
 	U_LOG_E("%d %d", width, height);
 #if 0
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1); // Set to 1 for tightly packed data
+//    glPixelStorei(GL_UNPACK_ALIGNMENT, 1); // Set to 1 for tightly packed data
 
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
 
@@ -428,27 +432,56 @@ mainloop_one(struct state_t &state)
 		U_LOG_E("Failed to wait for swapchain image (%d)", result);
 	}
 
-	//    if (state.xf) {
-	if (false) {
+	    if (state.xf) {
+//	if (false) {
+
+            for (int y = 0; y < state.xf->height; y++) {
+                for (int x = 0; x < state.xf->width; x++) {
+                    const uint8_t *src = state.xf->data;
+                    uint8_t *dst = (uint8_t*)global_data;
+
+                    src = src + (y * state.xf->stride / 2) + (x*8);
+                    dst = dst + (y * width*4) + (x * 4);
+                    dst[0] = src[0];
+                    dst[1] = src[1];
+                    dst[2] = src[2];
+                    dst[3] = src[3];
+
+                }
+
+            }
+
+
 		U_LOG_E("meow!");
 		glBindTexture(GL_TEXTURE_2D, state.frame_tex);
-		glPixelStorei(GL_UNPACK_ROW_LENGTH, state.xf->stride / 3);
+		glPixelStorei(GL_UNPACK_ROW_LENGTH, 11520/4);
+//            glPixelStorei(GL_UNPACK_ALIGNMENT, 2); // Set to 1 for tightly packed data
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 1440, 1584, GL_RGBA, GL_UNSIGNED_BYTE, global_data);
 
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, state.xf->width, state.xf->height, 0, GL_RGBA, GL_UNSIGNED_BYTE,
-		             state.xf->data);
+//		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, state.xf->width, state.xf->height, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+//		             state.xf->data);
 
 		//        glPixelStorei(GL_UNPACK_ROW_LENGTH, state.xf->stride / 4);
 		//    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, state.xf->width, state.xf->height, 0, GL_RGBA,
 		//    GL_UNSIGNED_BYTE, state.xf->data);
 		glBindTexture(GL_TEXTURE_2D, 0);
-		xrt_frame_reference(&state.xf, NULL);
-	}
-    state.frame_idx++;
-	if (state.frame_idx % 20 == 0) {
-		U_LOG_E("what");
-        state.way++;
-		generateRandomTextureOld(state.width, state.height, state.way % 3, &state.frame_tex);
-	}
+
+//            delete[] data;
+
+        }
+
+    // can be factored into the above, it's just useful to be able to disable seperately
+    if (state.xf) {
+        xrt_frame_reference(&state.xf, NULL);
+
+    }
+
+//    state.frame_idx++;
+//	if (state.frame_idx % 20 == 0) {
+//		U_LOG_E("what");
+//        state.way++;
+//		generateRandomTextureOld(state.width, state.height, state.way % 3, &state.frame_tex);
+//	}
 
 
 	glBindFramebuffer(GL_FRAMEBUFFER, state.framebuffers[imageIndex]);
@@ -591,7 +624,7 @@ android_main(struct android_app *app)
 	struct xrt_frame_context xfctx = {};
 	struct xrt_fs *blah = vf_fs_videotestsource(&xfctx, state.width, state.height);
 
-#if 0
+#if 1
 	xrt_fs_stream_start(blah, &state.frame_sink, XRT_FS_CAPTURE_TYPE_TRACKING, 0);
 #else
     (void)blah;
