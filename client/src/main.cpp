@@ -18,7 +18,7 @@
 #include "vf/vf_interface.h"
 
 
-static GLuint global_data[1440*1584*4];
+//static GLuint global_data[1440*1584*4];
 
 
 static state_t state = {};
@@ -435,28 +435,28 @@ mainloop_one(struct state_t &state)
 	    if (state.xf) {
 //	if (false) {
 
-            for (int y = 0; y < state.xf->height; y++) {
-                for (int x = 0; x < state.xf->width; x++) {
-                    const uint8_t *src = state.xf->data;
-                    uint8_t *dst = (uint8_t*)global_data;
-
-                    src = src + (y * state.xf->stride ) + (x*4);
-                    dst = dst + (y * width*4) + (x * 4);
-                    dst[0] = src[0];
-                    dst[1] = src[1];
-                    dst[2] = src[2];
-                    dst[3] = src[3];
-
-                }
-
-            }
+//            for (int y = 0; y < state.xf->height; y++) {
+//                for (int x = 0; x < state.xf->width; x++) {
+//                    const uint8_t *src = state.xf->data;
+//                    uint8_t *dst = (uint8_t*)global_data;
+//
+//                    src = src + (y * state.xf->stride ) + (x*4);
+//                    dst = dst + (y * width*4) + (x * 4);
+//                    dst[0] = src[0];
+//                    dst[1] = src[1];
+//                    dst[2] = src[2];
+//                    dst[3] = src[3];
+//
+//                }
+//
+//            }
 
 
 		U_LOG_E("meow!");
 		glBindTexture(GL_TEXTURE_2D, state.frame_tex);
 		glPixelStorei(GL_UNPACK_ROW_LENGTH, 1440);
 //            glPixelStorei(GL_UNPACK_ALIGNMENT, 2); // Set to 1 for tightly packed data
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 1440, 1584, GL_RGBA, GL_UNSIGNED_BYTE, global_data);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 1440, 1584, GL_RGBA, GL_UNSIGNED_BYTE, state.xf->data);
 
 //		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, state.xf->width, state.xf->height, 0, GL_RGBA, GL_UNSIGNED_BYTE,
 //		             state.xf->data);
