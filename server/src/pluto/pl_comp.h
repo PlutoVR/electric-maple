@@ -133,6 +133,8 @@ struct pluto_compositor
 
 	struct xrt_frame_context xfctx = {};
 
+	struct vk_cmd_pool cmd_pool = {};
+
 	struct vk_image_readback_to_xf_pool *pool = nullptr;
 	int image_sequence;
 	struct u_sink_debug hackers_debug_sink;

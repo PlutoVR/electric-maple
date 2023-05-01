@@ -27,6 +27,7 @@
 
 #include "vk/vk_image_readback_to_xf_pool.h"
 #include "vk/vk_cmd.h"
+#include "vk/vk_cmd_pool.h"
 
 
 #include "pl_comp.h"
@@ -222,6 +223,22 @@ compositor_init_vulkan(struct pluto_compositor *c)
 	c->sys_info.client_d3d_deviceLUID = vk_res.client_gpu_deviceLUID;
 	c->sys_info.client_d3d_deviceLUID_valid = vk_res.client_gpu_deviceLUID_valid;
 
+	// Init command pool.
+	constexpr VkCommandPoolCreateFlags flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+	U_LOG_E("%s", vk_result_string(ret));
+	ret = vk_cmd_pool_init(vk, &c->cmd_pool, flags);
+	if (ret != VK_SUCCESS) {
+		PLUTO_COMP_ERROR(c, "vk_cmd_pool_init: %s", vk_result_string(ret));
+		return false;
+	}
+
+	// Init shared swapchain resources.
+	xrt_result_t xret = comp_swapchain_shared_init(&c->base.cscs, vk);
+	if (xret != XRT_SUCCESS) {
+		PLUTO_COMP_ERROR(c, "comp_swapchain_shared_init: %u", xret);
+		return false;
+	}
+
 	return true;
 }
 
@@ -334,16 +351,18 @@ do_the_thing(struct pluto_compositor *c,
 	// Usefull.
 	xrt_frame *frame = &wrap->base_frame;
 
+	const VkCommandBufferUsageFlags flags = 0;
 	VkCommandBuffer cmd = {};
-	ret = vk_cmd_buffer_create_and_begin(vk, &cmd);
+
+	// For submitting commands.
+	vk_cmd_pool_lock(&c->cmd_pool);
+
+	ret = vk_cmd_pool_create_and_begin_cmd_buffer_locked(vk, &c->cmd_pool, flags, &cmd);
 	if (ret != VK_SUCCESS) {
-		PLUTO_COMP_ERROR(c, "vk_cmd_buffer_create_and_begin: %s", vk_result_string(ret));
+		PLUTO_COMP_ERROR(c, "vk_cmd_pool_create_and_begin_cmd_buffer_locked: %s", vk_result_string(ret));
 		xrt_frame_reference(&frame, NULL);
 		return;
 	}
-
-	// For submitting commands.
-	os_mutex_lock(&vk->cmd_pool_mutex);
 
 	// Blit images side-by-side (does scaling).
 	{
@@ -455,12 +474,17 @@ do_the_thing(struct pluto_compositor *c,
 	}
 
 	// Done submitting commands.
-	os_mutex_unlock(&vk->cmd_pool_mutex);
 
 	// Waits for command to finish.
-	ret = vk_cmd_buffer_submit(vk, cmd);
+	ret = vk_cmd_pool_end_submit_wait_and_free_cmd_buffer_locked(vk, &c->cmd_pool, cmd);
+
+	// Unlock before checking.
+	vk_cmd_pool_unlock(&c->cmd_pool);
+
+	// Do checking here.
 	if (ret != VK_SUCCESS) {
-		PLUTO_COMP_ERROR(c, "vk_cmd_buffer_submit: %s", vk_result_string(ret));
+		PLUTO_COMP_ERROR(c, "vk_cmd_pool_end_submit_wait_and_free_cmd_buffer_locked: %s",
+		                 vk_result_string(ret));
 		xrt_frame_reference(&frame, NULL);
 		return;
 	}
@@ -664,7 +688,7 @@ pluto_compositor_layer_commit(struct xrt_compositor *xc, xrt_graphics_sync_handl
 	}
 
 	// Now is a good point to garbage collect.
-	comp_swapchain_garbage_collect(&c->base.cscgc);
+	comp_swapchain_shared_garbage_collect(&c->base.cscs);
 
 	return XRT_SUCCESS;
 }
@@ -737,20 +761,18 @@ pluto_compositor_destroy(struct xrt_compositor *xc)
 	PLUTO_COMP_DEBUG(c, "PLUTO_COMP_COMP_DESTROY");
 
 	// Make sure we don't have anything to destroy.
-	comp_swapchain_garbage_collect(&c->base.cscgc);
+	comp_swapchain_shared_garbage_collect(&c->base.cscs);
+	comp_swapchain_shared_destroy(&c->base.cscs, vk);
 
 	vk_image_readback_to_xf_pool_destroy(vk, &c->pool);
+
+	vk_cmd_pool_destroy(vk, &c->cmd_pool);
 
 	if (c->bounce.image != VK_NULL_HANDLE) {
 		vk->vkDestroyImage(vk->device, c->bounce.image, NULL);
 		vk->vkFreeMemory(vk->device, c->bounce.device_memory, NULL);
 		c->bounce.image = VK_NULL_HANDLE;
 		c->bounce.device_memory = VK_NULL_HANDLE;
-	}
-
-	if (vk->cmd_pool != VK_NULL_HANDLE) {
-		vk->vkDestroyCommandPool(vk->device, vk->cmd_pool, NULL);
-		vk->cmd_pool = VK_NULL_HANDLE;
 	}
 
 	if (vk->device != VK_NULL_HANDLE) {
