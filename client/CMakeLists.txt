@@ -92,7 +92,7 @@ set_property(
 	TARGET openxr_loader
 	PROPERTY
 		IMPORTED_LOCATION
-		${CMAKE_CURRENT_SOURCE_DIR}/OpenXR/Libs/Android/${ANDROID_ABI}/${CMAKE_BUILD_TYPE}/libopenxr_loader.so
+		${OCULUS_OPENXR_MOBILE_SDK}/OpenXR/Libs/Android/${ANDROID_ABI}/${CMAKE_BUILD_TYPE}/libopenxr_loader.so
 	)
 
 add_subdirectory(src)

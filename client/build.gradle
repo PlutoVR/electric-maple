@@ -12,6 +12,11 @@ buildscript {
     }
 }
 
+plugins {
+    // Used for getting the eigen dir, explicit python binary, etc. from local.properties
+    id 'com.github.b3er.local.properties' version '1.1'
+}
+
 allprojects {
     repositories {
         google()
@@ -23,9 +28,10 @@ task clean(type: Delete) {
     delete rootProject.buildDir
 }
 
-
 ext {
     // If you are building on Windows, you will need to explicitly set eigenIncludeDir in your
     // local.properties file since the default value provided below only makes sense on *nix
     eigenIncludeDir = project.findProperty('eigenIncludeDir') ?: '/usr/include/eigen3'
+    // You will need to set "ovrOpenXRMobileSDK=/PATH" in your local.properties file.
+    ovrOpenXRMobileSDK = project.findProperty('ovrOpenXRMobileSDK') ?: '.'
 }
