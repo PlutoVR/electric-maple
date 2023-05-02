@@ -32,6 +32,24 @@
 #include <gst/gstelement.h>
 #include <gst/video/video-frame.h>
 
+
+// #include <glib-unix.h>
+// #include <gst/gst.h>
+
+#define PL_LIBSOUP2
+
+
+#define GST_USE_UNSTABLE_API
+#include <gst/webrtc/webrtc.h>
+
+#include <libsoup/soup-message.h>
+#include <libsoup/soup-session.h>
+
+#include <json-glib/json-glib.h>
+#include "stdio.h"
+
+
+
 /*
  *
  * Defines.
@@ -50,7 +68,7 @@
 #define VF_WARN(d, ...) U_LOG_IFL_W(d->log_level, __VA_ARGS__)
 #define VF_ERROR(d, ...) U_LOG_IFL_E(d->log_level, __VA_ARGS__)
 
-DEBUG_GET_ONCE_LOG_OPTION(vf_log, "VF_LOG", U_LOGGING_WARN)
+DEBUG_GET_ONCE_LOG_OPTION(vf_log, "VF_LOG", U_LOGGING_TRACE)
 
 /*!
  * A frame server operating on a video file.
@@ -106,6 +124,26 @@ struct vf_frame
 
 	GstVideoFrame frame;
 };
+
+
+
+static gchar *websocket_uri = NULL;
+
+static GOptionEntry options[] = {
+    {"websocket-uri", 'u', 0, G_OPTION_ARG_STRING, &websocket_uri, "Websocket URI of webrtc signaling connection"},
+    {NULL}};
+
+#define WEBSOCKET_URI_DEFAULT "ws://127.0.0.1:8080/ws"
+
+//!@todo Don't use global state
+static SoupWebsocketConnection *ws = NULL;
+static GstElement *pipeline = NULL;
+static GstElement *webrtcbin = NULL;
+static GstWebRTCDataChannel *datachannel = NULL;
+
+//!@todo SORRY
+static struct vf_fs *the_vf_fs = NULL;
+
 
 
 /*
@@ -227,6 +265,7 @@ vf_fs_frame(struct vf_fs *vid, GstSample *sample)
 static GstFlowReturn
 on_new_sample_from_sink(GstElement *elt, struct vf_fs *vid)
 {
+	U_LOG_E("called!");
 	SINK_TRACE_MARKER();
 	GstSample *sample;
 	sample = gst_app_sink_pull_sample(GST_APP_SINK(elt));
@@ -249,6 +288,15 @@ on_new_sample_from_sink(GstElement *elt, struct vf_fs *vid)
 		// first sample is only used for getting metadata
 		return GST_FLOW_OK;
 	}
+
+	if (!vid->is_running) {
+		U_LOG_E("We're not running, so we're not returning a sample");
+		// I don't know if we can pause WebRTC stuff, so let's just not pause it
+		return GST_FLOW_OK;
+	}
+
+	U_LOG_E("Going to try to return a sample");
+
 
 	// Takes ownership of the sample.
 	vf_fs_frame(vid, sample);
@@ -313,6 +361,377 @@ vf_fs_mainloop(void *ptr)
 }
 
 
+
+static gboolean
+sigint_handler(gpointer user_data)
+{
+	U_LOG_E("called!");
+	g_main_loop_quit(user_data);
+	return G_SOURCE_REMOVE;
+}
+
+static gboolean
+gst_bus_cb(GstBus *bus, GstMessage *message, gpointer data)
+{
+	U_LOG_E("called!");
+	GstBin *pipeline = GST_BIN(data);
+
+	switch (GST_MESSAGE_TYPE(message)) {
+	case GST_MESSAGE_ERROR: {
+		GError *gerr;
+		gchar *debug_msg;
+		gst_message_parse_error(message, &gerr, &debug_msg);
+		GST_DEBUG_BIN_TO_DOT_FILE(pipeline, GST_DEBUG_GRAPH_SHOW_ALL, "mss-pipeline-ERROR");
+		g_error("Error: %s (%s)", gerr->message, debug_msg);
+		g_error_free(gerr);
+		g_free(debug_msg);
+	} break;
+	case GST_MESSAGE_WARNING: {
+		GError *gerr;
+		gchar *debug_msg;
+		gst_message_parse_warning(message, &gerr, &debug_msg);
+		GST_DEBUG_BIN_TO_DOT_FILE(pipeline, GST_DEBUG_GRAPH_SHOW_ALL, "mss-pipeline-WARNING");
+		g_warning("Warning: %s (%s)", gerr->message, debug_msg);
+		g_error_free(gerr);
+		g_free(debug_msg);
+	} break;
+	case GST_MESSAGE_EOS: {
+		g_error("Got EOS!!");
+	} break;
+	default: break;
+	}
+	return TRUE;
+}
+
+void
+send_sdp_answer(const gchar *sdp)
+{
+	U_LOG_E("called!");
+	JsonBuilder *builder;
+	JsonNode *root;
+	gchar *msg_str;
+
+	U_LOG_E("Send answer: %s\n", sdp);
+
+	builder = json_builder_new();
+	json_builder_begin_object(builder);
+	json_builder_set_member_name(builder, "msg");
+	json_builder_add_string_value(builder, "answer");
+
+	json_builder_set_member_name(builder, "sdp");
+	json_builder_add_string_value(builder, sdp);
+	json_builder_end_object(builder);
+
+	root = json_builder_get_root(builder);
+
+	msg_str = json_to_string(root, TRUE);
+	soup_websocket_connection_send_text(ws, msg_str);
+	g_clear_pointer(&msg_str, g_free);
+
+	json_node_unref(root);
+	g_object_unref(builder);
+}
+
+static void
+webrtc_on_ice_candidate_cb(GstElement *webrtcbin, guint mlineindex, gchar *candidate)
+{
+	U_LOG_E("called!");
+	JsonBuilder *builder;
+	JsonNode *root;
+	gchar *msg_str;
+
+	U_LOG_E("Send candidate: %u %s\n", mlineindex, candidate);
+
+	builder = json_builder_new();
+	json_builder_begin_object(builder);
+	json_builder_set_member_name(builder, "msg");
+	json_builder_add_string_value(builder, "candidate");
+
+	json_builder_set_member_name(builder, "candidate");
+	json_builder_begin_object(builder);
+	json_builder_set_member_name(builder, "candidate");
+	json_builder_add_string_value(builder, candidate);
+	json_builder_set_member_name(builder, "sdpMLineIndex");
+	json_builder_add_int_value(builder, mlineindex);
+	json_builder_end_object(builder);
+	json_builder_end_object(builder);
+
+	root = json_builder_get_root(builder);
+
+	msg_str = json_to_string(root, TRUE);
+	soup_websocket_connection_send_text(ws, msg_str);
+	g_clear_pointer(&msg_str, g_free);
+
+	json_node_unref(root);
+	g_object_unref(builder);
+}
+
+static void
+on_answer_created(GstPromise *promise, gpointer user_data)
+{
+	U_LOG_E("called!");
+	GstWebRTCSessionDescription *answer = NULL;
+	gchar *sdp;
+
+	gst_structure_get(gst_promise_get_reply(promise), "answer", GST_TYPE_WEBRTC_SESSION_DESCRIPTION, &answer, NULL);
+	gst_promise_unref(promise);
+
+	g_signal_emit_by_name(webrtcbin, "set-local-description", answer, NULL);
+
+	sdp = gst_sdp_message_as_text(answer->sdp);
+	send_sdp_answer(sdp);
+	g_free(sdp);
+
+	gst_webrtc_session_description_free(answer);
+}
+
+static void
+process_sdp_offer(const gchar *sdp)
+{
+	U_LOG_E("called!");
+	GstSDPMessage *sdp_msg = NULL;
+	GstWebRTCSessionDescription *desc = NULL;
+
+	U_LOG_E("Received offer: %s\n", sdp);
+
+	if (gst_sdp_message_new_from_text(sdp, &sdp_msg) != GST_SDP_OK) {
+		g_debug("Error parsing SDP description");
+		goto out;
+	}
+
+	desc = gst_webrtc_session_description_new(GST_WEBRTC_SDP_TYPE_OFFER, sdp_msg);
+	if (desc) {
+		GstPromise *promise;
+
+		promise = gst_promise_new();
+
+		g_signal_emit_by_name(webrtcbin, "set-remote-description", desc, promise);
+
+		gst_promise_wait(promise);
+		gst_promise_unref(promise);
+
+		g_signal_emit_by_name(
+		    webrtcbin, "create-answer", NULL,
+		    gst_promise_new_with_change_func((GstPromiseChangeFunc)on_answer_created, NULL, NULL));
+	} else {
+		gst_sdp_message_free(sdp_msg);
+	}
+
+out:
+	g_clear_pointer(&desc, gst_webrtc_session_description_free);
+}
+
+static void
+process_candidate(guint mlineindex, const gchar *candidate)
+{
+	U_LOG_E("called!");
+	U_LOG_E("Received candidate: %d %s\n", mlineindex, candidate);
+
+	g_signal_emit_by_name(webrtcbin, "add-ice-candidate", mlineindex, candidate);
+}
+
+static void
+message_cb(SoupWebsocketConnection *connection, gint type, GBytes *message, gpointer user_data)
+{
+	U_LOG_E("called!");
+	gsize length = 0;
+	const gchar *msg_data = g_bytes_get_data(message, &length);
+	JsonParser *parser = json_parser_new();
+	GError *error = NULL;
+
+	if (json_parser_load_from_data(parser, msg_data, length, &error)) {
+		JsonObject *msg = json_node_get_object(json_parser_get_root(parser));
+		const gchar *msg_type;
+
+		if (!json_object_has_member(msg, "msg")) {
+			// Invalid message
+			goto out;
+		}
+
+		msg_type = json_object_get_string_member(msg, "msg");
+		U_LOG_E("Websocket message received: %s\n", msg_type);
+
+		if (g_str_equal(msg_type, "offer")) {
+			const gchar *offer_sdp = json_object_get_string_member(msg, "sdp");
+			process_sdp_offer(offer_sdp);
+		} else if (g_str_equal(msg_type, "candidate")) {
+			JsonObject *candidate;
+
+			candidate = json_object_get_object_member(msg, "candidate");
+
+			process_candidate(json_object_get_int_member(candidate, "sdpMLineIndex"),
+			                  json_object_get_string_member(candidate, "candidate"));
+		}
+	} else {
+		g_debug("Error parsing message: %s", error->message);
+		g_clear_error(&error);
+	}
+
+out:
+	g_object_unref(parser);
+}
+
+static void
+data_channel_error_cb(GstWebRTCDataChannel *datachannel, void *data)
+{
+	U_LOG_E("error\n");
+	abort();
+}
+
+static void
+data_channel_close_cb(GstWebRTCDataChannel *datachannel, gpointer timeout_src_id)
+{
+	U_LOG_E("Data channel closed\n");
+
+	g_source_remove(GPOINTER_TO_UINT(timeout_src_id));
+	g_clear_object(&datachannel);
+}
+
+static void
+data_channel_message_string_cb(GstWebRTCDataChannel *datachannel, gchar *str, void *data)
+{
+	U_LOG_E("Received data channel message: %s\n", str);
+}
+
+gboolean
+datachannel_send_message(gpointer unused)
+{
+	g_signal_emit_by_name(datachannel, "send-string", "Hi! from Pluto client");
+
+	return G_SOURCE_CONTINUE;
+}
+
+static void
+webrtc_on_data_channel_cb(GstElement *webrtcbin, GstWebRTCDataChannel *data_channel, void *data)
+{
+	guint timeout_src_id;
+
+	U_LOG_E("Successfully created datachannel\n");
+
+	g_assert_null(datachannel);
+
+	datachannel = GST_WEBRTC_DATA_CHANNEL(data_channel);
+
+	timeout_src_id = g_timeout_add_seconds(3, datachannel_send_message, NULL);
+
+	g_signal_connect(datachannel, "on-close", G_CALLBACK(data_channel_close_cb), GUINT_TO_POINTER(timeout_src_id));
+	g_signal_connect(datachannel, "on-error", G_CALLBACK(data_channel_error_cb), GUINT_TO_POINTER(timeout_src_id));
+	g_signal_connect(datachannel, "on-message-string", G_CALLBACK(data_channel_message_string_cb), NULL);
+}
+
+static void
+websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
+{
+	U_LOG_E("called!");
+	GError *error = NULL;
+
+	g_assert(!ws);
+
+	ws = soup_session_websocket_connect_finish(SOUP_SESSION(session), res, &error);
+	if (error) {
+		U_LOG_E("Error creating websocket: %s\n", error->message);
+		g_clear_error(&error);
+	} else {
+		GstBus *bus;
+
+		U_LOG_E("Websocket connected\n");
+		g_signal_connect(ws, "message", G_CALLBACK(message_cb), NULL);
+
+		uint32_t width = 1440;
+		uint32_t height = 1584;
+
+		gchar *pipeline_string = g_strdup_printf(
+		    "videotestsrc is-live=1 name=source ! "
+		    "appsink name=testsink caps=video/x-raw,format=RGBx,width=%u,height=%u",
+		    width, height);
+
+		pipeline = gst_parse_launch(pipeline_string, &error);
+
+
+		{
+			struct vf_fs *vid = the_vf_fs;
+			vid->source = pipeline;
+			vid->testsink = gst_bin_get_by_name(GST_BIN(vid->source), "testsink");
+			g_object_set(G_OBJECT(vid->testsink), "emit-signals", TRUE, "sync", TRUE, NULL);
+			g_signal_connect(vid->testsink, "new-sample", G_CALLBACK(on_new_sample_from_sink), vid);
+
+			GstBus *bus = gst_element_get_bus(vid->source);
+			gst_bus_add_watch(bus, (GstBusFunc)on_source_message, vid);
+			gst_object_unref(bus);
+		}
+
+		g_assert_no_error(error);
+
+		webrtcbin = gst_bin_get_by_name(GST_BIN(pipeline), "webrtc");
+		g_signal_connect(webrtcbin, "on-data-channel", G_CALLBACK(webrtc_on_data_channel_cb), NULL);
+
+
+		g_signal_connect(webrtcbin, "on-ice-candidate", G_CALLBACK(webrtc_on_ice_candidate_cb), NULL);
+
+		bus = gst_element_get_bus(pipeline);
+		gst_bus_add_watch(bus, gst_bus_cb, pipeline);
+		gst_clear_object(&bus);
+
+		g_assert(gst_element_set_state(pipeline, GST_STATE_PLAYING) != GST_STATE_CHANGE_FAILURE);
+	}
+}
+
+#if 0
+int
+blah(int argc, char *argv[])
+{
+	GOptionContext *option_context;
+	GMainLoop *loop;
+	SoupSession *soup_session;
+	GError *error = NULL;
+
+	gst_init(&argc, &argv);
+
+	option_context = g_option_context_new(NULL);
+	g_option_context_add_main_entries(option_context, options, NULL);
+
+	if (!g_option_context_parse(option_context, &argc, &argv, &error)) {
+		U_LOG_E("option parsing failed: %s\n", error->message);
+		exit(1);
+	}
+
+	if (!websocket_uri) {
+		websocket_uri = g_strdup(WEBSOCKET_URI_DEFAULT);
+	}
+
+	soup_session = soup_session_new();
+
+#ifdef PL_LIBSOUP2
+	soup_session_websocket_connect_async(soup_session,                                     // session
+	                                     soup_message_new(SOUP_METHOD_GET, websocket_uri), // message
+	                                     NULL,                                             // origin
+	                                     NULL,                                             // protocols
+	                                     NULL,                                             // cancellable
+	                                     websocket_connected_cb,                           // callback
+	                                     NULL);                                            // user_data
+
+#else
+	soup_session_websocket_connect_async(soup_session,                                     // session
+	                                     soup_message_new(SOUP_METHOD_GET, websocket_uri), // message
+	                                     NULL,                                             // origin
+	                                     NULL,                                             // protocols
+	                                     0,                                                // io_prority
+	                                     NULL,                                             // cancellable
+	                                     websocket_connected_cb,                           // callback
+	                                     NULL);                                            // user_data
+
+#endif
+
+	loop = g_main_loop_new(NULL, FALSE);
+	g_unix_signal_add(SIGINT, sigint_handler, loop);
+
+	g_main_loop_run(loop);
+	g_main_loop_unref(loop);
+	g_clear_pointer(&websocket_uri, g_free);
+}
+#endif
+
+
 /*
  *
  * Frame server methods.
@@ -361,7 +780,7 @@ vf_fs_stream_start(struct xrt_fs *xfs,
 	vid->capture_type = capture_type;
 	vid->selected = descriptor_index;
 
-	gst_element_set_state(vid->source, GST_STATE_PLAYING);
+	// gst_element_set_state(vid->source, GST_STATE_PLAYING);
 
 	VF_TRACE(vid, "info: Started!");
 
@@ -445,35 +864,74 @@ GST_PLUGIN_STATIC_DECLARE(overlaycomposition);
 static struct xrt_fs *
 alloc_and_init_common(struct xrt_frame_context *xfctx,      //
                       enum xrt_format format,               //
-                      enum xrt_stereo_format stereo_format, //
-                      gchar *pipeline_string)               //
+                      enum xrt_stereo_format stereo_format) //
 {
 	struct vf_fs *vid = U_TYPED_CALLOC(struct vf_fs);
+	the_vf_fs = vid;
 	vid->got_sample = false;
 	vid->format = format;
 	vid->stereo_format = stereo_format;
 
 	GstBus *bus = NULL;
 
-    GST_PLUGIN_STATIC_REGISTER(app);
-    GST_PLUGIN_STATIC_REGISTER(coreelements);
-    GST_PLUGIN_STATIC_REGISTER(videotestsrc);
-    GST_PLUGIN_STATIC_REGISTER(videoconvertscale);
-    GST_PLUGIN_STATIC_REGISTER(overlaycomposition);
+	GST_PLUGIN_STATIC_REGISTER(app);
+	GST_PLUGIN_STATIC_REGISTER(coreelements);
+	GST_PLUGIN_STATIC_REGISTER(videotestsrc);
+	GST_PLUGIN_STATIC_REGISTER(videoconvertscale);
+	GST_PLUGIN_STATIC_REGISTER(overlaycomposition);
 
 	int ret = os_thread_helper_init(&vid->play_thread);
 	if (ret < 0) {
 		VF_ERROR(vid, "Failed to init thread");
-		g_free(pipeline_string);
+		// g_free(pipeline_string);
 		free(vid);
 		return NULL;
 	}
 
 	vid->loop = g_main_loop_new(NULL, FALSE);
-	VF_DEBUG(vid, "Pipeline: %s", pipeline_string);
 
-    GError *error = NULL;
+	GOptionContext *option_context;
+	GMainLoop *loop;
+	SoupSession *soup_session;
+	GError *error = NULL;
 
+	option_context = g_option_context_new(NULL);
+	g_option_context_add_main_entries(option_context, options, NULL);
+
+	if (!g_option_context_parse(option_context, NULL, NULL, &error)) {
+		U_LOG_E("option parsing failed: %s\n", error->message);
+		exit(1);
+	}
+
+	if (!websocket_uri) {
+		websocket_uri = g_strdup(WEBSOCKET_URI_DEFAULT);
+	}
+
+	soup_session = soup_session_new();
+
+#ifdef PL_LIBSOUP2
+	soup_session_websocket_connect_async(soup_session,                                     // session
+	                                     soup_message_new(SOUP_METHOD_GET, websocket_uri), // message
+	                                     NULL,                                             // origin
+	                                     NULL,                                             // protocols
+	                                     NULL,                                             // cancellable
+	                                     websocket_connected_cb,                           // callback
+	                                     NULL);                                            // user_data
+
+#else
+	soup_session_websocket_connect_async(soup_session,                                     // session
+	                                     soup_message_new(SOUP_METHOD_GET, websocket_uri), // message
+	                                     NULL,                                             // origin
+	                                     NULL,                                             // protocols
+	                                     0,                                                // io_prority
+	                                     NULL,                                             // cancellable
+	                                     websocket_connected_cb,                           // callback
+	                                     NULL);                                            // user_data
+
+#endif
+
+
+#if 0
 	vid->source = gst_parse_launch(pipeline_string, &error);
 	g_free(pipeline_string);
 
@@ -492,6 +950,7 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 	bus = gst_element_get_bus(vid->source);
 	gst_bus_add_watch(bus, (GstBusFunc)on_source_message, vid);
 	gst_object_unref(bus);
+#endif
 
 	ret = os_thread_helper_start(&vid->play_thread, vf_fs_mainloop, vid);
 	if (ret != 0) {
@@ -501,15 +960,17 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 		return NULL;
 	}
 
+#if 0
 	// We need one sample to determine frame size.
 	VF_DEBUG(vid, "Waiting for frame");
-    {
-        GstStateChangeReturn ret = gst_element_set_state(vid->source, GST_STATE_PLAYING);
+	{
+		GstStateChangeReturn ret = gst_element_set_state(vid->source, GST_STATE_PLAYING);
 
-        if (ret == GST_STATE_CHANGE_FAILURE) {
-            VF_ERROR(vid, "WHAT.");
-        }
-    }
+		if (ret == GST_STATE_CHANGE_FAILURE) {
+			VF_ERROR(vid, "WHAT.");
+		}
+	}
+#endif
 	while (!vid->got_sample) {
 		os_nanosleep(100 * 1000 * 1000);
 	}
@@ -546,56 +1007,10 @@ vf_fs_videotestsource(struct xrt_frame_context *xfctx, uint32_t width, uint32_t 
 	enum xrt_format format = XRT_FORMAT_R8G8B8A8;
 	enum xrt_stereo_format stereo_format = XRT_STEREO_FORMAT_NONE;
 
-	gchar *pipeline_string = g_strdup_printf(
-	    "videotestsrc is-live=1 name=source ! "
-	    "appsink name=testsink caps=video/x-raw,format=RGBx,width=%u,height=%u",
-		width, height, width, height);
+	// gchar *pipeline_string = g_strdup_printf(
+	//     "videotestsrc is-live=1 name=source ! "
+	//     "appsink name=testsink caps=video/x-raw,format=RGBx,width=%u,height=%u",
+	//     width, height, width, height);
 
-	return alloc_and_init_common(xfctx, format, stereo_format, pipeline_string);
-}
-
-struct xrt_fs *
-vf_fs_open_file(struct xrt_frame_context *xfctx, const char *path)
-{
-	if (path == NULL) {
-		U_LOG_E("No path given");
-		return NULL;
-	}
-
-	gst_init(0, NULL);
-
-	if (!g_file_test(path, G_FILE_TEST_EXISTS)) {
-		U_LOG_E("File %s does not exist", path);
-		return NULL;
-	}
-
-#if 0
-	const gchar *caps = "video/x-raw,format=RGB";
-	enum xrt_format format = XRT_FORMAT_R8G8B8;
-	enum xrt_stereo_format stereo_format = XRT_STEREO_FORMAT_NONE;
-#endif
-
-#if 0
-	// For hand tracking
-	const gchar *caps = "video/x-raw,format=RGB";
-	enum xrt_format format = XRT_FORMAT_R8G8B8;
-	enum xrt_stereo_format stereo_format = XRT_STEREO_FORMAT_SBS;
-#endif
-
-#if 1
-	const gchar *caps = "video/x-raw,format=YUY2";
-	enum xrt_format format = XRT_FORMAT_YUYV422;
-	enum xrt_stereo_format stereo_format = XRT_STEREO_FORMAT_SBS;
-#endif
-
-	gchar *loop = "false";
-
-	gchar *pipeline_string = g_strdup_printf(
-	    "multifilesrc location=\"%s\" loop=%s ! "
-	    "decodebin ! "
-	    "videoconvert ! "
-	    "appsink caps=\"%s\" name=testsink",
-	    path, loop, caps);
-
-	return alloc_and_init_common(xfctx, format, stereo_format, pipeline_string);
+	return alloc_and_init_common(xfctx, format, stereo_format);
 }

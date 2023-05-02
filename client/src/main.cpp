@@ -41,6 +41,7 @@ onAppCmd(struct android_app *app, int32_t cmd)
 void
 sink_push_frame(struct xrt_frame_sink *xfs, struct xrt_frame *xf)
 {
+	U_LOG_E("called!");
 	if (!xf) {
 		U_LOG_E("what??");
 		return;
