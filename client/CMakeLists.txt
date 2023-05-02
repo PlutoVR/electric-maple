@@ -462,8 +462,27 @@ ${gstreamer_android_SOURCE_DIR}/arm64/lib/libturbojpeg.a
 
 )
 
+# ${GLIB_LIBRARIES}
+# ${LIBSOUP_LIBRARIES}
+# ${JSONGLIB_LIBRARIES}
+# ${GIO_LIBRARIES}
+
+
+# set(GLIB_LIBRARY_DIRS ${gstreamer_android_SOURCE_DIR}/arm64/lib)
+# set(LIBSOUP_LIBRARY_DIRS ${gstreamer_android_SOURCE_DIR}/arm64/lib)
+set(JSONGLIB_LIBRARIES ${gstreamer_android_SOURCE_DIR}/arm64/lib/libjson-glib-1.0.a)
+# set(GIO_LIBRARY_DIRS ${gstreamer_android_SOURCE_DIR}/arm64/lib)
+
+# find_library(GLIB_LIBRARIES glib-2.0 HINTS ${GLIB_LIBRARY_DIRS})
+# find_library(LIBSOUP_LIBRARIES soup-2.4 HINTS ${LIBSOUP_LIBRARY_DIRS})
+# find_library(JSONGLIB_LIBRARIES json-glib-1.0 HINTS ${JSONGLIB_LIBRARY_DIRS})
+# find_library(GIO_LIBRARIES gio-2.0 HINTS ${GIO_LIBRARY_DIRS})
+
 set(GST_INCLUDE_DIRS ${gstreamer_android_SOURCE_DIR}/arm64/include/gstreamer-1.0/ )
 set(GLIB_INCLUDE_DIRS ${gstreamer_android_SOURCE_DIR}/arm64/include/glib-2.0 ${gstreamer_android_SOURCE_DIR}/arm64/lib/glib-2.0/include/)
+set(LIBSOUP_INCLUDE_DIRS ${gstreamer_android_SOURCE_DIR}/arm64/include/libsoup-2.4/)
+set(JSONGLIB_INCLUDE_DIRS ${gstreamer_android_SOURCE_DIR}/arm64/include/json-glib-1.0)
+set(GIO_INCLUDE_DIRS ${gstreamer_android_SOURCE_DIR}/arm64/include/glib-2.0/ ${gstreamer_android_SOURCE_DIR}/arm64/lib/gio-unix-2.0/)
 
 
 # These two don't seem to help
