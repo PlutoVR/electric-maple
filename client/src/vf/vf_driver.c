@@ -133,7 +133,7 @@ static GOptionEntry options[] = {
     {"websocket-uri", 'u', 0, G_OPTION_ARG_STRING, &websocket_uri, "Websocket URI of webrtc signaling connection"},
     {NULL}};
 
-#define WEBSOCKET_URI_DEFAULT "ws://127.0.0.1:8080/ws"
+#define WEBSOCKET_URI_DEFAULT "ws://192.168.0.168:8080/ws"
 
 //!@todo Don't use global state
 static SoupWebsocketConnection *ws = NULL;
@@ -593,7 +593,7 @@ data_channel_message_string_cb(GstWebRTCDataChannel *datachannel, gchar *str, vo
 	U_LOG_E("Received data channel message: %s\n", str);
 }
 
-gboolean
+static gboolean
 datachannel_send_message(gpointer unused)
 {
 	g_signal_emit_by_name(datachannel, "send-string", "Hi! from Pluto client");
@@ -619,10 +619,65 @@ webrtc_on_data_channel_cb(GstElement *webrtcbin, GstWebRTCDataChannel *data_chan
 	g_signal_connect(datachannel, "on-message-string", G_CALLBACK(data_channel_message_string_cb), NULL);
 }
 
+
+// You can generally figure these out by going to
+// https://gstreamer.freedesktop.org/documentation/plugins_doc.html?gi-language=c, searching for the GstElement you
+// need, and finding the plugin name it corresponds to in the sidebar. Some of them (libav is an example) don't
+// correspond 1:1 in the names in the sidebar, so guessing as well as `find deps/gstreamer_android | grep <name>` helps.
+GST_PLUGIN_STATIC_DECLARE(app); // Definitely needed
+GST_PLUGIN_STATIC_DECLARE(autodetect); // Definitely needed
+GST_PLUGIN_STATIC_DECLARE(coreelements);
+GST_PLUGIN_STATIC_DECLARE(dtls);
+
+// GST_PLUGIN_STATIC_DECLARE(libav);
+
+GST_PLUGIN_STATIC_DECLARE(nice);
+GST_PLUGIN_STATIC_DECLARE(rtp);
+GST_PLUGIN_STATIC_DECLARE(rtpmanager);
+GST_PLUGIN_STATIC_DECLARE(sctp);
+GST_PLUGIN_STATIC_DECLARE(srtp);
+GST_PLUGIN_STATIC_DECLARE(usrsctp);
+GST_PLUGIN_STATIC_DECLARE(videoparsersbad);
+GST_PLUGIN_STATIC_DECLARE(webrtc);
+GST_PLUGIN_STATIC_DECLARE(androidmedia);
+
+GST_PLUGIN_STATIC_DECLARE(videotestsrc); // Definitely needed
+GST_PLUGIN_STATIC_DECLARE(videoconvertscale);
+GST_PLUGIN_STATIC_DECLARE(overlaycomposition);
+
+GST_PLUGIN_STATIC_DECLARE(playback); // "FFMPEG "
+// GST_PLUGIN_STATIC_DECLARE(webrtcnice);
+
 static void
 websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 {
 	U_LOG_E("called!");
+
+
+GST_PLUGIN_STATIC_REGISTER(app); // Definitely needed
+GST_PLUGIN_STATIC_REGISTER(autodetect); // Definitely needed
+GST_PLUGIN_STATIC_REGISTER(coreelements);
+GST_PLUGIN_STATIC_REGISTER(dtls);
+
+// GST_PLUGIN_STATIC_REGISTER(libav);
+
+GST_PLUGIN_STATIC_REGISTER(nice);
+GST_PLUGIN_STATIC_REGISTER(rtp);
+GST_PLUGIN_STATIC_REGISTER(rtpmanager);
+GST_PLUGIN_STATIC_REGISTER(usrsctp);
+GST_PLUGIN_STATIC_REGISTER(sctp);
+GST_PLUGIN_STATIC_REGISTER(srtp);
+GST_PLUGIN_STATIC_REGISTER(videoparsersbad);
+GST_PLUGIN_STATIC_REGISTER(webrtc);
+GST_PLUGIN_STATIC_REGISTER(androidmedia);
+
+GST_PLUGIN_STATIC_REGISTER(videotestsrc); // Definitely needed
+GST_PLUGIN_STATIC_REGISTER(videoconvertscale);
+GST_PLUGIN_STATIC_REGISTER(overlaycomposition);
+
+GST_PLUGIN_STATIC_REGISTER(playback); // "FFMPEG "
+	// GST_PLUGIN_STATIC_REGISTER(webrtcnice);
+
 	GError *error = NULL;
 
 	g_assert(!ws);
@@ -637,21 +692,42 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 		U_LOG_E("Websocket connected\n");
 		g_signal_connect(ws, "message", G_CALLBACK(message_cb), NULL);
 
-		uint32_t width = 1440;
-		uint32_t height = 1584;
+		uint32_t width = 480;
+		uint32_t height = 270;
+
+		// decodebin3 seems to .. hang?
+		// omxh264dec doesn't seem to exist
 
 		gchar *pipeline_string = g_strdup_printf(
-		    "videotestsrc is-live=1 name=source ! "
-		    "appsink name=testsink caps=video/x-raw,format=RGBx,width=%u,height=%u",
-		    width, height);
+		    "webrtcbin name=webrtc bundle-policy=max-bundle ! h264parse ! "
+//            "avdec_h264 !"
+            "decodebin3 !"
+		    "appsink name=testsink");
+				
+				//  caps=video/x-raw,format=RGBx,width=%u,height=%u",
+		    // width, height);
 
+		printf("launching pipeline\n");
 		pipeline = gst_parse_launch(pipeline_string, &error);
+
+		if (error) {
+			U_LOG_E("diff error");
+			U_LOG_E("%s", error->message);
+		}
+
+		if (pipeline == NULL) {
+			U_LOG_E("Bad source");
+			U_LOG_E("%s", error->message);
+			abort();
+		}
 
 
 		{
 			struct vf_fs *vid = the_vf_fs;
 			vid->source = pipeline;
+			printf("getting testsink\n");
 			vid->testsink = gst_bin_get_by_name(GST_BIN(vid->source), "testsink");
+			printf("done getting testsink\n");
 			g_object_set(G_OBJECT(vid->testsink), "emit-signals", TRUE, "sync", TRUE, NULL);
 			g_signal_connect(vid->testsink, "new-sample", G_CALLBACK(on_new_sample_from_sink), vid);
 
@@ -661,8 +737,10 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 		}
 
 		g_assert_no_error(error);
+		printf("getting webrtcbin\n");
 
 		webrtcbin = gst_bin_get_by_name(GST_BIN(pipeline), "webrtc");
+		printf("done getting webrtcbin\n");
 		g_signal_connect(webrtcbin, "on-data-channel", G_CALLBACK(webrtc_on_data_channel_cb), NULL);
 
 
@@ -672,7 +750,14 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 		gst_bus_add_watch(bus, gst_bus_cb, pipeline);
 		gst_clear_object(&bus);
 
-		g_assert(gst_element_set_state(pipeline, GST_STATE_PLAYING) != GST_STATE_CHANGE_FAILURE);
+		GstStateChangeReturn ret = gst_element_set_state(pipeline, GST_STATE_PLAYING);
+
+		if (ret == GST_STATE_CHANGE_FAILURE) {
+			U_LOG_E("Noooo");
+
+		} else {
+			U_LOG_E("Successfully changed state!");
+		}
 	}
 }
 
@@ -971,11 +1056,12 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 		}
 	}
 #endif
+	// OK so it's stuck waiting here, alright.
 	while (!vid->got_sample) {
 		os_nanosleep(100 * 1000 * 1000);
 	}
 	VF_DEBUG(vid, "Got first sample");
-	gst_element_set_state(vid->source, GST_STATE_PAUSED);
+	// gst_element_set_state(vid->source, GST_STATE_PAUSED);
 
 	vid->base.enumerate_modes = vf_fs_enumerate_modes;
 	vid->base.configure_capture = vf_fs_configure_capture;
@@ -1003,6 +1089,9 @@ struct xrt_fs *
 vf_fs_videotestsource(struct xrt_frame_context *xfctx, uint32_t width, uint32_t height)
 {
 	gst_init(0, NULL);
+
+	GST_DEBUG("lol");
+	g_print("meow");
 
 	enum xrt_format format = XRT_FORMAT_R8G8B8A8;
 	enum xrt_stereo_format stereo_format = XRT_STEREO_FORMAT_NONE;
