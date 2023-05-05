@@ -332,7 +332,7 @@ on_source_message(GstBus *bus, GstMessage *message, struct vf_fs *vid)
 	case GST_MESSAGE_ERROR:
 		VF_ERROR(vid, "Received error.");
 		print_gst_error(message);
-		g_main_loop_quit(vid->loop);
+		// g_main_loop_quit(vid->loop);
 		break;
 	default: break;
 	}
@@ -571,53 +571,53 @@ out:
 	g_object_unref(parser);
 }
 
-static void
-data_channel_error_cb(GstWebRTCDataChannel *datachannel, void *data)
-{
-	U_LOG_E("error\n");
-	abort();
-}
+// static void
+// data_channel_error_cb(GstWebRTCDataChannel *datachannel, void *data)
+// {
+// 	U_LOG_E("error\n");
+// 	abort();
+// }
 
-static void
-data_channel_close_cb(GstWebRTCDataChannel *datachannel, gpointer timeout_src_id)
-{
-	U_LOG_E("Data channel closed\n");
+// static void
+// data_channel_close_cb(GstWebRTCDataChannel *datachannel, gpointer timeout_src_id)
+// {
+// 	U_LOG_E("Data channel closed\n");
 
-	g_source_remove(GPOINTER_TO_UINT(timeout_src_id));
-	g_clear_object(&datachannel);
-}
+// 	g_source_remove(GPOINTER_TO_UINT(timeout_src_id));
+// 	g_clear_object(&datachannel);
+// }
 
-static void
-data_channel_message_string_cb(GstWebRTCDataChannel *datachannel, gchar *str, void *data)
-{
-	U_LOG_E("Received data channel message: %s\n", str);
-}
+// static void
+// data_channel_message_string_cb(GstWebRTCDataChannel *datachannel, gchar *str, void *data)
+// {
+// 	U_LOG_E("Received data channel message: %s\n", str);
+// }
 
-static gboolean
-datachannel_send_message(gpointer unused)
-{
-	g_signal_emit_by_name(datachannel, "send-string", "Hi! from Pluto client");
+// static gboolean
+// datachannel_send_message(gpointer unused)
+// {
+// 	g_signal_emit_by_name(datachannel, "send-string", "Hi! from Pluto client");
 
-	return G_SOURCE_CONTINUE;
-}
+// 	return G_SOURCE_CONTINUE;
+// }
 
-static void
-webrtc_on_data_channel_cb(GstElement *webrtcbin, GstWebRTCDataChannel *data_channel, void *data)
-{
-	guint timeout_src_id;
+// static void
+// webrtc_on_data_channel_cb(GstElement *webrtcbin, GstWebRTCDataChannel *data_channel, void *data)
+// {
+// 	guint timeout_src_id;
 
-	U_LOG_E("Successfully created datachannel\n");
+// 	U_LOG_E("Successfully created datachannel\n");
 
-	g_assert_null(datachannel);
+// 	g_assert_null(datachannel);
 
-	datachannel = GST_WEBRTC_DATA_CHANNEL(data_channel);
+// 	datachannel = GST_WEBRTC_DATA_CHANNEL(data_channel);
 
-	timeout_src_id = g_timeout_add_seconds(3, datachannel_send_message, NULL);
+// 	timeout_src_id = g_timeout_add_seconds(3, datachannel_send_message, NULL);
 
-	g_signal_connect(datachannel, "on-close", G_CALLBACK(data_channel_close_cb), GUINT_TO_POINTER(timeout_src_id));
-	g_signal_connect(datachannel, "on-error", G_CALLBACK(data_channel_error_cb), GUINT_TO_POINTER(timeout_src_id));
-	g_signal_connect(datachannel, "on-message-string", G_CALLBACK(data_channel_message_string_cb), NULL);
-}
+// 	g_signal_connect(datachannel, "on-close", G_CALLBACK(data_channel_close_cb), GUINT_TO_POINTER(timeout_src_id));
+// 	g_signal_connect(datachannel, "on-error", G_CALLBACK(data_channel_error_cb), GUINT_TO_POINTER(timeout_src_id));
+// 	g_signal_connect(datachannel, "on-message-string", G_CALLBACK(data_channel_message_string_cb), NULL);
+// }
 
 
 // You can generally figure these out by going to
@@ -629,14 +629,15 @@ GST_PLUGIN_STATIC_DECLARE(autodetect); // Definitely needed
 GST_PLUGIN_STATIC_DECLARE(coreelements);
 GST_PLUGIN_STATIC_DECLARE(dtls);
 
-// GST_PLUGIN_STATIC_DECLARE(libav);
+ GST_PLUGIN_STATIC_DECLARE(libav);
 
 GST_PLUGIN_STATIC_DECLARE(nice);
 GST_PLUGIN_STATIC_DECLARE(rtp);
 GST_PLUGIN_STATIC_DECLARE(rtpmanager);
 GST_PLUGIN_STATIC_DECLARE(sctp);
 GST_PLUGIN_STATIC_DECLARE(srtp);
-GST_PLUGIN_STATIC_DECLARE(usrsctp);
+
+//GST_PLUGIN_STATIC_DECLARE(usrsctp);
 GST_PLUGIN_STATIC_DECLARE(videoparsersbad);
 GST_PLUGIN_STATIC_DECLARE(webrtc);
 GST_PLUGIN_STATIC_DECLARE(androidmedia);
@@ -659,12 +660,13 @@ GST_PLUGIN_STATIC_REGISTER(autodetect); // Definitely needed
 GST_PLUGIN_STATIC_REGISTER(coreelements);
 GST_PLUGIN_STATIC_REGISTER(dtls);
 
-// GST_PLUGIN_STATIC_REGISTER(libav);
+ GST_PLUGIN_STATIC_REGISTER(libav);
 
 GST_PLUGIN_STATIC_REGISTER(nice);
 GST_PLUGIN_STATIC_REGISTER(rtp);
 GST_PLUGIN_STATIC_REGISTER(rtpmanager);
-GST_PLUGIN_STATIC_REGISTER(usrsctp);
+
+//GST_PLUGIN_STATIC_REGISTER(usrsctp);
 GST_PLUGIN_STATIC_REGISTER(sctp);
 GST_PLUGIN_STATIC_REGISTER(srtp);
 GST_PLUGIN_STATIC_REGISTER(videoparsersbad);
@@ -699,9 +701,9 @@ GST_PLUGIN_STATIC_REGISTER(playback); // "FFMPEG "
 		// omxh264dec doesn't seem to exist
 
 		gchar *pipeline_string = g_strdup_printf(
-		    "webrtcbin name=webrtc bundle-policy=max-bundle ! h264parse ! "
-//            "avdec_h264 !"
-            "decodebin3 !"
+		    "webrtcbin name=webrtc bundle-policy=max-compat ! h264parse ! "
+            "avdec_h264 !"
+//            "decodebin3 !"
 		    "appsink name=testsink");
 				
 				//  caps=video/x-raw,format=RGBx,width=%u,height=%u",
@@ -741,7 +743,7 @@ GST_PLUGIN_STATIC_REGISTER(playback); // "FFMPEG "
 
 		webrtcbin = gst_bin_get_by_name(GST_BIN(pipeline), "webrtc");
 		printf("done getting webrtcbin\n");
-		g_signal_connect(webrtcbin, "on-data-channel", G_CALLBACK(webrtc_on_data_channel_cb), NULL);
+		// g_signal_connect(webrtcbin, "on-data-channel", G_CALLBACK(webrtc_on_data_channel_cb), NULL);
 
 
 		g_signal_connect(webrtcbin, "on-ice-candidate", G_CALLBACK(webrtc_on_ice_candidate_cb), NULL);
@@ -1057,9 +1059,11 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 	}
 #endif
 	// OK so it's stuck waiting here, alright.
+	#if 0
 	while (!vid->got_sample) {
 		os_nanosleep(100 * 1000 * 1000);
 	}
+	#endif
 	VF_DEBUG(vid, "Got first sample");
 	// gst_element_set_state(vid->source, GST_STATE_PAUSED);
 

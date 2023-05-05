@@ -19,9 +19,16 @@
 
 #include <unistd.h>
 
+#include <android/native_activity.h>
+#include <jni.h>
+#include <android/asset_manager_jni.h>
+#include <android/log.h>
+
+
+
+
 
 // static GLuint global_data[1440*1584*4];
-
 
 
 
@@ -29,41 +36,42 @@ static int pfd[2];
 static pthread_t thr;
 static const char *tag = "myapp";
 
-static void *thread_func(void*)
+static void *
+thread_func(void *)
 {
-    ssize_t rdsz;
-    char buf[2048];
-    while((rdsz = read(pfd[0], buf, sizeof buf - 1)) > 0) {
-        if(buf[rdsz - 1] == '\n') --rdsz;
-        buf[rdsz] = 0;  /* add null-terminator */
-        __android_log_write(ANDROID_LOG_DEBUG, tag, buf);
-    }
-    return 0;
+	ssize_t rdsz;
+	char buf[2048];
+	while ((rdsz = read(pfd[0], buf, sizeof buf - 1)) > 0) {
+		if (buf[rdsz - 1] == '\n')
+			--rdsz;
+		buf[rdsz] = 0; /* add null-terminator */
+		__android_log_write(ANDROID_LOG_DEBUG, tag, buf);
+	}
+	return 0;
 }
 
 
 
-int start_logger(const char *app_name)
+int
+start_logger(const char *app_name)
 {
-    tag = app_name;
+	tag = app_name;
 
-    /* make stdout line-buffered and stderr unbuffered */
-    setvbuf(stdout, 0, _IOLBF, 0);
-    setvbuf(stderr, 0, _IOLBF, 0);
+	/* make stdout line-buffered and stderr unbuffered */
+	setvbuf(stdout, 0, _IOLBF, 0);
+	setvbuf(stderr, 0, _IOLBF, 0);
 
-    /* create the pipe and redirect stdout and stderr */
-    pipe(pfd);
-    dup2(pfd[1], 1);
-    dup2(pfd[1], 2);
+	/* create the pipe and redirect stdout and stderr */
+	pipe(pfd);
+	dup2(pfd[1], 1);
+	dup2(pfd[1], 2);
 
-    /* spawn the logging thread */
-    if(pthread_create(&thr, 0, thread_func, 0) == -1)
-        return -1;
-    pthread_detach(thr);
-    return 0;
+	/* spawn the logging thread */
+	if (pthread_create(&thr, 0, thread_func, 0) == -1)
+		return -1;
+	pthread_detach(thr);
+	return 0;
 }
-
-
 
 
 
@@ -506,7 +514,7 @@ mainloop_one(struct state_t &state)
 		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 1440, 1584, GL_RGBA, GL_UNSIGNED_BYTE, state.xf->data);
 
 		//		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, state.xf->width, state.xf->height, 0, GL_RGBA,
-		//GL_UNSIGNED_BYTE, 		             state.xf->data);
+		// GL_UNSIGNED_BYTE, 		             state.xf->data);
 
 		//        glPixelStorei(GL_UNPACK_ROW_LENGTH, state.xf->stride / 4);
 		//    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, state.xf->width, state.xf->height, 0, GL_RGBA,
@@ -565,19 +573,78 @@ mainloop_one(struct state_t &state)
 	xrEndFrame(state.session, &endInfo);
 }
 
+#if 0
+const char *
+getFilePath(JNIEnv *env, jobject activity)
+{
+	jclass contextClass = env->GetObjectClass(activity);
+	jmethodID getExternalFilesDirMethod =
+	    env->GetMethodID(contextClass, "getExternalFilesDir", "(Ljava/lang/String;)Ljava/io/File;");
+	jstring directoryName = env->NewStringUTF("debug");
+	jobject directory = env->CallObjectMethod(activity, getExternalFilesDirMethod, directoryName);
+	env->DeleteLocalRef(directoryName);
+	env->DeleteLocalRef(contextClass);
+	if (directory == nullptr) {
+		return env->NewStringUTF("Failed to obtain external files directory");
+	}
+	jmethodID getPathMethod = env->GetMethodID(env->FindClass("java/io/File"), "getPath", "()Ljava/lang/String;");
+	jstring path = static_cast<jstring>(env->CallObjectMethod(directory, getPathMethod));
+	env->DeleteLocalRef(directory);
+	if (path == nullptr) {
+		return env->NewStringUTF("Failed to obtain path to external files directory");
+	}
+	std::string filePath = env->GetStringUTFChars(path, nullptr);
+	filePath += "/meow.dot";
+	jstring result = env->NewStringUTF(filePath.c_str());
+	env->ReleaseStringUTFChars(path, filePath.c_str());
+	return result;
+}
+#else
+extern "C" const char* getFilePath(JNIEnv* env, jobject activity) {
+    jclass contextClass = env->GetObjectClass(activity);
+    jmethodID getExternalFilesDirMethod = env->GetMethodID(contextClass, "getExternalFilesDir", "(Ljava/lang/String;)Ljava/io/File;");
+    jstring directoryName = env->NewStringUTF("debug");
+    jobject directory = env->CallObjectMethod(activity, getExternalFilesDirMethod, directoryName);
+    env->DeleteLocalRef(directoryName);
+    env->DeleteLocalRef(contextClass);
+    if (directory == nullptr) {
+        return strdup("Failed to obtain external files directory");
+    }
+    jmethodID getPathMethod = env->GetMethodID(env->FindClass("java/io/File"), "getPath", "()Ljava/lang/String;");
+    jstring path = static_cast<jstring>(env->CallObjectMethod(directory, getPathMethod));
+    env->DeleteLocalRef(directory);
+    if (path == nullptr) {
+        return strdup("Failed to obtain path to external files directory");
+    }
+    const char* filePath = env->GetStringUTFChars(path, nullptr);
+    env->DeleteLocalRef(path);
+    return filePath;
+}
+#endif
 
 void
 android_main(struct android_app *app)
 {
 	start_logger("meow meow");
-    setenv("GST_DEBUG", "*ssl*:9,*tls*:9,*webrtc*:9", 1);
-    setenv("GST_DEBUG", "*CAPS*:6", 1);
+	setenv("GST_DEBUG", "*ssl*:9,*tls*:9,*webrtc*:9", 1);
+	setenv("GST_DEBUG", "*CAPS*:6", 1);
 
 	state.app = app;
 	(*app->activity->vm).AttachCurrentThread(&state.jni, NULL);
 	app->onAppCmd = onAppCmd;
 
 	initializeEGL(state);
+
+    ANativeActivity *activity = app->activity;
+    JNIEnv* env = state.jni;
+    jclass clazz = env->FindClass("android/Manifest$permission");
+    jfieldID field = env->GetStaticFieldID(clazz, "WRITE_EXTERNAL_STORAGE", "Ljava/lang/String;");
+    jstring permissionString = (jstring) env->GetStaticObjectField(clazz, field);
+    jint permission = env->CallIntMethod(activity->clazz, env->GetMethodID(clazz, "checkSelfPermission", "(Ljava/lang/String;)I"), permissionString);
+
+    if (permission != PackageManager.PERMISSION_GRANTED) {
+        env->CallVoidMethod(activity->clazz, env->GetMethodID(clazz, "requestPermissions", "([Ljava/lang/String;I)V"), env->NewObjectArray(1, env->FindClass("java/lang/String"), permissionString), 1);
+    }
 
 	state.xf = nullptr;
 
