@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    compileSdkVersion 30
+    compileSdk 30
 
 
     defaultConfig {
@@ -51,6 +51,7 @@ android {
         checkReleaseBuilds false
     }
     namespace 'com.plutovr.plutosphere.webrtc_client'
+    ndkVersion '22.1.7171670'
 }
 
 dependencies {

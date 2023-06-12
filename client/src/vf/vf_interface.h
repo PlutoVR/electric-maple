@@ -10,7 +10,8 @@
 #pragma once
 
 #include "xrt/xrt_frameserver.h"
-
+// FIXME: set relative path through include-dir
+#include "/home/fredinfinite23/code/PlutoVR/linux-streaming-CLIENT2/monado/src/xrt/auxiliary/gstreamer/gstjniutils.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -39,7 +40,7 @@ vf_fs_open_file(struct xrt_frame_context *xfctx, const char *path);
  * @ingroup drv_vf
  */
 struct xrt_fs *
-vf_fs_videotestsource(struct xrt_frame_context *xfctx, uint32_t width, uint32_t height);
+vf_fs_videotestsource(struct xrt_frame_context *xfctx, uint32_t width, uint32_t height, JavaVM *java_vm);
 
 
 #ifdef __cplusplus
