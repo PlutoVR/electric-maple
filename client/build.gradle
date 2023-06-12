@@ -34,4 +34,5 @@ ext {
     eigenIncludeDir = project.findProperty('eigenIncludeDir') ?: '/usr/include/eigen3'
     // You will need to set "ovrOpenXRMobileSDK=/PATH" in your local.properties file.
     ovrOpenXRMobileSDK = project.findProperty('ovrOpenXRMobileSDK') ?: '.'
+    ndkVersion = '25.2.9519653'
 }
