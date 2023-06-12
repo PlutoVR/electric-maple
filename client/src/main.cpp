@@ -93,7 +93,7 @@ onAppCmd(struct android_app *app, int32_t cmd)
 void
 sink_push_frame(struct xrt_frame_sink *xfs, struct xrt_frame *xf)
 {
-	U_LOG_E("called!");
+	U_LOG_E("sink_push_frame called!");
 	if (!xf) {
 		U_LOG_E("what??");
 		return;
@@ -505,7 +505,7 @@ mainloop_one(struct state_t &state)
 		//            }
 
 
-		U_LOG_E("meow!");
+		U_LOG_E("DEBUG: Binding textures!");
 		glBindTexture(GL_TEXTURE_2D, state.frame_tex);
 		glPixelStorei(GL_UNPACK_ROW_LENGTH, 1440);
 		//            glPixelStorei(GL_UNPACK_ALIGNMENT, 2); // Set to 1 for tightly packed data
@@ -535,6 +535,7 @@ mainloop_one(struct state_t &state)
 	//	}
 
 
+	U_LOG_E("DEBUG: Binding framebuffer");
 	glBindFramebuffer(GL_FRAMEBUFFER, state.framebuffers[imageIndex]);
 
 	glViewport(0, 0, state.width * 2, state.height);
@@ -544,6 +545,7 @@ mainloop_one(struct state_t &state)
 	//    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	// Just display purple nothingness
+	U_LOG_E("DEBUG: DRAWING!");
 	for (uint32_t eye = 0; eye < 2; eye++) {
 		glViewport(eye * state.width, 0, state.width, state.height);
 		draw(state.framebuffers[imageIndex], state.frame_tex);
@@ -627,28 +629,29 @@ void
 android_main(struct android_app *app)
 {
 	start_logger("meow meow");
-	setenv("GST_DEBUG", "*ssl*:9,*tls*:9,*webrtc*:9", 1);
-	setenv("GST_DEBUG", "*CAPS*:6", 1);
+	setenv("GST_DEBUG", "*:3", 1);
+	// setenv("GST_DEBUG", "*ssl*:9,*tls*:9,*webrtc*:9", 1);
+	// setenv("GST_DEBUG", "*CAPS*:6", 1);
 
 	state.app = app;
+
 	(*app->activity->vm).AttachCurrentThread(&state.jni, NULL);
 	app->onAppCmd = onAppCmd;
 
 	initializeEGL(state);
 
-	ANativeActivity *activity = app->activity;
-	JNIEnv *env = state.jni;
-	jclass clazz = env->FindClass("android/Manifest$permission");
-	jfieldID field = env->GetStaticFieldID(clazz, "WRITE_EXTERNAL_STORAGE", "Ljava/lang/String;");
-	jstring permissionString = (jstring)env->GetStaticObjectField(clazz, field);
-	jint permission = env->CallIntMethod(
-	    activity->clazz, env->GetMethodID(clazz, "checkSelfPermission", "(Ljava/lang/String;)I"), permissionString);
+	/*  ANativeActivity *activity = app->activity;
+	  JNIEnv* env = state.jni;
+	  jclass clazz = env->FindClass("android/Manifest$permission");
+	  jfieldID field = env->GetStaticFieldID(clazz, "WRITE_EXTERNAL_STORAGE", "Ljava/lang/String;");
+	  jstring permissionString = (jstring) env->GetStaticObjectField(clazz, field);
+	  jint permission = env->CallIntMethod(activity->clazz, env->GetMethodID(clazz, "checkSelfPermission",
+	  "(Ljava/lang/String;)I"), permissionString);
 
-	if (permission != PackageManager.PERMISSION_GRANTED) {
-		env->CallVoidMethod(activity->clazz,
-		                    env->GetMethodID(clazz, "requestPermissions", "([Ljava/lang/String;I)V"),
-		                    env->NewObjectArray(1, env->FindClass("java/lang/String"), permissionString), 1);
-	}
+	  if (permission != PackageManager.PERMISSION_GRANTED) {
+	      env->CallVoidMethod(activity->clazz, env->GetMethodID(clazz, "requestPermissions",
+	  "([Ljava/lang/String;I)V"), env->NewObjectArray(1, env->FindClass("java/lang/String"), permissionString), 1);
+	  }*/
 
 	state.xf = nullptr;
 
@@ -730,7 +733,7 @@ android_main(struct android_app *app)
 	state.width = viewInfo[0].recommendedImageRectWidth;
 	state.height = viewInfo[0].recommendedImageRectHeight;
 
-	state.frame_tex = generateRandomTexture(state.width, state.height, 1);
+	state.frame_tex = generateRandomTexture(state.width, state.height, 2);
 	//    state.frame_tex = generateRandomTexture(320, 240);
 
 
@@ -741,8 +744,9 @@ android_main(struct android_app *app)
 	state.frame_sink.push_frame = sink_push_frame;
 
 	struct xrt_frame_context xfctx = {};
-	U_LOG_E("Creating videotestsrc");
-	struct xrt_fs *blah = vf_fs_videotestsource(&xfctx, state.width, state.height);
+	U_LOG_E("Creating videotestsrc, passing Java VM = %p", app->activity->vm);
+
+	struct xrt_fs *blah = vf_fs_videotestsource(&xfctx, state.width, state.height, app->activity->vm);
 	U_LOG_E("Done creating videotestsrc");
 
 #if 1
@@ -825,14 +829,18 @@ android_main(struct android_app *app)
 	}
 
 
+	U_LOG_E("DEBUG: Create spaces");
 	create_spaces(state);
 
+	U_LOG_E("DEBUG: Setup Render");
 	setupRender();
 
+	U_LOG_E("DEBUG: Really make socket");
 	really_make_socket(state);
 
 
 	// Mainloop
+	U_LOG_E("DEBUG: Starting main loop.");
 	while (!app->destroyRequested) {
 		mainloop_one(state);
 	}

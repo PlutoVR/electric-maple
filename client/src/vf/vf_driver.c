@@ -32,10 +32,6 @@
 #include <gst/gstelement.h>
 #include <gst/video/video-frame.h>
 
-
-// #include <glib-unix.h>
-// #include <gst/gst.h>
-
 #define PL_LIBSOUP2
 
 
@@ -109,6 +105,8 @@ struct vf_fs
 	bool is_configured;
 	bool is_running;
 	enum u_logging_level log_level;
+
+	JavaVM *java_vm;
 };
 
 /*!
@@ -133,7 +131,7 @@ static GOptionEntry options[] = {
     {"websocket-uri", 'u', 0, G_OPTION_ARG_STRING, &websocket_uri, "Websocket URI of webrtc signaling connection"},
     {NULL}};
 
-#define WEBSOCKET_URI_DEFAULT "ws://192.168.0.168:8080/ws"
+#define WEBSOCKET_URI_DEFAULT "ws://127.0.0.1:8080/ws"
 
 //!@todo Don't use global state
 static SoupWebsocketConnection *ws = NULL;
@@ -265,7 +263,7 @@ vf_fs_frame(struct vf_fs *vid, GstSample *sample)
 static GstFlowReturn
 on_new_sample_from_sink(GstElement *elt, struct vf_fs *vid)
 {
-	U_LOG_E("called!");
+	U_LOG_E("on_new_sample_from_sink called!");
 	SINK_TRACE_MARKER();
 	GstSample *sample;
 	sample = gst_app_sink_pull_sample(GST_APP_SINK(elt));
@@ -365,7 +363,7 @@ vf_fs_mainloop(void *ptr)
 static gboolean
 sigint_handler(gpointer user_data)
 {
-	U_LOG_E("called!");
+	U_LOG_E("sigint_handler called!");
 	g_main_loop_quit(user_data);
 	return G_SOURCE_REMOVE;
 }
@@ -373,7 +371,7 @@ sigint_handler(gpointer user_data)
 static gboolean
 gst_bus_cb(GstBus *bus, GstMessage *message, gpointer data)
 {
-	U_LOG_E("called!");
+	U_LOG_E("gst_bus_cb called!");
 	GstBin *pipeline = GST_BIN(data);
 
 	switch (GST_MESSAGE_TYPE(message)) {
@@ -406,7 +404,7 @@ gst_bus_cb(GstBus *bus, GstMessage *message, gpointer data)
 void
 send_sdp_answer(const gchar *sdp)
 {
-	U_LOG_E("called!");
+	U_LOG_E("send_sdp_answer called!");
 	JsonBuilder *builder;
 	JsonNode *root;
 	gchar *msg_str;
@@ -435,7 +433,7 @@ send_sdp_answer(const gchar *sdp)
 static void
 webrtc_on_ice_candidate_cb(GstElement *webrtcbin, guint mlineindex, gchar *candidate)
 {
-	U_LOG_E("called!");
+	U_LOG_E("webrtc_on_ice_candidate_cb called!");
 	JsonBuilder *builder;
 	JsonNode *root;
 	gchar *msg_str;
@@ -469,16 +467,23 @@ webrtc_on_ice_candidate_cb(GstElement *webrtcbin, guint mlineindex, gchar *candi
 static void
 on_answer_created(GstPromise *promise, gpointer user_data)
 {
-	U_LOG_E("called!");
+	U_LOG_E("on_answer_created called!");
 	GstWebRTCSessionDescription *answer = NULL;
 	gchar *sdp;
 
 	gst_structure_get(gst_promise_get_reply(promise), "answer", GST_TYPE_WEBRTC_SESSION_DESCRIPTION, &answer, NULL);
 	gst_promise_unref(promise);
 
+	if (NULL == answer) {
+		U_LOG_E("on_answer_created : ERROR !  get_promise answer = null !");
+	}
+
 	g_signal_emit_by_name(webrtcbin, "set-local-description", answer, NULL);
 
 	sdp = gst_sdp_message_as_text(answer->sdp);
+	if (NULL == sdp) {
+		U_LOG_E("on_answer_created : ERROR !  sdp = null !");
+	}
 	send_sdp_answer(sdp);
 	g_free(sdp);
 
@@ -488,9 +493,10 @@ on_answer_created(GstPromise *promise, gpointer user_data)
 static void
 process_sdp_offer(const gchar *sdp)
 {
-	U_LOG_E("called!");
+	U_LOG_E("process_sdp_offer called!");
 	GstSDPMessage *sdp_msg = NULL;
 	GstWebRTCSessionDescription *desc = NULL;
+
 
 	U_LOG_E("Received offer: %s\n", sdp);
 
@@ -524,7 +530,7 @@ out:
 static void
 process_candidate(guint mlineindex, const gchar *candidate)
 {
-	U_LOG_E("called!");
+	U_LOG_E("process_candidate called!");
 	U_LOG_E("Received candidate: %d %s\n", mlineindex, candidate);
 
 	g_signal_emit_by_name(webrtcbin, "add-ice-candidate", mlineindex, candidate);
@@ -533,7 +539,7 @@ process_candidate(guint mlineindex, const gchar *candidate)
 static void
 message_cb(SoupWebsocketConnection *connection, gint type, GBytes *message, gpointer user_data)
 {
-	U_LOG_E("called!");
+	U_LOG_E("message_cb called!");
 	gsize length = 0;
 	const gchar *msg_data = g_bytes_get_data(message, &length);
 	JsonParser *parser = json_parser_new();
@@ -624,18 +630,16 @@ out:
 // https://gstreamer.freedesktop.org/documentation/plugins_doc.html?gi-language=c, searching for the GstElement you
 // need, and finding the plugin name it corresponds to in the sidebar. Some of them (libav is an example) don't
 // correspond 1:1 in the names in the sidebar, so guessing as well as `find deps/gstreamer_android | grep <name>` helps.
+
 GST_PLUGIN_STATIC_DECLARE(app);        // Definitely needed
 GST_PLUGIN_STATIC_DECLARE(autodetect); // Definitely needed
 GST_PLUGIN_STATIC_DECLARE(coreelements);
-GST_PLUGIN_STATIC_DECLARE(dtls);
-
-GST_PLUGIN_STATIC_DECLARE(libav);
-
 GST_PLUGIN_STATIC_DECLARE(nice);
 GST_PLUGIN_STATIC_DECLARE(rtp);
 GST_PLUGIN_STATIC_DECLARE(rtpmanager);
 GST_PLUGIN_STATIC_DECLARE(sctp);
 GST_PLUGIN_STATIC_DECLARE(srtp);
+GST_PLUGIN_STATIC_DECLARE(dtls);
 
 // GST_PLUGIN_STATIC_DECLARE(usrsctp);
 GST_PLUGIN_STATIC_DECLARE(videoparsersbad);
@@ -649,19 +653,16 @@ GST_PLUGIN_STATIC_DECLARE(overlaycomposition);
 GST_PLUGIN_STATIC_DECLARE(playback); // "FFMPEG "
 // GST_PLUGIN_STATIC_DECLARE(webrtcnice);
 
+
 static void
 websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 {
-	U_LOG_E("called!");
+	U_LOG_E("websocket_connected_cb called!");
 
 
 	GST_PLUGIN_STATIC_REGISTER(app);        // Definitely needed
 	GST_PLUGIN_STATIC_REGISTER(autodetect); // Definitely needed
 	GST_PLUGIN_STATIC_REGISTER(coreelements);
-	GST_PLUGIN_STATIC_REGISTER(dtls);
-
-	GST_PLUGIN_STATIC_REGISTER(libav);
-
 	GST_PLUGIN_STATIC_REGISTER(nice);
 	GST_PLUGIN_STATIC_REGISTER(rtp);
 	GST_PLUGIN_STATIC_REGISTER(rtpmanager);
@@ -669,6 +670,7 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 	// GST_PLUGIN_STATIC_REGISTER(usrsctp);
 	GST_PLUGIN_STATIC_REGISTER(sctp);
 	GST_PLUGIN_STATIC_REGISTER(srtp);
+	GST_PLUGIN_STATIC_REGISTER(dtls);
 	GST_PLUGIN_STATIC_REGISTER(videoparsersbad);
 	GST_PLUGIN_STATIC_REGISTER(webrtc);
 	GST_PLUGIN_STATIC_REGISTER(androidmedia);
@@ -678,7 +680,7 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 	GST_PLUGIN_STATIC_REGISTER(overlaycomposition);
 
 	GST_PLUGIN_STATIC_REGISTER(playback); // "FFMPEG "
-	// GST_PLUGIN_STATIC_REGISTER(webrtcnice);
+	                                      // GST_PLUGIN_STATIC_REGISTER(webrtcnice);
 
 	GError *error = NULL;
 
@@ -691,7 +693,7 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 	} else {
 		GstBus *bus;
 
-		U_LOG_E("Websocket connected\n");
+		U_LOG_E("YO !! : Websocket connected\n");
 		g_signal_connect(ws, "message", G_CALLBACK(message_cb), NULL);
 
 		uint32_t width = 480;
@@ -701,13 +703,17 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 		// omxh264dec doesn't seem to exist
 
 		gchar *pipeline_string = g_strdup_printf(
-		    "webrtcbin name=webrtc bundle-policy=max-compat ! h264parse ! "
-		    "avdec_h264 !"
-		    //            "decodebin3 !"
-		    "appsink name=testsink");
+		    //            	"videotestsrc is-live=1 name=source ! "
+		    "webrtcbin name=webrtc bundle-policy=max-bundle ! rtph264depay ! amcviddec-omxqcomvideodecoderavc !"
+		    //                "webrtcsrc start-call=false signaler::server_url=s://127.0.0.1:8080/ws !
+		    //                rtph264depay ! decodebin3 !"
+		    //				"videoconvertscale !"
+		    "appsink name=testsink caps=video/x-raw,format=(string)I420,width=%u,height=%u",
+		    width, height);
+		//                "appsink name=testsink caps=video/x-raw,format=RGB,width=%u,height=%u", width,
+		//                height);
 
-		//  caps=video/x-raw,format=RGBx,width=%u,height=%u",
-		// width, height);
+
 
 		printf("launching pipeline\n");
 		pipeline = gst_parse_launch(pipeline_string, &error);
@@ -752,6 +758,7 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 		gst_bus_add_watch(bus, gst_bus_cb, pipeline);
 		gst_clear_object(&bus);
 
+		U_LOG_E("YO : TRYING TO SET PLAY ");
 		GstStateChangeReturn ret = gst_element_set_state(pipeline, GST_STATE_PLAYING);
 
 		if (ret == GST_STATE_CHANGE_FAILURE) {
@@ -941,13 +948,24 @@ vf_fs_node_destroy(struct xrt_frame_node *node)
  *
  */
 
-
+/*
 GST_PLUGIN_STATIC_DECLARE(app); // Definitely needed
+GST_PLUGIN_STATIC_DECLARE(autodetect); // Definitely needed
 GST_PLUGIN_STATIC_DECLARE(coreelements);
+GST_PLUGIN_STATIC_DECLARE(nice);
+GST_PLUGIN_STATIC_DECLARE(rtp);
+GST_PLUGIN_STATIC_DECLARE(rtpmanager);
+GST_PLUGIN_STATIC_DECLARE(sctp);
+GST_PLUGIN_STATIC_DECLARE(srtp);
+GST_PLUGIN_STATIC_DECLARE(dtls);
+GST_PLUGIN_STATIC_DECLARE(videoparsersbad);
+GST_PLUGIN_STATIC_DECLARE(webrtc);
+GST_PLUGIN_STATIC_DECLARE(androidmedia);
 GST_PLUGIN_STATIC_DECLARE(videotestsrc); // Definitely needed
 GST_PLUGIN_STATIC_DECLARE(videoconvertscale);
 GST_PLUGIN_STATIC_DECLARE(overlaycomposition);
-
+GST_PLUGIN_STATIC_DECLARE(playback); // "FFMPEG "
+*/
 static struct xrt_fs *
 alloc_and_init_common(struct xrt_frame_context *xfctx,      //
                       enum xrt_format format,               //
@@ -960,13 +978,25 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 	vid->stereo_format = stereo_format;
 
 	GstBus *bus = NULL;
+	/*
+	    GST_PLUGIN_STATIC_REGISTER(app); // Definitely needed
+	    GST_PLUGIN_STATIC_REGISTER(autodetect); // Definitely needed
+	    GST_PLUGIN_STATIC_REGISTER(coreelements);
+	    GST_PLUGIN_STATIC_REGISTER(nice);
+	    GST_PLUGIN_STATIC_REGISTER(rtp);
+	    GST_PLUGIN_STATIC_REGISTER(rtpmanager);
+	    GST_PLUGIN_STATIC_REGISTER(sctp);
+	    GST_PLUGIN_STATIC_REGISTER(srtp);
+	        GST_PLUGIN_STATIC_REGISTER(dtls);
+	    GST_PLUGIN_STATIC_REGISTER(videoparsersbad);
+	    GST_PLUGIN_STATIC_REGISTER(webrtc);
+	    GST_PLUGIN_STATIC_REGISTER(androidmedia);
+	    GST_PLUGIN_STATIC_REGISTER(videotestsrc); // Definitely needed
+	    GST_PLUGIN_STATIC_REGISTER(videoconvertscale);
+	    GST_PLUGIN_STATIC_REGISTER(overlaycomposition);
 
-	GST_PLUGIN_STATIC_REGISTER(app);
-	GST_PLUGIN_STATIC_REGISTER(coreelements);
-	GST_PLUGIN_STATIC_REGISTER(videotestsrc);
-	GST_PLUGIN_STATIC_REGISTER(videoconvertscale);
-	GST_PLUGIN_STATIC_REGISTER(overlaycomposition);
-
+	    GST_PLUGIN_STATIC_REGISTER(playback); // "FFMPEG "
+	*/
 	int ret = os_thread_helper_init(&vid->play_thread);
 	if (ret < 0) {
 		VF_ERROR(vid, "Failed to init thread");
@@ -1090,9 +1120,11 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 }
 
 struct xrt_fs *
-vf_fs_videotestsource(struct xrt_frame_context *xfctx, uint32_t width, uint32_t height)
+vf_fs_videotestsource(struct xrt_frame_context *xfctx, uint32_t width, uint32_t height, JavaVM *java_vm)
 {
 	gst_init(0, NULL);
+
+	gst_amc_jni_set_java_vm(java_vm);
 
 	GST_DEBUG("lol");
 	g_print("meow");
