@@ -22,7 +22,7 @@ android {
 
         externalNativeBuild {
             cmake {
-                arguments '-DANDROID_STL=c++_shared', "-DEIGEN3_INCLUDE_DIR=${project.eigenIncludeDir}", "-DOCULUS_OPENXR_MOBILE_SDK=${project.ovrOpenXRMobileSDK}"
+                arguments '-DANDROID_STL=c++_shared', "-DEIGEN3_INCLUDE_DIR=${project.eigenIncludeDir}", "-DOCULUS_OPENXR_MOBILE_SDK=${project.ovrOpenXRMobileSDK}", "-DANDROID_NDK=${project.androidNDK}"
             }
         }
         externalNativeBuild {
