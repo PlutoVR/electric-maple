@@ -20,6 +20,8 @@ target_include_directories(
 	plutovr_webrtc_client
 	PRIVATE ${ANDROID_NDK}/sources/android/native_app_glue ${CMAKE_CURRENT_BINARY_DIR}/shaders/
 		${CMAKE_CURRENT_SOURCE_DIR}/../external/include
+		${ANDROID_NDK}/sources/android/native_app_glue
+		${ANDROID_NDK}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include
 		${GLIB_INCLUDE_DIRS}
 		${GST_INCLUDE_DIRS}
 	)
