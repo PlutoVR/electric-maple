@@ -66,9 +66,12 @@ struct state_t
     int way;
     int frame_idx;
 
+    /* REMOVE: removing frameserver
     struct xrt_frame_sink frame_sink;
-    xrt_frame *xf = NULL;
-	GLuint frame_tex;
+    xrt_frame *xf = NULL;*/
+	// FIXME : Do we need THIS frame_tex , still ? maybe yes...
+    //         THIS state-defined frame_tex is the frame_tex id used by our current renderer.
+    //  GLuint frame_tex;
 };
 
 
