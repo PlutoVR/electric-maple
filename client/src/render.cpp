@@ -6,6 +6,7 @@
  * @author Moshi Turner <moses@collabora.com>
  */
 
+#include <cstdio>
 #include "common.hpp"
 
 // Initialize EGL context. We'll need this going forward.
@@ -15,14 +16,14 @@ initializeEGL(struct state_t &state)
 	state.display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
 
 	if (state.display == EGL_NO_DISPLAY) {
-		U_LOG_E("Failed to get EGL display");
+		printf("Failed to get EGL display");
 		return;
 	}
 
 	bool success = eglInitialize(state.display, NULL, NULL);
 
 	if (!success) {
-		U_LOG_E("Failed to initialize EGL");
+		printf("Failed to initialize EGL");
 		return;
 	}
 
@@ -31,7 +32,7 @@ initializeEGL(struct state_t &state)
 	success = eglGetConfigs(state.display, configs, 1024, &configCount);
 
 	if (!success) {
-		U_LOG_E("Failed to get EGL configs");
+		printf("Failed to get EGL configs");
 		return;
 	}
 
@@ -68,27 +69,27 @@ initializeEGL(struct state_t &state)
 	}
 
 	if (!state.config) {
-		U_LOG_E("Failed to find suitable EGL config");
+		printf("Failed to find suitable EGL config");
 	}
 
 	EGLint contextAttributes[] = {EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE};
 
 	if ((state.context = eglCreateContext(state.display, state.config, EGL_NO_CONTEXT, contextAttributes)) ==
 	    EGL_NO_CONTEXT) {
-		U_LOG_E("Failed to create EGL context");
+		printf("Failed to create EGL context");
 	}
 
 	EGLint surfaceAttributes[] = {EGL_WIDTH, 16, EGL_HEIGHT, 16, EGL_NONE};
 
 	if ((state.surface = eglCreatePbufferSurface(state.display, state.config, surfaceAttributes)) ==
 	    EGL_NO_SURFACE) {
-		U_LOG_E("Failed to create EGL surface");
+		printf("Failed to create EGL surface");
 		eglDestroyContext(state.display, state.context);
 		return;
 	}
 
 	if (eglMakeCurrent(state.display, state.surface, state.surface, state.context) == EGL_FALSE) {
-		U_LOG_E("Failed to make EGL context current");
+		printf("Failed to make EGL context current");
 		eglDestroySurface(state.display, state.surface);
 		eglDestroyContext(state.display, state.context);
 	}
@@ -133,7 +134,7 @@ checkShaderCompilation(GLuint shader)
 	glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
 	if (!success) {
 		glGetShaderInfoLog(shader, 512, NULL, infoLog);
-		U_LOG_E("Shader compilation failed: %s\n", infoLog);
+		printf("Shader compilation failed: %s\n", infoLog);
 	}
 }
 
@@ -146,7 +147,7 @@ checkProgramLinking(GLuint program)
 	glGetProgramiv(program, GL_LINK_STATUS, &success);
 	if (!success) {
 		glGetProgramInfoLog(program, 512, NULL, infoLog);
-		U_LOG_E("Shader program linking failed: %s\n", infoLog);
+		printf("Shader program linking failed: %s\n", infoLog);
 	}
 }
 
@@ -248,7 +249,7 @@ draw(GLuint framebuffer, GLuint texture)
 		case GL_OUT_OF_MEMORY: errorStr = "GL_OUT_OF_MEMORY"; break;
 		default: errorStr = "Unknown error"; break;
 		}
-		U_LOG_E("error! %s", errorStr);
+		printf("error! %s", errorStr);
 	}
 
 	// Unbind the framebuffer
