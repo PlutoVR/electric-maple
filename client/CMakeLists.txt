@@ -560,7 +560,10 @@ set(JSONGLIB_LIBRARIES ${gstreamer_android_SOURCE_DIR}/arm64/lib/libjson-glib-1.
 # find_library(JSONGLIB_LIBRARIES json-glib-1.0 HINTS ${JSONGLIB_LIBRARY_DIRS})
 # find_library(GIO_LIBRARIES gio-2.0 HINTS ${GIO_LIBRARY_DIRS})
 
-set(GST_INCLUDE_DIRS ${gstreamer_android_SOURCE_DIR}/arm64/include/gstreamer-1.0/ )
+set(GST_INCLUDE_DIRS
+	${gstreamer_android_SOURCE_DIR}/arm64/include/gstreamer-1.0/
+	${gstreamer_android_SOURCE_DIR}/arm64/lib/gstreamer-1.0/include/
+)
 set(GLIB_INCLUDE_DIRS ${gstreamer_android_SOURCE_DIR}/arm64/include/glib-2.0 ${gstreamer_android_SOURCE_DIR}/arm64/lib/glib-2.0/include/)
 set(LIBSOUP_INCLUDE_DIRS ${gstreamer_android_SOURCE_DIR}/arm64/include/libsoup-2.4/)
 set(JSONGLIB_INCLUDE_DIRS ${gstreamer_android_SOURCE_DIR}/arm64/include/json-glib-1.0)
