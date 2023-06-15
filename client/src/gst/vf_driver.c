@@ -28,9 +28,15 @@
 
 #include <glib.h>
 #include <gst/gst.h>
+#include <gst/gl/gl.h>
 #include <gst/app/gstappsink.h>
 #include <gst/gstelement.h>
 #include <gst/video/video-frame.h>
+
+#include <EGL/egl.h>
+#include <EGL/eglext.h>
+#include <GLES2/gl2.h>
+#include <GLES2/gl2ext.h>
 
 #define PL_LIBSOUP2
 

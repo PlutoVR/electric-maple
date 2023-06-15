@@ -15,7 +15,7 @@
 #include <assert.h>
 
 #include "common.hpp"
-#include "vf/vf_interface.h"
+#include "gst/vf_interface.h"
 
 #include <unistd.h>
 

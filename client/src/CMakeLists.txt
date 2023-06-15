@@ -1,4 +1,4 @@
-add_subdirectory(vf)
+add_subdirectory(gst)
 
 # build native_app_glue as a static lib
 set(${CMAKE_C_FLAGS}, "${CMAKE_C_FLAGS}")
