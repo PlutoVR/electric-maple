@@ -66,6 +66,14 @@
 
 DEBUG_GET_ONCE_LOG_OPTION(vf_log, "VF_LOG", U_LOGGING_TRACE)
 
+#define SINK_CAPS \
+    "video/x-raw(" GST_CAPS_FEATURE_MEMORY_GL_MEMORY "), "              \
+    "format = (string) RGBA, "                                          \
+    "width = " GST_VIDEO_SIZE_RANGE ", "                                \
+    "height = " GST_VIDEO_SIZE_RANGE ", "                               \
+    "framerate = " GST_VIDEO_FPS_RANGE ", "                             \
+    "texture-target = (string) { 2D, external-oes } "                   \
+
 /*!
  * A frame server operating on a video file.
  *
@@ -78,10 +86,14 @@ struct vf_fs
 
 	struct os_thread_helper play_thread;
 
-	GMainLoop *loop;
-	GstElement *source;
-	GstElement *testsink;
-	bool got_sample;
+	GstElement *pipeline;
+	GstGLDisplay *display;
+	GstGLContext *other_context;
+	GstGLContext *context;
+	GstElement *appsink;
+	GLenum texture_target;
+	GLuint texture_id;
+
 	int width;
 	int height;
 	enum xrt_format format;
@@ -142,7 +154,188 @@ static GstWebRTCDataChannel *datachannel = NULL;
 //!@todo SORRY
 static struct vf_fs *the_vf_fs = NULL;
 
+static GstBusSyncReply
+bus_sync_handler_cb(GstBus *bus, GstMessage *msg, gpointer user_data)
+{
+  struct vf_fs *vid = user_data;
 
+  /* Do not let GstGL retrieve the display handle on its own
+   * because then it believes it owns it and calls eglTerminate()
+   * when disposed */
+  if (GST_MESSAGE_TYPE(msg) == GST_MESSAGE_NEED_CONTEXT)
+    {
+      const gchar *type;
+      gst_message_parse_context_type(msg, &type);
+      if (g_str_equal(type, GST_GL_DISPLAY_CONTEXT_TYPE)) {
+        g_autoptr(GstContext) context = gst_context_new(GST_GL_DISPLAY_CONTEXT_TYPE, TRUE);
+        gst_context_set_gl_display(context, vid->display);
+        gst_element_set_context(GST_ELEMENT(msg->src), context);
+      } else if (g_str_equal(type, "gst.gl.app_context")) {
+        g_autoptr(GstContext) app_context = gst_context_new("gst.gl.app_context", TRUE);
+        GstStructure *s = gst_context_writable_structure(app_context);
+        gst_structure_set(s,
+            "context", GST_TYPE_GL_CONTEXT, vid->other_context,
+            NULL);
+        gst_element_set_context(GST_ELEMENT(msg->src), app_context);
+      }
+    }
+
+  return GST_BUS_PASS;
+}
+
+static void
+setup_sink(struct vf_fs *vid)
+{
+  /* Wrap application gl context */
+  GstGLPlatform gl_platform = GST_GL_PLATFORM_EGL;
+  guintptr gl_handle = gst_gl_context_get_current_gl_context(gl_platform);
+  GstGLAPI gl_api = gst_gl_context_get_current_gl_api(gl_platform, NULL, NULL);
+  vid->display = g_object_ref_sink(gst_gl_display_new());
+  vid->other_context = g_object_ref_sink(gst_gl_context_new_wrapped(
+      vid->display, gl_handle, gl_platform, gl_api));
+
+  g_autoptr(GstCaps) caps = gst_caps_from_string(SINK_CAPS);
+  vid->appsink = gst_element_factory_make("appsink", NULL);
+  g_object_set(vid->appsink, "caps", caps, NULL);
+
+  g_autoptr(GstElement) glsinkbin = gst_bin_get_by_name(vid->pipeline, "glsink");
+  g_object_set(glsinkbin, "sink", vid->appsink, NULL);
+
+  g_autoptr(GstBus) bus = gst_element_get_bus(vid->pipeline);
+  gst_bus_set_sync_handler(bus, bus_sync_handler_cb, vid, NULL);
+}
+
+static void
+render_gl_texture(struct vf_fs *vid)
+{
+  // FIXME: Render GL texture using vid->texture_target and vid->texture_id
+#if 0
+  glUseProgram(mProgramId);
+
+  GLint positionLoc = glGetAttribLocation(mProgramId, "a_position");
+  glEnableVertexAttribArray(positionLoc);
+  glVertexAttribPointer(positionLoc, 4, GL_FLOAT, GL_FALSE, 0, pos);
+
+  GLint texcoordLoc = glGetAttribLocation(mProgramId, "a_texcoord");
+  glEnableVertexAttribArray(texcoordLoc);
+  glVertexAttribPointer(texcoordLoc, 2, GL_FLOAT, GL_FALSE, 0, uv);
+
+  GLint texLoc = glGetUniformLocation(mProgramId, "tex_sampler_0");
+  glUniform1i(texLoc, 0);
+
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(vid->texture_target, vid->texture_id);
+  glTexParameteri(vid->texture_target, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(vid->texture_target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(vid->texture_target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(vid->texture_target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+  glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+  glDisableVertexAttribArray(positionLoc);
+  glDisableVertexAttribArray(texcoordLoc);
+  glBindTexture(vid->texture_target, 0);
+
+  eglSwapBuffers(mEGLDisplay, mEGLSurface);
+#endif
+}
+
+static gboolean
+render_frame(struct vf_fs *vid)
+{
+  g_autoptr(GstSample) sample = gst_app_sink_pull_sample(GST_APP_SINK(vid->appsink));
+  if (sample == NULL) {
+    return FALSE;
+  }
+
+  GstBuffer *buffer = gst_sample_get_buffer(sample);
+  GstCaps *caps = gst_sample_get_caps(sample);
+
+  GstVideoInfo info;
+  gst_video_info_from_caps(&info, caps);
+  gint width = GST_VIDEO_INFO_WIDTH (&info);
+  gint height = GST_VIDEO_INFO_HEIGHT (&info);
+  if (width != vid->width || height != vid->height) {
+    vid->width = width;
+    vid->height = height;
+    // FIXME: Handle resize
+  }
+
+  GstVideoFrame frame;
+  gst_video_frame_map(&frame, &info, buffer, GST_MAP_READ | GST_MAP_GL);
+  vid->texture_id = *(GLuint *)frame.data[0];
+
+  if (vid->context == NULL) {
+    /* Get GStreamer's gl context. */
+    gst_gl_query_local_gl_context(vid->appsink, GST_PAD_SINK, &vid->context);
+
+    /* Check if we have 2D or OES textures */
+    GstStructure *s = gst_caps_get_structure(caps, 0);
+    const gchar *texture_target_str = gst_structure_get_string(s, "texture-target");
+    if (g_str_equal(texture_target_str, GST_GL_TEXTURE_TARGET_EXTERNAL_OES_STR)) {
+      vid->texture_target = GL_TEXTURE_EXTERNAL_OES;
+    } else if (g_str_equal(texture_target_str, GST_GL_TEXTURE_TARGET_2D_STR)) {
+      vid->texture_target = GL_TEXTURE_2D;
+    } else {
+      g_assert_not_reached();
+    }
+  }
+
+  GstGLSyncMeta *sync_meta = gst_buffer_get_gl_sync_meta(buffer);
+  if (sync_meta) {
+    /* XXX: the set_sync() seems to be needed for resizing */
+    gst_gl_sync_meta_set_sync_point(sync_meta, vid->context);
+    gst_gl_sync_meta_wait(sync_meta, vid->context);
+  }
+
+  render_gl_texture(vid);
+
+  gst_video_frame_unmap(&frame);
+
+  return true;
+}
+
+static void *
+vf_fs_mainloop(void *ptr)
+{
+  struct vf_fs *vid = ptr;
+
+  SINK_TRACE_MARKER();
+
+  eglBindAPI(EGL_OPENGL_ES_API);
+
+  // FIXME: Take application GL context
+  eglMakeCurrent(mEGLDisplay, mEGLSurface, mEGLSurface, mEGLContext);
+
+  setup_sink(vid);
+
+  GstStateChangeReturn ret = gst_element_set_state(vid->pipeline, GST_STATE_PLAYING);
+  if (ret == GST_STATE_CHANGE_FAILURE) {
+    U_LOG_E("Noooo");
+  } else {
+    U_LOG_E("Successfully changed state!");
+  }
+
+  while (vid->is_running) {
+    if (!render_frame(vid)) {
+      break;
+    }
+  }
+
+  return NULL;
+}
+
+static void
+stop_pipeline(struct vf_fs *vid)
+{
+  vid->is_running = false;
+  gst_element_set_state(vid->pipeline, GST_STATE_NULL);
+  os_thread_helper_destroy(&vid->play_thread);
+  gst_clear_object(&vid->pipeline);
+  gst_clear_object(&vid->display);
+  gst_clear_object(&vid->other_context);
+  gst_clear_object(&id->context);
+}
 
 /*
  *
@@ -260,51 +453,6 @@ vf_fs_frame(struct vf_fs *vid, GstSample *sample)
 	seq++;
 }
 
-static GstFlowReturn
-on_new_sample_from_sink(GstElement *elt, struct vf_fs *vid)
-{
-	U_LOG_E("on_new_sample_from_sink called!");
-	SINK_TRACE_MARKER();
-	GstSample *sample;
-	sample = gst_app_sink_pull_sample(GST_APP_SINK(elt));
-
-	if (!vid->got_sample) {
-		gint width;
-		gint height;
-
-		GstCaps *caps = gst_sample_get_caps(sample);
-		GstStructure *structure = gst_caps_get_structure(caps, 0);
-
-		gst_structure_get_int(structure, "width", &width);
-		gst_structure_get_int(structure, "height", &height);
-
-		VF_DEBUG(vid, "video size is %dx%d", width, height);
-		vid->got_sample = true;
-		vid->width = width;
-		vid->height = height;
-
-		// first sample is only used for getting metadata
-		return GST_FLOW_OK;
-	}
-
-	if (!vid->is_running) {
-		U_LOG_E("We're not running, so we're not returning a sample");
-		// I don't know if we can pause WebRTC stuff, so let's just not pause it
-		return GST_FLOW_OK;
-	}
-
-	U_LOG_E("Going to try to return a sample");
-
-
-	// Takes ownership of the sample.
-	vf_fs_frame(vid, sample);
-
-	// Done with sample now.
-	gst_sample_unref(sample);
-
-	return GST_FLOW_OK;
-}
-
 static void
 print_gst_error(GstMessage *message)
 {
@@ -325,46 +473,24 @@ on_source_message(GstBus *bus, GstMessage *message, struct vf_fs *vid)
 	switch (GST_MESSAGE_TYPE(message)) {
 	case GST_MESSAGE_EOS:
 		VF_DEBUG(vid, "Finished playback.");
-		g_main_loop_quit(vid->loop);
+		stop_pipeline(vid);
 		break;
 	case GST_MESSAGE_ERROR:
 		VF_ERROR(vid, "Received error.");
 		print_gst_error(message);
-		// g_main_loop_quit(vid->loop);
+		stop_pipeline(vid);
 		break;
 	default: break;
 	}
 	return TRUE;
 }
 
-static void *
-vf_fs_mainloop(void *ptr)
-{
-	SINK_TRACE_MARKER();
-
-	struct vf_fs *vid = (struct vf_fs *)ptr;
-
-	VF_DEBUG(vid, "Let's run!");
-	g_main_loop_run(vid->loop);
-	VF_DEBUG(vid, "Going out!");
-
-	gst_object_unref(vid->testsink);
-	gst_element_set_state(vid->source, GST_STATE_NULL);
-
-
-	gst_object_unref(vid->source);
-	g_main_loop_unref(vid->loop);
-
-	return NULL;
-}
-
-
-
 static gboolean
 sigint_handler(gpointer user_data)
 {
+	struct vf_fs *vid = user_data;
 	U_LOG_E("sigint_handler called!");
-	g_main_loop_quit(user_data);
+	stop_pipeline(vid);
 	return G_SOURCE_REMOVE;
 }
 
@@ -653,7 +779,6 @@ GST_PLUGIN_STATIC_DECLARE(overlaycomposition);
 GST_PLUGIN_STATIC_DECLARE(playback); // "FFMPEG "
 // GST_PLUGIN_STATIC_DECLARE(webrtcnice);
 
-
 static void
 websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 {
@@ -696,9 +821,6 @@ GST_PLUGIN_STATIC_REGISTER(playback); // "FFMPEG "
 		U_LOG_E("YO !! : Websocket connected\n");
 		g_signal_connect(ws, "message", G_CALLBACK(message_cb), NULL);
 
-		uint32_t width = 480;
-		uint32_t height = 270;
-
 		// decodebin3 seems to .. hang?
 		// omxh264dec doesn't seem to exist
 
@@ -707,63 +829,42 @@ GST_PLUGIN_STATIC_REGISTER(playback); // "FFMPEG "
 				"webrtcbin name=webrtc bundle-policy=max-bundle ! rtph264depay ! amcviddec-omxqcomvideodecoderavc !"
 //                "webrtcsrc start-call=false signaler::server_url=s://127.0.0.1:8080/ws ! rtph264depay ! decodebin3 !"
 //				"videoconvertscale !"
-				"appsink name=testsink caps=video/x-raw,format=(string)I420,width=%u,height=%u", width, height);
+				"glsinkbin name=glsink");
 //                "appsink name=testsink caps=video/x-raw,format=RGB,width=%u,height=%u", width, height);
 
 
 
 		printf("launching pipeline\n");
-		pipeline = gst_parse_launch(pipeline_string, &error);
-
-		if (error) {
-			U_LOG_E("diff error");
-			U_LOG_E("%s", error->message);
-		}
-
-		if (pipeline == NULL) {
+		vid->pipeline = gst_parse_launch(pipeline_string, &error);
+		if (vid->pipeline == NULL) {
 			U_LOG_E("Bad source");
 			U_LOG_E("%s", error->message);
 			abort();
 		}
+		gst_object_ref_sink(vid->pipeline);
 
-
-		{
-			struct vf_fs *vid = the_vf_fs;
-			vid->source = pipeline;
-			printf("getting testsink\n");
-			vid->testsink = gst_bin_get_by_name(GST_BIN(vid->source), "testsink");
-			printf("done getting testsink\n");
-			g_object_set(G_OBJECT(vid->testsink), "emit-signals", TRUE, "sync", TRUE, NULL);
-			g_signal_connect(vid->testsink, "new-sample", G_CALLBACK(on_new_sample_from_sink), vid);
-
-			GstBus *bus = gst_element_get_bus(vid->source);
-			gst_bus_add_watch(bus, (GstBusFunc)on_source_message, vid);
-			gst_object_unref(bus);
-		}
-
-		g_assert_no_error(error);
 		printf("getting webrtcbin\n");
 
-		webrtcbin = gst_bin_get_by_name(GST_BIN(pipeline), "webrtc");
+		webrtcbin = gst_bin_get_by_name(GST_BIN(vid->pipeline), "webrtc");
 		printf("done getting webrtcbin\n");
 		// g_signal_connect(webrtcbin, "on-data-channel", G_CALLBACK(webrtc_on_data_channel_cb), NULL);
 
 
 		g_signal_connect(webrtcbin, "on-ice-candidate", G_CALLBACK(webrtc_on_ice_candidate_cb), NULL);
 
-		bus = gst_element_get_bus(pipeline);
-		gst_bus_add_watch(bus, gst_bus_cb, pipeline);
+		bus = gst_element_get_bus(vid->pipeline);
+		gst_bus_add_watch(bus, gst_bus_cb, vid->pipeline);
 		gst_clear_object(&bus);
 
-        U_LOG_E("YO : TRYING TO SET PLAY ");
-		GstStateChangeReturn ret = gst_element_set_state(pipeline, GST_STATE_PLAYING);
-
-		if (ret == GST_STATE_CHANGE_FAILURE) {
-			U_LOG_E("Noooo");
-
-		} else {
-			U_LOG_E("Successfully changed state!");
+		vid->is_running = TRUE;
+		ret = os_thread_helper_start(&vid->play_thread, vf_fs_mainloop, vid);
+		if (ret != 0) {
+			VF_ERROR(vid, "Failed to start thread '%i'", ret);
+			vid->running = FALSE;
+			free(vid);
+			return NULL;
 		}
+
 	}
 }
 
@@ -883,14 +984,7 @@ static bool
 vf_fs_stream_stop(struct xrt_fs *xfs)
 {
 	struct vf_fs *vid = vf_fs(xfs);
-
-	if (!vid->is_running) {
-		return true;
-	}
-
-	vid->is_running = false;
-	gst_element_set_state(vid->source, GST_STATE_PAUSED);
-
+	stop_pipeline(vid);
 	return true;
 }
 
@@ -898,22 +992,13 @@ static bool
 vf_fs_is_running(struct xrt_fs *xfs)
 {
 	struct vf_fs *vid = vf_fs(xfs);
-
-	GstState current = GST_STATE_NULL;
-	GstState pending;
-	gst_element_get_state(vid->source, &current, &pending, 0);
-
-	return current == GST_STATE_PLAYING;
+	return vid->is_running;
 }
 
 static void
 vf_fs_destroy(struct vf_fs *vid)
 {
-	g_main_loop_quit(vid->loop);
-
-	// Destroy also stops the thread.
-	os_thread_helper_destroy(&vid->play_thread);
-
+	stop_pipeline(vid);
 	free(vid);
 }
 
@@ -1002,10 +1087,7 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 		return NULL;
 	}
 
-	vid->loop = g_main_loop_new(NULL, FALSE);
-
 	GOptionContext *option_context;
-	GMainLoop *loop;
 	SoupSession *soup_session;
 	GError *error = NULL;
 
@@ -1065,14 +1147,6 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 	gst_bus_add_watch(bus, (GstBusFunc)on_source_message, vid);
 	gst_object_unref(bus);
 #endif
-
-	ret = os_thread_helper_start(&vid->play_thread, vf_fs_mainloop, vid);
-	if (ret != 0) {
-		VF_ERROR(vid, "Failed to start thread '%i'", ret);
-		g_main_loop_unref(vid->loop);
-		free(vid);
-		return NULL;
-	}
 
 #if 0
 	// We need one sample to determine frame size.
