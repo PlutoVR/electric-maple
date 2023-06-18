@@ -7,7 +7,7 @@
  */
 
 #include <cstdio>
-#include "common.hpp"
+#include "render.hpp"
 
 // Initialize EGL context. We'll need this going forward.
 void
@@ -221,9 +221,6 @@ void
 draw(GLuint framebuffer, GLuint texture)
 {
 	//    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
-
-	// Clear the framebuffer
-
 
 	// Use the shader program
 	glUseProgram(shaderProgram);
