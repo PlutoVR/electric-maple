@@ -95,141 +95,10 @@ set_property(
 		${OCULUS_OPENXR_MOBILE_SDK}/OpenXR/Libs/Android/${ANDROID_ABI}/${CMAKE_BUILD_TYPE}/libopenxr_loader.so
 	)
 
-# include(FetchContent)
-
-# FetchContent_Declare(
-# 	gstreamer_android
-# 	URL https://gstreamer.freedesktop.org/data/pkg/android/1.22.2/gstreamer-1.0-android-universal-1.22.2.tar.xz
-# 	DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-# 	PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
-# 	)
-
-
-# if(NOT gstreamer_android_POPULATED)
-# 	# Fetch the content using previously declared details
-# 	FetchContent_Populate(gstreamer_android)
-
-# 	# Set custom variables, policies, etc.
-# 	# ...
-
-# 	# Bring the populated content into the build
-# 	# add_subdirectory(${gstreamer_android_SOURCE_DIR} ${gstreamer_android_BINARY_DIR})
-
-
-# endif()
-
-
-
-# FetchContent_MakeAvailable(gstreamer_android)
-
-set(android_runtime_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/android_runtime")
-
-set(ART_LIBRARIES
-${android_runtime_SOURCE_DIR}/com.android.art/lib64/libadbconnection.so
-${android_runtime_SOURCE_DIR}/com.android.art/lib64/libandroidio.so
-${android_runtime_SOURCE_DIR}/com.android.art/lib64/libart-compiler.so
-${android_runtime_SOURCE_DIR}/com.android.art/lib64/libart-dexlayout.so
-${android_runtime_SOURCE_DIR}/com.android.art/lib64/libart-disassembler.so
-${android_runtime_SOURCE_DIR}/com.android.art/lib64/libart.so
-${android_runtime_SOURCE_DIR}/com.android.art/lib64/libartbase.so
-${android_runtime_SOURCE_DIR}/com.android.art/lib64/libartpalette.so
-${android_runtime_SOURCE_DIR}/com.android.art/lib64/libbacktrace.so
-${android_runtime_SOURCE_DIR}/com.android.art/lib64/libbase.so
-${android_runtime_SOURCE_DIR}/com.android.art/lib64/libc++.so
-${android_runtime_SOURCE_DIR}/com.android.art/lib64/libcrypto.so
-${android_runtime_SOURCE_DIR}/com.android.art/lib64/libdexfile.so
-${android_runtime_SOURCE_DIR}/com.android.art/lib64/libdt_fd_forward.so
-${android_runtime_SOURCE_DIR}/com.android.art/lib64/libdt_socket.so
-${android_runtime_SOURCE_DIR}/com.android.art/lib64/libexpat.so
-${android_runtime_SOURCE_DIR}/com.android.art/lib64/libjavacore.so
-${android_runtime_SOURCE_DIR}/com.android.art/lib64/libjdwp.so
-${android_runtime_SOURCE_DIR}/com.android.art/lib64/liblz4.so
-${android_runtime_SOURCE_DIR}/com.android.art/lib64/liblzma.so
-${android_runtime_SOURCE_DIR}/com.android.art/lib64/libnativebridge.so
-${android_runtime_SOURCE_DIR}/com.android.art/lib64/libnativehelper.so
-${android_runtime_SOURCE_DIR}/com.android.art/lib64/libnativeloader.so
-${android_runtime_SOURCE_DIR}/com.android.art/lib64/libnpt.so
-${android_runtime_SOURCE_DIR}/com.android.art/lib64/libopenjdk.so
-${android_runtime_SOURCE_DIR}/com.android.art/lib64/libopenjdkjvm.so
-${android_runtime_SOURCE_DIR}/com.android.art/lib64/libopenjdkjvmti.so
-${android_runtime_SOURCE_DIR}/com.android.art/lib64/libperfetto_hprof.so
-${android_runtime_SOURCE_DIR}/com.android.art/lib64/libprofile.so
-${android_runtime_SOURCE_DIR}/com.android.art/lib64/libsigchain.so
-${android_runtime_SOURCE_DIR}/com.android.art/lib64/libunwindstack.so
-${android_runtime_SOURCE_DIR}/com.android.art/lib64/libziparchive.so
-)
-
-set(ADBD_LIBRARIES
-${android_runtime_SOURCE_DIR}/com.android.adbd/lib64/libadb_pairing_auth.so
-${android_runtime_SOURCE_DIR}/com.android.adbd/lib64/libadb_pairing_connection.so
-${android_runtime_SOURCE_DIR}/com.android.adbd/lib64/libadb_pairing_server.so
-${android_runtime_SOURCE_DIR}/com.android.adbd/lib64/libadb_protos.so
-${android_runtime_SOURCE_DIR}/com.android.adbd/lib64/libadbconnection_client.so
-${android_runtime_SOURCE_DIR}/com.android.adbd/lib64/libbase.so
-${android_runtime_SOURCE_DIR}/com.android.adbd/lib64/libc++.so
-${android_runtime_SOURCE_DIR}/com.android.adbd/lib64/libcrypto.so
-${android_runtime_SOURCE_DIR}/com.android.adbd/lib64/libcrypto_utils.so
-${android_runtime_SOURCE_DIR}/com.android.adbd/lib64/libcutils.so
-${android_runtime_SOURCE_DIR}/com.android.adbd/lib64/libprotobuf-cpp-lite.so
-)
-
-set(ANDROID_RUNTIME_LIBRARIES
-${android_runtime_SOURCE_DIR}/com.android.runtime/lib64/ld-android.so
-${android_runtime_SOURCE_DIR}/com.android.runtime/lib64/libbase.so
-${android_runtime_SOURCE_DIR}/com.android.runtime/lib64/libc++.so
-${android_runtime_SOURCE_DIR}/com.android.runtime/lib64/libc_malloc_debug.so
-${android_runtime_SOURCE_DIR}/com.android.runtime/lib64/libc_malloc_hooks.so
-${android_runtime_SOURCE_DIR}/com.android.runtime/lib64/liblzma.so
-${android_runtime_SOURCE_DIR}/com.android.runtime/lib64/libprocinfo.so
-${android_runtime_SOURCE_DIR}/com.android.runtime/lib64/libunwindstack.so
-${android_runtime_SOURCE_DIR}/com.android.runtime/lib64/bionic/libc.so
-${android_runtime_SOURCE_DIR}/com.android.runtime/lib64/bionic/libdl.so
-${android_runtime_SOURCE_DIR}/com.android.runtime/lib64/bionic/libdl_android.so
-${android_runtime_SOURCE_DIR}/com.android.runtime/lib64/bionic/libm.so
-)
-set(OS_STATSD_LIBRARIES
-${android_runtime_SOURCE_DIR}/com.android.os.statsd/lib64/libstats_jni.so
-${android_runtime_SOURCE_DIR}/com.android.os.statsd/lib64/libstatspull.so
-${android_runtime_SOURCE_DIR}/com.android.os.statsd/lib64/libstatssocket.so
-)
-
-set(ANDROID_SYSTEM_LIB64_LIBRARIES
-${android_runtime_SOURCE_DIR}/system-lib64/heapprofd_client_api.so
-${android_runtime_SOURCE_DIR}/system-lib64/libartpalette-system.so
-${android_runtime_SOURCE_DIR}/system-lib64/libprocessgroup.so
-${android_runtime_SOURCE_DIR}/system-lib64/libtombstoned_client.so
-		${android_runtime_SOURCE_DIR}/system-lib64/libselinux.so
-		${android_runtime_SOURCE_DIR}/system-lib64/libcgrouprc.so
-		${android_runtime_SOURCE_DIR}/system-lib64/libpcre2.so
-		${android_runtime_SOURCE_DIR}/system-lib64/libpackagelistparser.so
-)
-
 set(gstreamer_android_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/gstreamer_android")
 
-# set(GST_LIBRARIES
-# # Order matters for gobject, gmodule, glib.
-# ${gstreamer_android_SOURCE_DIR}/arm64/lib/libgobject-2.0.a
-# ${gstreamer_android_SOURCE_DIR}/arm64/lib/libgmodule-2.0.a
-# ${gstreamer_android_SOURCE_DIR}/arm64/lib/libglib-2.0.a
-# # Doesn't seem like order matters for the stuff after this.
-
-# ${gstreamer_android_SOURCE_DIR}/arm64/lib/libgstreamer-1.0.a
-# ${gstreamer_android_SOURCE_DIR}/arm64/lib/libgstbase-1.0.a
-# ${gstreamer_android_SOURCE_DIR}/arm64/lib/libgstapp-1.0.a
-# ${gstreamer_android_SOURCE_DIR}/arm64/lib/libgstvideo-1.0.a
-
-# ${gstreamer_android_SOURCE_DIR}/arm64/lib/gstreamer-1.0/libgstvideotestsrc.a
-
-# ${gstreamer_android_SOURCE_DIR}/arm64/lib/libiconv.a
-# ${gstreamer_android_SOURCE_DIR}/arm64/lib/libintl.a
-# ${gstreamer_android_SOURCE_DIR}/arm64/lib/libffi.a
-# ${gstreamer_android_SOURCE_DIR}/arm64/lib/libpcre2-8.a
-# ${gstreamer_android_SOURCE_DIR}/arm64/lib/liborc-0.4.a
-# )
-
-
 set(GST_LIBRARIES
-#${gstreamer_android_SOURCE_DIR}/arm64/lib/libgstreamer-1.0.a
+#${gstreamer_android_SOURCE_DIR}/arm64/lib/libgstreamer-1.0.a // we're loading this one as A WHOLE lib in CMakeLists.txt.
 ${gstreamer_android_SOURCE_DIR}/arm64/lib/libgstrtsp-1.0.a
 ${gstreamer_android_SOURCE_DIR}/arm64/lib/libgstphotography-1.0.a
 ${gstreamer_android_SOURCE_DIR}/arm64/lib/liboggkate.a
@@ -542,21 +411,7 @@ ${gstreamer_android_SOURCE_DIR}/arm64/lib/libturbojpeg.a
 
 )
 
-# ${GLIB_LIBRARIES}
-# ${LIBSOUP_LIBRARIES}
-# ${JSONGLIB_LIBRARIES}
-# ${GIO_LIBRARIES}
-
-
-# set(GLIB_LIBRARY_DIRS ${gstreamer_android_SOURCE_DIR}/arm64/lib)
-# set(LIBSOUP_LIBRARY_DIRS ${gstreamer_android_SOURCE_DIR}/arm64/lib)
 set(JSONGLIB_LIBRARIES ${gstreamer_android_SOURCE_DIR}/arm64/lib/libjson-glib-1.0.a)
-# set(GIO_LIBRARY_DIRS ${gstreamer_android_SOURCE_DIR}/arm64/lib)
-
-# find_library(GLIB_LIBRARIES glib-2.0 HINTS ${GLIB_LIBRARY_DIRS})
-# find_library(LIBSOUP_LIBRARIES soup-2.4 HINTS ${LIBSOUP_LIBRARY_DIRS})
-# find_library(JSONGLIB_LIBRARIES json-glib-1.0 HINTS ${JSONGLIB_LIBRARY_DIRS})
-# find_library(GIO_LIBRARIES gio-2.0 HINTS ${GIO_LIBRARY_DIRS})
 
 set(GST_INCLUDE_DIRS
 	${gstreamer_android_SOURCE_DIR}/arm64/include/gstreamer-1.0/
@@ -566,7 +421,6 @@ set(GLIB_INCLUDE_DIRS ${gstreamer_android_SOURCE_DIR}/arm64/include/glib-2.0 ${g
 set(LIBSOUP_INCLUDE_DIRS ${gstreamer_android_SOURCE_DIR}/arm64/include/libsoup-2.4/)
 set(JSONGLIB_INCLUDE_DIRS ${gstreamer_android_SOURCE_DIR}/arm64/include/json-glib-1.0)
 set(GIO_INCLUDE_DIRS ${gstreamer_android_SOURCE_DIR}/arm64/include/glib-2.0/ ${gstreamer_android_SOURCE_DIR}/arm64/lib/gio-unix-2.0/)
-
 
 # These two don't seem to help
 include_directories(
@@ -580,7 +434,5 @@ link_directories(
 
 message(gstreamer_android_SOURCE_DIR)
 message(GST_LIBRARIES)
-
-message(ART_LIBRARIES)
 
 add_subdirectory(src)
