@@ -9,6 +9,17 @@
 
 #pragma once
 
+#define XR_USE_PLATFORM_ANDROID
+#define XR_USE_GRAPHICS_API_OPENGL_ES
+
+#include "os/os_time.h"
+#include "os/os_threading.h"
+
+#include "xrt/xrt_frame.h"
+#include "util/u_logging.h"
+#include "util/u_time.h"
+#include "os/os_time.h"
+
 #include <android_native_app_glue.h>
 #include <GLES3/gl3.h>
 #include <GLES3/gl3ext.h>
@@ -16,20 +27,28 @@
 #include <android/log.h>
 #include <jni.h>
 
-// FIXME: THE BELOW ARE UGLY !?
-#include "../../../../../../../.gradle/caches/transforms-3/0ea571ec8b0b3b9231cb793af03e2479/transformed/jetified-openxr_loader_for_android-1.0.20/prefab/modules/openxr_loader/include/openxr/openxr.h"
-#include "../../../../../../../.gradle/caches/transforms-3/0ea571ec8b0b3b9231cb793af03e2479/transformed/jetified-openxr_loader_for_android-1.0.20/prefab/modules/openxr_loader/include/openxr/openxr_platform.h"
+#include <gst/gst.h>
+#include <gst/gl/gl.h>
+#include <gst/app/gstappsink.h>
+#include <gst/gstelement.h>
+#include <gst/video/video-frame.h>
 
-#define XR_LOAD(fn) xrGetInstanceProcAddr(state.instance, #fn, (PFN_xrVoidFunction *)&fn);
+#include <openxr/openxr.h>
+#include <openxr/openxr_platform.h>
 
-#include "../../../../proto/generated/pluto.pb.h"
-#include "../../../../monado/src/external/nanopb/pb_encode.h"
+#include "pluto.pb.h"
+#include "pb_encode.h"
 
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-//#include "xrt/xrt_frameserver.h"
+#include <string.h>
+#include <stdbool.h>
+
+#define XR_LOAD(fn) xrGetInstanceProcAddr(state.instance, #fn, (PFN_xrVoidFunction *)&fn);
+
+#include "xrt/xrt_frameserver.h"
 // FIXME: set relative path through include-dir
 #include "/home/fredinfinite23/code/PlutoVR/linux-streaming-CLIENT2/monado/src/xrt/auxiliary/gstreamer/gstjniutils.h"
 
@@ -37,8 +56,14 @@ struct state_t
 {
     struct android_app *app;
     JNIEnv *jni;
+    JavaVM *java_vm;
     bool hasPermissions;
-    // ANativeWindow *window; // Are we going to need this ?
+
+    struct vf_fs *vid;
+
+    // This mutex protects the EGL context below across main and gstgl threads
+    struct os_mutex egl_lock;
+
     EGLDisplay display;
     EGLContext context;
     EGLConfig config;
@@ -63,15 +88,63 @@ struct state_t
     // this is bad, we want an xrt_frame_node etc.
 
     int way;
-    int frame_idx;
 
-    /* REMOVE: removing frameserver
     struct xrt_frame_sink frame_sink;
-    xrt_frame *xf = NULL;*/
-    // FIXME : Do we need THIS frame_tex , still ? maybe yes...
-    //         THIS state-defined frame_tex is the frame_tex id used by our current renderer.
-    //  GLuint frame_tex;
+    struct xrt_frame *xf;
+    // this is the GL texture id used by the main renderer. This is what gst/ code should also be using.
+    GLuint frame_texture_id;
+    GLenum frame_texture_target;
+    GLboolean frame_available;
 };
+
+// FIXME : MERGE VID AND STATE !!!! THIS IS SO UGLY !!
+struct vf_fs
+{
+    struct xrt_fs base;
+
+    struct os_thread_helper play_thread;
+
+    GMainLoop *loop;
+    GstElement *pipeline;
+    GstGLDisplay *gst_gl_display;
+    GstGLContext *gst_gl_context;
+    GstGLContext *gst_gl_other_context;
+
+    GstGLDisplay *display;
+    GstGLContext *other_context;
+    GstGLContext *context;
+    GstElement *appsink;
+    //GLenum texture_target; // WE SHOULD USE RENDER'S texture target
+    //GLuint texture_id; // WE SHOULD USE RENDER'S texture id
+
+    int width;
+    int height;
+    enum xrt_format format;
+    enum xrt_stereo_format stereo_format;
+
+    struct xrt_frame_node node;
+
+    struct
+    {
+        bool extended_format;
+        bool timeperframe;
+    } has;
+
+    enum xrt_fs_capture_type capture_type;
+    struct xrt_frame_sink *sink;
+
+    uint32_t selected;
+
+    struct xrt_fs_capture_parameters capture_params;
+
+    bool is_configured;
+    bool is_running;
+    enum u_logging_level log_level;
+
+    struct state_t *state;
+    JavaVM *java_vm;
+};
+
 
 #ifdef __cplusplus
 extern "C" {
@@ -100,7 +173,7 @@ vf_fs_open_file(struct xrt_frame_context *xfctx, const char *path);
  * @ingroup drv_vf
  */
 struct xrt_fs *
-vf_fs_videotestsource(struct xrt_frame_context *xfctx, uint32_t width, uint32_t height, JavaVM *java_vm);
+vf_fs_gst_pipeline(struct xrt_frame_context *xfctx, struct state_t *state);
 
 
 #ifdef __cplusplus
