@@ -7,7 +7,8 @@
  */
 
 #include <cstdio>
-#include "common.hpp"
+#include "render.hpp"
+//#include "common.hpp"
 
 // Initialize EGL context. We'll need this going forward.
 void

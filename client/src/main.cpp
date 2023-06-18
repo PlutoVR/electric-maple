@@ -13,9 +13,8 @@
 #include <errno.h>
 
 #include <assert.h>
-
-#include "common.hpp"
-#include "gst/vf_interface.h"
+#include "gst/gst_common.h"
+#include "render.hpp"
 
 #include <unistd.h>
 
@@ -24,11 +23,7 @@
 #include <android/asset_manager_jni.h>
 #include <android/log.h>
 
-
-
 // static GLuint global_data[1440*1584*4];
-
-
 
 static int pfd[2];
 static pthread_t thr;
@@ -105,7 +100,7 @@ sink_push_frame(struct xrt_frame_sink *xfs, struct xrt_frame *xf)
 		//		xrt_frame_reference(&xf, st->xf);
 		xrt_frame_reference(&st->xf, xf);
 	}
-	printf("Called! %d %p %u %u %zu", st->frame_tex, xf->data, xf->width, xf->height, xf->stride);
+	printf("Called! %d %p %u %u %zu", st->frame_texture_id, xf->data, xf->width, xf->height, xf->stride);
 }
 
 void
@@ -505,8 +500,9 @@ mainloop_one(struct state_t &state)
 		//            }
 
 
+		// FIXME: This will go away now that we have a GL_TEXTURE_EXTERNAL texture
 		printf("DEBUG: Binding textures!");
-		glBindTexture(GL_TEXTURE_2D, state.frame_tex);
+		glBindTexture(GL_TEXTURE_2D, state.frame_texture_id);
 		glPixelStorei(GL_UNPACK_ROW_LENGTH, 1440);
 		//            glPixelStorei(GL_UNPACK_ALIGNMENT, 2); // Set to 1 for tightly packed data
 		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 1440, 1584, GL_RGBA, GL_UNSIGNED_BYTE, state.xf->data);
@@ -527,14 +523,6 @@ mainloop_one(struct state_t &state)
 		xrt_frame_reference(&state.xf, NULL);
 	}
 
-	//    state.frame_idx++;
-	//	if (state.frame_idx % 20 == 0) {
-	//		printf("what");
-	//        state.way++;
-	//		generateRandomTextureOld(state.width, state.height, state.way % 3, &state.frame_tex);
-	//	}
-
-
 	printf("DEBUG: Binding framebuffer");
 	glBindFramebuffer(GL_FRAMEBUFFER, state.framebuffers[imageIndex]);
 
@@ -548,7 +536,7 @@ mainloop_one(struct state_t &state)
 	printf("DEBUG: DRAWING!");
 	for (uint32_t eye = 0; eye < 2; eye++) {
 		glViewport(eye * state.width, 0, state.width, state.height);
-		draw(state.framebuffers[imageIndex], state.frame_tex);
+		draw(state.framebuffers[imageIndex], state.frame_texture_id);
 	}
 
 	// Release
@@ -631,6 +619,7 @@ android_main(struct android_app *app)
 	//setenv("GST_DEBUG", "*CAPS*:6", 1);
 
 	state.app = app;
+	state.java_vm = app->activity->vm;
 
 	(*app->activity->vm).AttachCurrentThread(&state.jni, NULL);
 	app->onAppCmd = onAppCmd;
@@ -649,8 +638,6 @@ android_main(struct android_app *app)
     }*/
 
 	state.xf = nullptr;
-
-
 
 	// Initialize OpenXR loader
 
@@ -728,30 +715,20 @@ android_main(struct android_app *app)
 	state.width = viewInfo[0].recommendedImageRectWidth;
 	state.height = viewInfo[0].recommendedImageRectHeight;
 
-	state.frame_tex = generateRandomTexture(state.width, state.height, 2);
+	state.frame_texture_id = generateRandomTexture(state.width, state.height, 2);
 	//    state.frame_tex = generateRandomTexture(320, 240);
-
-
-	//    GLint w = 1;
-	//    GLint h = 1;
-
 
 	state.frame_sink.push_frame = sink_push_frame;
 
 	struct xrt_frame_context xfctx = {};
-	printf("Creating videotestsrc, passing Java VM = %p", app->activity->vm);
-
-	struct xrt_fs *blah = vf_fs_videotestsource(&xfctx, state.width, state.height, app->activity->vm);
+	struct xrt_fs *blah = vf_fs_videotestsource(&xfctx, &state);
 	printf("Done creating videotestsrc");
 
-#if 1
 	printf("Starting source");
 
+	// FIXME: Eventually completely remove XRT_FS dependency here for driving the gst pipeline look
 	xrt_fs_stream_start(blah, &state.frame_sink, XRT_FS_CAPTURE_TYPE_TRACKING, 0);
 	printf("Done starting source");
-#else
-	(void)blah;
-#endif
 
 	// OpenXR session
 
@@ -806,7 +783,7 @@ android_main(struct android_app *app)
 
 
 	if (state.xf) {
-		glBindTexture(GL_TEXTURE_2D, state.frame_tex);
+		glBindTexture(GL_TEXTURE_2D, state.frame_texture_id);
 		glPixelStorei(GL_UNPACK_ROW_LENGTH, state.xf->stride / 4);
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, state.xf->width, state.xf->height, 0, GL_RGBA, GL_UNSIGNED_BYTE,
 		             state.xf->data);

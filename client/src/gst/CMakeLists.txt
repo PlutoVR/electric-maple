@@ -1,4 +1,4 @@
-add_library(pluto_vf STATIC vf_driver.c)
+add_library(pluto_vf STATIC gst_driver.c)
 target_link_libraries(pluto_vf PRIVATE xrt-interfaces aux_os aux_util
         ${GST_LIBRARIES}
         #-Wl,--whole-archive ${gstreamer_android_SOURCE_DIR}/arm64/lib/libgstreamer-1.0.a -Wl,--no-whole-archive
@@ -16,6 +16,7 @@ ${JSONGLIB_LIBRARIES}
 # ${GIO_LIBRARIES}
 )
 target_include_directories(pluto_vf PRIVATE
+${ANDROID_NDK}/sources/android/native_app_glue
 ${CMAKE_CURRENT_SOURCE_DIR}/../monado/src/xrt/auxiliary/gstreamer
 ${GST_INCLUDE_DIRS}
 ${GLIB_INCLUDE_DIRS}

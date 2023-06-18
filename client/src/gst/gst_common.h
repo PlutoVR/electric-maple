@@ -9,6 +9,14 @@
 
 #pragma once
 
+#define XR_USE_PLATFORM_ANDROID
+#define XR_USE_GRAPHICS_API_OPENGL_ES
+
+#include "xrt/xrt_frame.h"
+#include "util/u_logging.h"
+#include "util/u_time.h"
+#include "os/os_time.h"
+
 #include <android_native_app_glue.h>
 #include <GLES3/gl3.h>
 #include <GLES3/gl3ext.h>
@@ -29,7 +37,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-//#include "xrt/xrt_frameserver.h"
+#include "xrt/xrt_frameserver.h"
 // FIXME: set relative path through include-dir
 #include "/home/fredinfinite23/code/PlutoVR/linux-streaming-CLIENT2/monado/src/xrt/auxiliary/gstreamer/gstjniutils.h"
 
@@ -37,6 +45,7 @@ struct state_t
 {
     struct android_app *app;
     JNIEnv *jni;
+    JavaVM *java_vm;
     bool hasPermissions;
     // ANativeWindow *window; // Are we going to need this ?
     EGLDisplay display;
@@ -63,14 +72,13 @@ struct state_t
     // this is bad, we want an xrt_frame_node etc.
 
     int way;
-    int frame_idx;
 
-    /* REMOVE: removing frameserver
     struct xrt_frame_sink frame_sink;
-    xrt_frame *xf = NULL;*/
-    // FIXME : Do we need THIS frame_tex , still ? maybe yes...
-    //         THIS state-defined frame_tex is the frame_tex id used by our current renderer.
-    //  GLuint frame_tex;
+    struct xrt_frame *xf;
+    // this is the GL texture id used by the main renderer. This is what gst/ code should also be using.
+    GLuint frame_texture_id;
+    GLenum frame_texture_target;
+    GLboolean frame_available;
 };
 
 #ifdef __cplusplus
@@ -100,7 +108,7 @@ vf_fs_open_file(struct xrt_frame_context *xfctx, const char *path);
  * @ingroup drv_vf
  */
 struct xrt_fs *
-vf_fs_videotestsource(struct xrt_frame_context *xfctx, uint32_t width, uint32_t height, JavaVM *java_vm);
+vf_fs_videotestsource(struct xrt_frame_context *xfctx, struct state_t *state);
 
 
 #ifdef __cplusplus

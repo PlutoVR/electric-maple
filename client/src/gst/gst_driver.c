@@ -21,7 +21,7 @@
 #include "util/u_logging.h"
 #include "util/u_trace_marker.h"
 
-#include "vf_interface.h"
+#include "gst_common.h"
 
 #include <stdio.h>
 #include <assert.h>
@@ -97,8 +97,8 @@ struct vf_fs
 	GstGLContext *other_context;
 	GstGLContext *context;
 	GstElement *appsink;
-	GLenum texture_target;
-	GLuint texture_id;
+	//GLenum texture_target; // WE SHOULD USE RENDER'S texture target
+	//GLuint texture_id; // WE SHOULD USE RENDER'S texture id
 
 	int width;
 	int height;
@@ -124,6 +124,7 @@ struct vf_fs
 	bool is_running;
 	enum u_logging_level log_level;
 
+	struct state_t *state;
 	JavaVM *java_vm;
 };
 
@@ -158,6 +159,7 @@ static GstElement *webrtcbin = NULL;
 static GstWebRTCDataChannel *datachannel = NULL;
 
 //!@todo SORRY
+// FIXME : Check if this was added for vid lifetime reasons.
 static struct vf_fs *the_vf_fs = NULL;
 
 static GstBusSyncReply
@@ -269,7 +271,7 @@ render_frame(struct vf_fs *vid)
 
   GstVideoFrame frame;
   gst_video_frame_map(&frame, &info, buffer, GST_MAP_READ | GST_MAP_GL);
-  vid->texture_id = *(GLuint *)frame.data[0];
+  vid->state->frame_texture_id = *(GLuint *)frame.data[0];
 
   if (vid->context == NULL) {
     /* Get GStreamer's gl context. */
@@ -279,9 +281,9 @@ render_frame(struct vf_fs *vid)
     GstStructure *s = gst_caps_get_structure(caps, 0);
     const gchar *texture_target_str = gst_structure_get_string(s, "texture-target");
     if (g_str_equal(texture_target_str, GST_GL_TEXTURE_TARGET_EXTERNAL_OES_STR)) {
-      vid->texture_target = GL_TEXTURE_EXTERNAL_OES;
+      vid->state->frame_texture_target = GL_TEXTURE_EXTERNAL_OES;
     } else if (g_str_equal(texture_target_str, GST_GL_TEXTURE_TARGET_2D_STR)) {
-      vid->texture_target = GL_TEXTURE_2D;
+      vid->state->frame_texture_target = GL_TEXTURE_2D;
     } else {
       g_assert_not_reached();
     }
@@ -294,7 +296,9 @@ render_frame(struct vf_fs *vid)
     gst_gl_sync_meta_wait(sync_meta, vid->context);
   }
 
-  render_gl_texture(vid);
+  // FIXME: Might not be necessary !
+  // This will make our main renderer pick up and render the gl texture.
+  vid->state->frame_available = true;
 
   gst_video_frame_unmap(&frame);
 
@@ -311,7 +315,7 @@ vf_fs_mainloop(void *ptr)
   eglBindAPI(EGL_OPENGL_ES_API);
 
   // FIXME: Take application GL context
-  eglMakeCurrent(mEGLDisplay, mEGLSurface, mEGLSurface, mEGLContext);
+  eglMakeCurrent(vid->state->display, vid->state->surface, vid->state->surface, vid->state->context);
 
   setup_sink(vid);
 
@@ -340,7 +344,7 @@ stop_pipeline(struct vf_fs *vid)
   gst_clear_object(&vid->pipeline);
   gst_clear_object(&vid->display);
   gst_clear_object(&vid->other_context);
-  gst_clear_object(&id->context);
+  gst_clear_object(&vid->context);
 }
 
 /*
@@ -790,7 +794,6 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 {
 	U_LOG_E("websocket_connected_cb called!");
 
-
 GST_PLUGIN_STATIC_REGISTER(app); // Definitely needed
 GST_PLUGIN_STATIC_REGISTER(autodetect); // Definitely needed
 GST_PLUGIN_STATIC_REGISTER(coreelements);
@@ -816,8 +819,9 @@ GST_PLUGIN_STATIC_REGISTER(playback); // "FFMPEG "
 	GError *error = NULL;
 
 	g_assert(!ws);
+    struct vf_fs *vid = (struct vf_fs *) user_data;
 
-	ws = soup_session_websocket_connect_finish(SOUP_SESSION(session), res, &error);
+    ws = soup_session_websocket_connect_finish(SOUP_SESSION(session), res, &error);
 	if (error) {
 		U_LOG_E("Error creating websocket: %s\n", error->message);
 		g_clear_error(&error);
@@ -863,12 +867,11 @@ GST_PLUGIN_STATIC_REGISTER(playback); // "FFMPEG "
 		gst_clear_object(&bus);
 
 		vid->is_running = TRUE;
-		ret = os_thread_helper_start(&vid->play_thread, vf_fs_mainloop, vid);
+		int ret = os_thread_helper_start(&vid->play_thread, vf_fs_mainloop, vid);
 		if (ret != 0) {
 			VF_ERROR(vid, "Failed to start thread '%i'", ret);
-			vid->running = FALSE;
+			vid->is_running = FALSE;
 			free(vid);
-			return NULL;
 		}
 
 	}
@@ -1036,55 +1039,19 @@ vf_fs_node_destroy(struct xrt_frame_node *node)
  *
  */
 
-/*
-GST_PLUGIN_STATIC_DECLARE(app); // Definitely needed
-GST_PLUGIN_STATIC_DECLARE(autodetect); // Definitely needed
-GST_PLUGIN_STATIC_DECLARE(coreelements);
-GST_PLUGIN_STATIC_DECLARE(nice);
-GST_PLUGIN_STATIC_DECLARE(rtp);
-GST_PLUGIN_STATIC_DECLARE(rtpmanager);
-GST_PLUGIN_STATIC_DECLARE(sctp);
-GST_PLUGIN_STATIC_DECLARE(srtp);
-GST_PLUGIN_STATIC_DECLARE(dtls);
-GST_PLUGIN_STATIC_DECLARE(videoparsersbad);
-GST_PLUGIN_STATIC_DECLARE(webrtc);
-GST_PLUGIN_STATIC_DECLARE(androidmedia);
-GST_PLUGIN_STATIC_DECLARE(videotestsrc); // Definitely needed
-GST_PLUGIN_STATIC_DECLARE(videoconvertscale);
-GST_PLUGIN_STATIC_DECLARE(overlaycomposition);
-GST_PLUGIN_STATIC_DECLARE(playback); // "FFMPEG "
-*/
 static struct xrt_fs *
 alloc_and_init_common(struct xrt_frame_context *xfctx,      //
+		              struct state_t *state,                //
                       enum xrt_format format,               //
                       enum xrt_stereo_format stereo_format) //
 {
 	struct vf_fs *vid = U_TYPED_CALLOC(struct vf_fs);
 	the_vf_fs = vid;
-	vid->got_sample = false;
 	vid->format = format;
 	vid->stereo_format = stereo_format;
 
 	GstBus *bus = NULL;
-/*
-    GST_PLUGIN_STATIC_REGISTER(app); // Definitely needed
-    GST_PLUGIN_STATIC_REGISTER(autodetect); // Definitely needed
-    GST_PLUGIN_STATIC_REGISTER(coreelements);
-    GST_PLUGIN_STATIC_REGISTER(nice);
-    GST_PLUGIN_STATIC_REGISTER(rtp);
-    GST_PLUGIN_STATIC_REGISTER(rtpmanager);
-    GST_PLUGIN_STATIC_REGISTER(sctp);
-    GST_PLUGIN_STATIC_REGISTER(srtp);
-	GST_PLUGIN_STATIC_REGISTER(dtls);
-    GST_PLUGIN_STATIC_REGISTER(videoparsersbad);
-    GST_PLUGIN_STATIC_REGISTER(webrtc);
-    GST_PLUGIN_STATIC_REGISTER(androidmedia);
-    GST_PLUGIN_STATIC_REGISTER(videotestsrc); // Definitely needed
-    GST_PLUGIN_STATIC_REGISTER(videoconvertscale);
-    GST_PLUGIN_STATIC_REGISTER(overlaycomposition);
 
-    GST_PLUGIN_STATIC_REGISTER(playback); // "FFMPEG "
-*/
 	int ret = os_thread_helper_init(&vid->play_thread);
 	if (ret < 0) {
 		VF_ERROR(vid, "Failed to init thread");
@@ -1118,7 +1085,7 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 	                                     NULL,                                             // protocols
 	                                     NULL,                                             // cancellable
 	                                     websocket_connected_cb,                           // callback
-	                                     NULL);                                            // user_data
+	                                     vid);                                            // user_data
 
 #else
 	soup_session_websocket_connect_async(soup_session,                                     // session
@@ -1197,11 +1164,10 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 }
 
 struct xrt_fs *
-vf_fs_videotestsource(struct xrt_frame_context *xfctx, uint32_t width, uint32_t height, JavaVM *java_vm)
+vf_fs_videotestsource(struct xrt_frame_context *xfctx, struct state_t *state)
 {
 	gst_init(0, NULL);
-
-    gst_amc_jni_set_java_vm(java_vm);
+    gst_amc_jni_set_java_vm(state->java_vm);
 
 	GST_DEBUG("lol");
 	g_print("meow");
@@ -1214,5 +1180,5 @@ vf_fs_videotestsource(struct xrt_frame_context *xfctx, uint32_t width, uint32_t 
 	//     "appsink name=testsink caps=video/x-raw,format=RGBx,width=%u,height=%u",
 	//     width, height, width, height);
 
-	return alloc_and_init_common(xfctx, format, stereo_format);
+	return alloc_and_init_common(xfctx, state, format, stereo_format);
 }

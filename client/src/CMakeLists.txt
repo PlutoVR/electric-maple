@@ -14,7 +14,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror")
 # Refer to: https://github.com/android-ndk/ndk/issues/381.
 set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -u ANativeActivity_onCreate")
 
-add_library(plutovr_webrtc_client SHARED main.cpp render.cpp common.hpp)
+add_library(plutovr_webrtc_client SHARED main.cpp render.cpp)
 
 target_include_directories(
 	plutovr_webrtc_client
