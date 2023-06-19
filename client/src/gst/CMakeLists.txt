@@ -14,6 +14,9 @@ target_link_libraries(pluto_vf PRIVATE xrt-interfaces aux_os aux_util
 # ${LIBSOUP_LIBRARIES}
 ${JSONGLIB_LIBRARIES}
 # ${GIO_LIBRARIES}
+        OpenXR::openxr_loader
+        openxr_loader
+        pluto_proto
 )
 target_include_directories(pluto_vf PRIVATE
 ${ANDROID_NDK}/sources/android/native_app_glue

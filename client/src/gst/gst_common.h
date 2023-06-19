@@ -24,18 +24,20 @@
 #include <android/log.h>
 #include <jni.h>
 
-// FIXME: THE BELOW ARE UGLY !?
-#include "../../../../../../../.gradle/caches/transforms-3/0ea571ec8b0b3b9231cb793af03e2479/transformed/jetified-openxr_loader_for_android-1.0.20/prefab/modules/openxr_loader/include/openxr/openxr.h"
-#include "../../../../../../../.gradle/caches/transforms-3/0ea571ec8b0b3b9231cb793af03e2479/transformed/jetified-openxr_loader_for_android-1.0.20/prefab/modules/openxr_loader/include/openxr/openxr_platform.h"
+#include <openxr/openxr.h>
+#include <openxr/openxr_platform.h>
 
-#define XR_LOAD(fn) xrGetInstanceProcAddr(state.instance, #fn, (PFN_xrVoidFunction *)&fn);
-
-#include "../../../../proto/generated/pluto.pb.h"
-#include "../../../../monado/src/external/nanopb/pb_encode.h"
+#include "pluto.pb.h"
+#include "pb_encode.h"
 
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+
+#include <string.h>
+#include <stdbool.h>
+
+#define XR_LOAD(fn) xrGetInstanceProcAddr(state.instance, #fn, (PFN_xrVoidFunction *)&fn);
 
 #include "xrt/xrt_frameserver.h"
 // FIXME: set relative path through include-dir

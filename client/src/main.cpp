@@ -74,13 +74,13 @@ static void
 onAppCmd(struct android_app *app, int32_t cmd)
 {
 	switch (cmd) {
-	case APP_CMD_START: printf("APP_CMD_START"); break;
-	case APP_CMD_RESUME: printf("APP_CMD_RESUME"); break;
-	case APP_CMD_PAUSE: printf("APP_CMD_PAUSE"); break;
-	case APP_CMD_STOP: printf("APP_CMD_STOP"); break;
-	case APP_CMD_DESTROY: printf("APP_CMD_DESTROY"); break;
-	case APP_CMD_INIT_WINDOW: printf("APP_CMD_INIT_WINDOW"); break;
-	case APP_CMD_TERM_WINDOW: printf("APP_CMD_TERM_WINDOW"); break;
+	case APP_CMD_START: U_LOG_E("APP_CMD_START"); break;
+	case APP_CMD_RESUME: U_LOG_E("APP_CMD_RESUME"); break;
+	case APP_CMD_PAUSE: U_LOG_E("APP_CMD_PAUSE"); break;
+	case APP_CMD_STOP: U_LOG_E("APP_CMD_STOP"); break;
+	case APP_CMD_DESTROY: U_LOG_E("APP_CMD_DESTROY"); break;
+	case APP_CMD_INIT_WINDOW: U_LOG_E("APP_CMD_INIT_WINDOW"); break;
+	case APP_CMD_TERM_WINDOW: U_LOG_E("APP_CMD_TERM_WINDOW"); break;
 	}
 }
 
@@ -88,9 +88,9 @@ onAppCmd(struct android_app *app, int32_t cmd)
 void
 sink_push_frame(struct xrt_frame_sink *xfs, struct xrt_frame *xf)
 {
-	printf("sink_push_frame called!");
+	U_LOG_E("sink_push_frame called!");
 	if (!xf) {
-		printf("what??");
+		U_LOG_E("what??");
 		return;
 	}
 	struct state_t *st = container_of(xfs, struct state_t, frame_sink);
@@ -100,7 +100,7 @@ sink_push_frame(struct xrt_frame_sink *xfs, struct xrt_frame *xf)
 		//		xrt_frame_reference(&xf, st->xf);
 		xrt_frame_reference(&st->xf, xf);
 	}
-	printf("Called! %d %p %u %u %zu", st->frame_texture_id, xf->data, xf->width, xf->height, xf->stride);
+	U_LOG_E("Called! %d %p %u %u %zu", st->frame_texture_id, xf->data, xf->width, xf->height, xf->stride);
 }
 
 void
@@ -199,7 +199,7 @@ generateRandomTextureOld(GLsizei width, GLsizei height, int way, GLuint *handle)
 	writeRandomTexture(width, height, way, data);
 	glBindTexture(GL_TEXTURE_2D, *handle);
 	// This call is definitely what's crashing, which is real confusing.
-	printf("%d %d", width, height);
+	U_LOG_E("%d %d", width, height);
 #if 0
 //    glPixelStorei(GL_UNPACK_ALIGNMENT, 1); // Set to 1 for tightly packed data
 
@@ -218,7 +218,7 @@ generateRandomTextureOld(GLsizei width, GLsizei height, int way, GLuint *handle)
 void
 die_errno()
 {
-	printf("Something happened! %s", strerror(errno));
+	U_LOG_E("Something happened! %s", strerror(errno));
 }
 
 
@@ -233,7 +233,7 @@ really_make_socket(struct state_t &st)
 	// Doesn't work :(
 	st.socket_fd = socket(PF_INET, SOCK_SEQPACKET, IPPROTO_SCTP);
 #endif
-	printf("Socket fd is %d, errno is %s", st.socket_fd, strerror(errno));
+	U_LOG_E("Socket fd is %d, errno is %s", st.socket_fd, strerror(errno));
 
 	// Connect to the parent process
 	sockaddr_in serverAddr;
@@ -249,7 +249,7 @@ really_make_socket(struct state_t &st)
 		die_errno();
 	}
 
-	printf("really_make_socket: Result is %d", iResult);
+	U_LOG_E("really_make_socket: Result is %d", iResult);
 }
 
 
@@ -265,7 +265,7 @@ hmd_pose(struct state_t &st)
 	hmdLocalLocation.next = NULL;
 	result = xrLocateSpace(st.viewSpace, st.worldSpace, os_monotonic_get_ns(), &hmdLocalLocation);
 	if (result != XR_SUCCESS) {
-		printf("Bad!");
+		U_LOG_E("Bad!");
 	}
 
 	XrPosef hmdLocalPose = hmdLocalLocation.pose;
@@ -295,7 +295,7 @@ hmd_pose(struct state_t &st)
 	int iResult = send(st.socket_fd, buffer, pluto_TrackingMessage_size, 0);
 
 	if (iResult <= 0) {
-		printf("BAD! %d %s", iResult, strerror(errno));
+		U_LOG_E("BAD! %d %s", iResult, strerror(errno));
 		die_errno();
 	}
 }
@@ -314,14 +314,14 @@ create_spaces(struct state_t &st)
 	result = xrCreateReferenceSpace(state.session, &spaceInfo, &state.worldSpace);
 
 	if (XR_FAILED(result)) {
-		printf("Failed to create reference space (%d)", result);
+		U_LOG_E("Failed to create reference space (%d)", result);
 	}
 	spaceInfo.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_VIEW;
 
 	result = xrCreateReferenceSpace(state.session, &spaceInfo, &state.viewSpace);
 
 	if (XR_FAILED(result)) {
-		printf("Failed to create reference space (%d)", result);
+		U_LOG_E("Failed to create reference space (%d)", result);
 	}
 }
 
@@ -407,7 +407,7 @@ mainloop_one(struct state_t &state)
 	result = xrWaitFrame(state.session, NULL, &frameState);
 
 	if (XR_FAILED(result)) {
-		printf("xrWaitFrame failed");
+		U_LOG_E("xrWaitFrame failed");
 	}
 
 	XrFrameBeginInfo beginfo = {.type = XR_TYPE_FRAME_BEGIN_INFO};
@@ -415,7 +415,7 @@ mainloop_one(struct state_t &state)
 	result = xrBeginFrame(state.session, &beginfo);
 
 	if (XR_FAILED(result)) {
-		printf("xrBeginFrame failed");
+		U_LOG_E("xrBeginFrame failed");
 	}
 
 	// Locate views, set up layers
@@ -435,7 +435,7 @@ mainloop_one(struct state_t &state)
 	result = xrLocateViews(state.session, &locateInfo, &viewState, 2, &viewCount, views);
 
 	if (XR_FAILED(result)) {
-		printf("Failed to locate views");
+		U_LOG_E("Failed to locate views");
 	}
 
 	int width = state.width;
@@ -468,7 +468,7 @@ mainloop_one(struct state_t &state)
 	result = xrAcquireSwapchainImage(state.swapchain, NULL, &imageIndex);
 
 	if (XR_FAILED(result)) {
-		printf("Failed to acquire swapchain image (%d)", result);
+		U_LOG_E("Failed to acquire swapchain image (%d)", result);
 	}
 
 	XrSwapchainImageWaitInfo waitInfo = {.type = XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO,
@@ -477,7 +477,7 @@ mainloop_one(struct state_t &state)
 	result = xrWaitSwapchainImage(state.swapchain, &waitInfo);
 
 	if (XR_FAILED(result)) {
-		printf("Failed to wait for swapchain image (%d)", result);
+		U_LOG_E("Failed to wait for swapchain image (%d)", result);
 	}
 
 	if (state.xf) {
@@ -501,7 +501,7 @@ mainloop_one(struct state_t &state)
 
 
 		// FIXME: This will go away now that we have a GL_TEXTURE_EXTERNAL texture
-		printf("DEBUG: Binding textures!");
+		U_LOG_E("DEBUG: Binding textures!");
 		glBindTexture(GL_TEXTURE_2D, state.frame_texture_id);
 		glPixelStorei(GL_UNPACK_ROW_LENGTH, 1440);
 		//            glPixelStorei(GL_UNPACK_ALIGNMENT, 2); // Set to 1 for tightly packed data
@@ -523,7 +523,7 @@ mainloop_one(struct state_t &state)
 		xrt_frame_reference(&state.xf, NULL);
 	}
 
-	printf("DEBUG: Binding framebuffer");
+	U_LOG_E("DEBUG: Binding framebuffer\n");
 	glBindFramebuffer(GL_FRAMEBUFFER, state.framebuffers[imageIndex]);
 
 	glViewport(0, 0, state.width * 2, state.height);
@@ -533,7 +533,7 @@ mainloop_one(struct state_t &state)
 	//    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	// Just display purple nothingness
-	printf("DEBUG: DRAWING!");
+	U_LOG_E("DEBUG: DRAWING!\n");
 	for (uint32_t eye = 0; eye < 2; eye++) {
 		glViewport(eye * state.width, 0, state.width, state.height);
 		draw(state.framebuffers[imageIndex], state.frame_texture_id);
@@ -652,7 +652,7 @@ android_main(struct android_app *app)
 	XrResult result = xrInitializeLoaderKHR((XrLoaderInitInfoBaseHeaderKHR *)&loaderInfo);
 
 	if (XR_FAILED(result)) {
-		printf("Failed to initialize OpenXR loader");
+		U_LOG_E("Failed to initialize OpenXR loader\n");
 	}
 
 	// Create OpenXR instance
@@ -677,7 +677,7 @@ android_main(struct android_app *app)
 	result = xrCreateInstance(&instanceInfo, &state.instance);
 
 	if (XR_FAILED(result)) {
-		printf("Failed to initialize OpenXR instance");
+		U_LOG_E("Failed to initialize OpenXR instance\n");
 	}
 
 	// OpenXR system
@@ -693,7 +693,7 @@ android_main(struct android_app *app)
 	    xrEnumerateViewConfigurations(state.instance, state.system, 2, &viewConfigurationCount, viewConfigurations);
 
 	if (XR_FAILED(result)) {
-		printf("Failed to enumerate view configurations");
+		U_LOG_E("Failed to enumerate view configurations\n");
 	}
 
 
@@ -708,7 +708,7 @@ android_main(struct android_app *app)
 	                                           XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO, 2, &viewCount, viewInfo);
 
 	if (XR_FAILED(result) || viewCount != 2) {
-		printf("Failed to enumerate view configuration views");
+		U_LOG_E("Failed to enumerate view configuration views\n");
 		return;
 	}
 
@@ -722,13 +722,13 @@ android_main(struct android_app *app)
 
 	struct xrt_frame_context xfctx = {};
 	struct xrt_fs *blah = vf_fs_videotestsource(&xfctx, &state);
-	printf("Done creating videotestsrc");
+	U_LOG_E("Done creating videotestsrc\n");
 
-	printf("Starting source");
+	U_LOG_E("Starting source\n");
 
 	// FIXME: Eventually completely remove XRT_FS dependency here for driving the gst pipeline look
 	xrt_fs_stream_start(blah, &state.frame_sink, XRT_FS_CAPTURE_TYPE_TRACKING, 0);
-	printf("Done starting source");
+	U_LOG_E("Done starting source\n");
 
 	// OpenXR session
 
@@ -748,7 +748,7 @@ android_main(struct android_app *app)
 	result = xrCreateSession(state.instance, &sessionInfo, &state.session);
 
 	if (XR_FAILED(result)) {
-		printf("Failed to create OpenXR session (%d)", result);
+		U_LOG_E("Failed to create OpenXR session (%d)\n", result);
 	}
 
 	// OpenXR swapchain
@@ -766,7 +766,7 @@ android_main(struct android_app *app)
 	result = xrCreateSwapchain(state.session, &swapchainInfo, &state.swapchain);
 
 	if (XR_FAILED(result)) {
-		printf("Failed to create OpenXR swapchain (%d)", result);
+		U_LOG_E("Failed to create OpenXR swapchain (%d)\n", result);
 	}
 
 	for (uint32_t i = 0; i < 4; i++) {
@@ -776,7 +776,7 @@ android_main(struct android_app *app)
 	xrEnumerateSwapchainImages(state.swapchain, 4, &state.imageCount, (XrSwapchainImageBaseHeader *)state.images);
 
 	if (XR_FAILED(result)) {
-		printf("Failed to get swapchain images (%d)", result);
+		U_LOG_E("Failed to get swapchain images (%d)\n", result);
 	}
 
 	glGenFramebuffers(state.imageCount, state.framebuffers);
@@ -796,23 +796,25 @@ android_main(struct android_app *app)
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, state.images[i].image, 0);
 		GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
 		if (status != GL_FRAMEBUFFER_COMPLETE) {
-			printf("Failed to create framebuffer (%d)", status);
+			U_LOG_E("Failed to create framebuffer (%d)\n", status);
 		}
 	}
 
 
-	printf("DEBUG: Create spaces");
+	U_LOG_E("DEBUG: Create spaces\n");
 	create_spaces(state);
 
-	printf("DEBUG: Setup Render");
+	U_LOG_E("DEBUG: Setup Render\n");
 	setupRender();
 
-	printf("DEBUG: Really make socket");
+    eglMakeCurrent(state.display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+
+	U_LOG_E("DEBUG: Really make socket\n");
 	really_make_socket(state);
 
 
 	// Mainloop
-	printf("DEBUG: Starting main loop.");
+	U_LOG_E("DEBUG: Starting main loop.\n");
 	while (!app->destroyRequested) {
 		mainloop_one(state);
 	}
