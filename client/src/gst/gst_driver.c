@@ -717,6 +717,25 @@ out:
 // need, and finding the plugin name it corresponds to in the sidebar. Some of them (libav is an example) don't
 // correspond 1:1 in the names in the sidebar, so guessing as well as `find deps/gstreamer_android | grep <name>` helps.
 
+
+// THE BELOW IS NICE FOR TESTING WITH THE ALTERNATIVE PIPELINE
+// THE ONE WITH WEBRTCBIN ! APPSINK. TO MAKE SURE OUR WEBRTCBIN COMPONENT RECEIVES.. ANYTHING.
+static GstFlowReturn
+new_sample_cb(GstElement *appsink, gpointer data)
+{
+    g_autoptr(GstSample) sample = gst_app_sink_pull_sample(GST_APP_SINK(appsink));
+    U_LOG_E("YO: New sample %" GST_PTR_FORMAT "\n", sample);
+    return GST_FLOW_OK;
+}
+
+
+// FOR RYAN : This is needed for all the GST_PLUGIN_STATIC_REGISTER
+// counterparts below to work. Macro gstreamer code to easily declare
+// and register all of the static plugins below. NOTE: ALL those
+// might NOT be required, but that's what Moshi initially registered
+// and I haven't had the time to check which were indeed requested
+// for the gstreamer pipeline we're creating below.
+
 GST_PLUGIN_STATIC_DECLARE(app); // Definitely needed
 GST_PLUGIN_STATIC_DECLARE(autodetect); // Definitely needed
 GST_PLUGIN_STATIC_DECLARE(coreelements);
@@ -726,33 +745,55 @@ GST_PLUGIN_STATIC_DECLARE(rtpmanager);
 GST_PLUGIN_STATIC_DECLARE(sctp);
 GST_PLUGIN_STATIC_DECLARE(srtp);
 GST_PLUGIN_STATIC_DECLARE(dtls);
-
-//GST_PLUGIN_STATIC_DECLARE(usrsctp);
 GST_PLUGIN_STATIC_DECLARE(videoparsersbad);
 GST_PLUGIN_STATIC_DECLARE(webrtc);
 GST_PLUGIN_STATIC_DECLARE(androidmedia);
 GST_PLUGIN_STATIC_DECLARE(opengl);
-
 GST_PLUGIN_STATIC_DECLARE(videotestsrc); // Definitely needed
 GST_PLUGIN_STATIC_DECLARE(videoconvertscale);
 GST_PLUGIN_STATIC_DECLARE(overlaycomposition);
-
 GST_PLUGIN_STATIC_DECLARE(playback); // "FFMPEG "
 // GST_PLUGIN_STATIC_DECLARE(webrtcnice);
 
+// FOR RYAN:
+// So we've successfully established a connection with the Server. (By the way,
+// This has all been tested working on the Quest2). Of course, test this with your
+// quest2 CONNECTED to laptop with USBc **and** CONNECTED TO THE SAME WIFI as your
+// laptop ! :) . the signalling happens locally on 127.0.0.1 , but the ICE handshake
+// (offers and candidates) will suggest a webrtc connection surely living on some
+// 192.168.1.X IP adresses into your local WAN so yeah, be advised.
 static void
 websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 {
     U_LOG_E("Fred : websocket_connected_cb called!\n");
 
+	// FOR RYAN : This is where our gstreamer plugins (especially the very important
+	// "androidmedia" one - which is our hardware decoder on Quest2) get actually
+	// registered and INITITIALIZED. all of them, except androidmedia, are self-
+	// contained, but androidmedia will use JNI to call java classes, notably the
+	// ones you'll find in the deps/gstreamer_android folder :
+	//
+	// deps/gstreamer_android/armv7/share/gst-android/ndk-build/androidmedia/GstAhcCallback.java
+	// deps/gstreamer_android/armv7/share/gst-android/ndk-build/androidmedia/GstAhsCallback.java
+	// deps/gstreamer_android/armv7/share/gst-android/ndk-build/androidmedia/GstAmcOnFrameAvailableListener.java
+	//
+	// so when integrating to PlutosphereOXR, please add those 3 java code to the project and
+	// build as packaged UNDER the gstreamer.java package (explained in main.cpp) as :
+	//
+	// package: org.freedesktop.gstreamer.androidmedia
+	// if properly built and integrated to your project, the below error message should NOT
+	// be seen when gstreamer pipeline get STARTED and webrtc ICE is established :
+	/* ERROR  [00m [00;04m             default gstjniutils.c:840:gst_amc_jni_get_application_class:[00m FRED: attempting to retrieve class org/freedesktop/gstreamer/androidmedia/GstAmcOnFrameAvailableListener
+	2023-06-23 16:59:35.624  6433-6465  meow meow  com...ovr.plutosphere.webrtc_client  D  ** (<unknown>:6433): CRITICAL **: 13:59:35.624: gst_amc_jni_object_local_unref: assertion 'object != NULL' failed
+	2023-06-23 16:59:35.624  6433-6465  meow meow  com...ovr.plutosphere.webrtc_client  D  ** (<unknown>:6433): CRITICAL **: 13:59:35.624: gst_amc_jni_object_local_unref: assertion 'object != NULL' failed
+	2023-06-23 16:59:35.625  6433-6465  meow meow  com...ovr.plutosphere.webrtc_client  D  0:00:02.415697812 [32m 6433[00m   0x7ba2308460 [31;01mERROR  [00m [00;04m             default gstamcsurfacetexture-jni.c:345:gst_amc_surface_texture_jni_set_on_frame_available_callback:[00m Could not create listener: Could not retrieve application class loader
+	2023-06-23 16:59:35.625  6433-6465  meow meow  com...ovr.plutosphere.webrtc_client  D  0:00:02.415738281 [32m 6433[00m   0x7ba2308460 [33;01mWARN   [00m [00m         amcvideodec gstamcvideodec.c:2010:gst_amc_video_dec_set_format:<amcvideodec-omxqcomvideodecoderavc0>[00m error: Could not retrieve application class loader*/
 GST_PLUGIN_STATIC_REGISTER(app); // Definitely needed
 GST_PLUGIN_STATIC_REGISTER(autodetect); // Definitely needed
 GST_PLUGIN_STATIC_REGISTER(coreelements);
 GST_PLUGIN_STATIC_REGISTER(nice);
 GST_PLUGIN_STATIC_REGISTER(rtp);
 GST_PLUGIN_STATIC_REGISTER(rtpmanager);
-
-//GST_PLUGIN_STATIC_REGISTER(usrsctp);
 GST_PLUGIN_STATIC_REGISTER(sctp);
 GST_PLUGIN_STATIC_REGISTER(srtp);
 GST_PLUGIN_STATIC_REGISTER(dtls);
@@ -760,11 +801,9 @@ GST_PLUGIN_STATIC_REGISTER(videoparsersbad);
 GST_PLUGIN_STATIC_REGISTER(webrtc);
 GST_PLUGIN_STATIC_REGISTER(androidmedia);
 GST_PLUGIN_STATIC_REGISTER(opengl);
-
 GST_PLUGIN_STATIC_REGISTER(videotestsrc); // Definitely needed
 GST_PLUGIN_STATIC_REGISTER(videoconvertscale);
 GST_PLUGIN_STATIC_REGISTER(overlaycomposition);
-
 GST_PLUGIN_STATIC_REGISTER(playback); // "FFMPEG "
 // GST_PLUGIN_STATIC_REGISTER(webrtcnice);
 
@@ -789,13 +828,19 @@ GST_PLUGIN_STATIC_REGISTER(playback); // "FFMPEG "
 
 
         gchar *pipeline_string = g_strdup_printf(
-				"webrtcbin name=webrtc bundle-policy=max-bundle ! rtph264depay ! amcviddec-omxqcomvideodecoderavc ! "
-                "glsinkbin name=glsink");
+			"webrtcbin name=webrtc bundle-policy=max-bundle ! rtph264depay ! h264parse ! video/x-h264,stream-format=(string)byte-stream, alignment=(string)au,parsed=(boolean)true !"
+            "amcviddec-omxqcomvideodecoderavc ! glsinkbin name=glsink");
 
-		printf("launching pipeline\n");
+// THIS IS THE TEST PIPELINE FOR TESTING WITH APPSINK AT VARIOUS PHASES OF THE PIPELINE AND
+// SEE IF YOU GET SAMPLES WITH THE BELOW g_signal_connect(..., new_sample_cb) signal.
+// for example, for testing that the h264parser gives you stuff :
+//                "webrtcbin name=webrtc bundle-policy=max-bundle ! rtph264depay ! h264parse ! appsink name=appsink");
+
         if (NULL == vid) {
-            U_LOG_E("FRED: NULL VID");
+            U_LOG_E("FRED: OH ! NULL VID - this shouldn't happen !");
         }
+
+        printf("launching pipeline\n");
 		vid->pipeline = gst_parse_launch(pipeline_string, &error);
 		if (vid->pipeline == NULL) {
 			U_LOG_E("FRED: Failed creating pipeline : Bad source");
@@ -808,8 +853,7 @@ GST_PLUGIN_STATIC_REGISTER(playback); // "FFMPEG "
 		webrtcbin = gst_bin_get_by_name(GST_BIN(vid->pipeline), "webrtc");
         g_signal_connect(webrtcbin, "on-ice-candidate", G_CALLBACK(webrtc_on_ice_candidate_cb), NULL);
 
-        //E_LOG_E("DEBUG: display=%p, surface=%p, ");
-        // We'll need and active egl context below
+        // We'll need and active egl context below before setting up gstgl (as explained previously)
         U_LOG_E("FRED: websocket_connected_cb: Trying to get the EGL lock");
         os_mutex_lock(&vid->state->egl_lock);
         U_LOG_E("FRED : make current display=%i, surface=%i, context=%i", (int)vid->state->display, (int)vid->state->surface, (int)vid->state->context);
@@ -817,95 +861,62 @@ GST_PLUGIN_STATIC_REGISTER(playback); // "FFMPEG "
 			U_LOG_E("FRED: websocket_connected_cb: Failed make egl context current");
 		}
 
+        // Important gstgl (opengl gstreamer plugin) considerations for the glsinkbin sink.
+        // There is a very good example of a very similar project using gstreamer opengl
+        // for the MagicLeap backend. You may read and inspire yourself.:
+        //
+        // https://gitlab.freedesktop.org/xclaesse/gstreamer_demo/-/blob/master/VideoScene.cpp
+        //
         GstGLPlatform gl_platform = GST_GL_PLATFORM_EGL;
         guintptr gl_handle = gst_gl_context_get_current_gl_context(gl_platform);
         GstGLAPI gl_api = gst_gl_context_get_current_gl_api(gl_platform, NULL, NULL);
         vid->gst_gl_display = g_object_ref_sink(gst_gl_display_new());
-        vid->other_context = g_object_ref_sink(gst_gl_context_new_wrapped(
-                vid->gst_gl_display, gl_handle, gl_platform, gl_api));
+        vid->other_context = g_object_ref_sink(gst_gl_context_new_wrapped(vid->gst_gl_display, gl_handle, gl_platform, gl_api));
 
+        // We convert the string SINK_CAPS above into a GstCaps that elements below can understand.
+        // the "video/x-raw(" GST_CAPS_FEATURE_MEMORY_GL_MEMORY ")," part of the caps is read :
+        // video/x-raw(memory:GLMemory) and is really important for getting zero-copy gl textures.
+        // It tells the pipeline (especially the decoder) that an internal android:Surface should
+        // get created internally (using the provided gstgl contexts above) so that the appsink
+        // can basically pull the samples out using an GLConsumer (this is just for context, as
+        // all of those constructs will be hidden from you, but are turned on by that CAPS).
         g_autoptr(GstCaps) caps = gst_caps_from_string(SINK_CAPS);
+
+        // THIS SHOULD BE UNCOMMENTED ONLY WHEN TURNING THE TEST PIPELINE ON ABOVE
+        /*vid->appsink = gst_bin_get_by_name(GST_BIN(vid->pipeline), "appsink");
+        gst_app_sink_set_emit_signals(GST_APP_SINK(vid->appsink), TRUE);
+        g_signal_connect(vid->appsink, "new-sample", G_CALLBACK(new_sample_cb), NULL);*/
+
+        // THIS SHOULD BE COMMENTED WHEN TURNING THE TEST PIPELINE
+		// FRED: We create the appsink 'manually' here because glsink's ALREADY a sink and so if we stick glsinkbin ! appsink
+		//       in our pipeline_string for automatic linking, gst_parse will NOT like this, as glsinkbin (a sink) cannot
+		//       link to anything upstream (appsink being 'another' sink). So we manually link them below using glsinkbin's
+		//       'sink' pad -> appsink.
         vid->appsink = gst_element_factory_make("appsink", NULL);
         g_object_set(vid->appsink, "caps", caps, NULL);
-
         g_autoptr(GstElement) glsinkbin = gst_bin_get_by_name(vid->pipeline, "glsink");
         g_object_set(glsinkbin, "sink", vid->appsink, NULL);
 
         g_autoptr(GstBus) bus = gst_element_get_bus(vid->pipeline);
         gst_bus_set_sync_handler(bus, bus_sync_handler_cb, vid, NULL);
+        gst_bus_add_watch(bus, gst_bus_cb, vid->pipeline);
+        g_object_unref(bus);
 
+        // FOR RYAN : We are STARTING the pipeline. From this point forth, if built with
+        // GST_DEBUG=*:6, you should see LOADS of GST output, including the webrtc negotiation.
         gst_element_set_state(vid->pipeline, GST_STATE_PLAYING);
-
-        //setup_sink(vid);
 
         // FIXME: Implement this when implementing data channel
 		// g_signal_connect(webrtcbin, "on-data-channel", G_CALLBACK(webrtc_on_data_channel_cb), NULL);
 
-		//bus = gst_element_get_bus(vid->pipeline);
-		gst_bus_add_watch(bus, gst_bus_cb, vid->pipeline);
-		gst_clear_object(&bus);
-
 		vid->is_running = TRUE;
+
+        // And we unCurrent the egl context.
         eglMakeCurrent(vid->state->display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
         U_LOG_E("FRED: websocket_connected: releasing the EGL lock");
         os_mutex_unlock(&vid->state->egl_lock);
 	}
 }
-
-#if 0
-int
-blah(int argc, char *argv[])
-{
-	GOptionContext *option_context;
-	GMainLoop *loop;
-	SoupSession *soup_session;
-	GError *error = NULL;
-
-	gst_init(&argc, &argv);
-
-	option_context = g_option_context_new(NULL);
-	g_option_context_add_main_entries(option_context, options, NULL);
-
-	if (!g_option_context_parse(option_context, &argc, &argv, &error)) {
-		U_LOG_E("option parsing failed: %s\n", error->message);
-		exit(1);
-	}
-
-	if (!websocket_uri) {
-		websocket_uri = g_strdup(WEBSOCKET_URI_DEFAULT);
-	}
-
-	soup_session = soup_session_new();
-
-#ifdef PL_LIBSOUP2
-	soup_session_websocket_connect_async(soup_session,                                     // session
-	                                     soup_message_new(SOUP_METHOD_GET, websocket_uri), // message
-	                                     NULL,                                             // origin
-	                                     NULL,                                             // protocols
-	                                     NULL,                                             // cancellable
-	                                     websocket_connected_cb,                           // callback
-	                                     NULL);                                            // user_data
-
-#else
-	soup_session_websocket_connect_async(soup_session,                                     // session
-	                                     soup_message_new(SOUP_METHOD_GET, websocket_uri), // message
-	                                     NULL,                                             // origin
-	                                     NULL,                                             // protocols
-	                                     0,                                                // io_prority
-	                                     NULL,                                             // cancellable
-	                                     websocket_connected_cb,                           // callback
-	                                     NULL);                                            // user_data
-
-#endif
-
-	loop = g_main_loop_new(NULL, FALSE);
-	g_unix_signal_add(SIGINT, sigint_handler, loop);
-
-	g_main_loop_run(loop);
-	g_main_loop_unref(loop);
-	g_clear_pointer(&websocket_uri, g_free);
-}
-#endif
 
 /*
  *
@@ -1028,6 +1039,7 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 
     U_LOG_E("FRED: alloc_and_init_common\n");
 
+	// FOR RYAN: We'll need this thread/mainloop for the websocket cb to fire below.
 	int ret = os_thread_helper_init(&vid->play_thread);
 	if (ret < 0) {
 		VF_ERROR(vid, "ERROR: Failed to init thread");
@@ -1036,7 +1048,6 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 		return NULL;
 	}
 
-	// FIXME: is this needed ?
 	vid->loop = g_main_loop_new(NULL, FALSE);
 
 	GOptionContext *option_context;
@@ -1057,6 +1068,9 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 
 	soup_session = soup_session_new();
 
+	// FOR RYAN : We're using libsoup here to create our websocket session. We're starting the thread herebelow
+	// on play_thread . You might wanna change how it's handled, but basically it's needed for
+	// websocket_connected_cb to fire when the connected's made. and that's where code flows continues...
 #ifdef PL_LIBSOUP2
     U_LOG_E("FRED: calling soup_session_websocket_connect_async. websocket_uri = %s\n", websocket_uri);
 	soup_session_websocket_connect_async(soup_session,                                     // session
@@ -1077,6 +1091,7 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 		return NULL;
 	}
 
+	// Again, this is all vf_fs (frameserver) stuff and might get ditched at some point.
 	vid->base.enumerate_modes = vf_fs_enumerate_modes;
 	vid->base.configure_capture = vf_fs_configure_capture;
 	vid->base.stream_start = vf_fs_stream_start;
@@ -1099,16 +1114,59 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 	return &(vid->base);
 }
 
+// FOR RYAN : This is our entry point in the gst "Driver", a fancy way of saying
+// we're entering C land. (take a look at gst_common.h's Extern "C" guarding
+// declaration of this function when included from main.cpp.
 struct xrt_fs *
 vf_fs_gst_pipeline(struct xrt_frame_context *xfctx, struct state_t *state)
 {
-	gst_init(0, NULL);
+	// FOR RYAN: The below JNI_OnLoad call MUST NOT be called !! It's just
+	// a hint to tell you how gstreamer will get inited from an Java/Native android app
+	// such as PlutosphereOXR (not the case here).
+	// In the case of PlutosphereOXR, libgstreamer-1.0 will HAVE to be linked as a SHARED
+	// library (it's the case here, look into one of the CMakeLists.txt I have and you will
+	// have to LOAD that library from Java (like from main activity's OnCreate() function)
+	// with the below call :
+	//
+	// System.LoadLibrary(gstreamer-1.0)
+	//
+	// This LoadLibrary function will internally call the library's JNI_OnLoad(...) function
+	// that will register all the JNI native functions so that you can thereafter use the
+	// gstreamer's androidmedia plugin that makes use of JNI calls internally.
+	//
+	// For more context, read important documentation about this here :
+	// https://developer.android.com/training/articles/perf-jni#native-libraries
+	//
+	// IMPORTANT :
+	// When Calling System.LoadlLibrary(...) however, internal JNI code will try to
+	// retrieve some Java classes throught he Java Loader..and those classes as defined
+	// in GStreamer.java that you'll find in the gstreamer_android folder (under deps/)
+	// It's important that you ADD that GStreamer.java code to your project as a new
+	// org.freedesktop.gstreamer package for it to be "findable" by the libgstreamer-1.0
+	// loader.
+
+    //DO NOT CALL THIS : JNI_OnLoad(state->java_vm, NULL);
+
+	// gst init. Make sure this gets calls AFTER Java-side System.LoadLibrary(gstreamer-1.0)
+    gst_init(0, NULL);
+
+	// This "might" be optional in Plutosphere Integration, but I would probably
+	// start by KEEPING it, it's a convenient call that GIVES the current Java VM to the
+	// Androidmedia plugin (amc = androidmediacodec) so it DOES NOT have to deal with the
+	// InvocationAPI internally when initializing and can just safely rely on the JavaVM
+	// we've given it.
+	// for more context, see amc gstreamer code :
+	// https://github.com/GStreamer/gst-plugins-bad/blob/master/sys/androidmedia/gstamc.c
+	// and here is what it's doing with the provided JAVA VM :
+	// https://github.com/GStreamer/gst-plugins-bad/blob/master/sys/androidmedia/gstjniutils.c#L783
     gst_amc_jni_set_java_vm(state->java_vm);
 
-	g_print("meow");
+    g_print("meow");
 
+	// The below calls are probably useless.. remnant of rhte xrt deps.
 	enum xrt_format format = XRT_FORMAT_R8G8B8A8;
 	enum xrt_stereo_format stereo_format = XRT_STEREO_FORMAT_NONE;
 
+	// Actually init gst plugins and create gstreamer pipeline !!
 	return alloc_and_init_common(xfctx, state, format, stereo_format);
 }
