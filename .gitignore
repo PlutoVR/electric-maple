@@ -9,7 +9,6 @@ out/
 
 cmake-build-*/
 build/
-deps/
 
 CMakeSettings.json
 

@@ -1,0 +1,245 @@
+From 99a3420387b5d525e7681038b05c94a74ffb0166 Mon Sep 17 00:00:00 2001
+From: Frederic Plourde <frederic.plourde@collabora.com>
+Date: Sun, 11 Jun 2023 21:18:13 -0400
+Subject: [PATCH] FIXES FOR PROPER AMC INITIALIZATION
+
+---
+ .../gst-android-hardware-camera.c             | 17 +++--
+ sys/androidmedia/gstamc.c                     |  8 +-
+ sys/androidmedia/gstjniutils.c                | 75 +++++++++++--------
+ 3 files changed, 61 insertions(+), 39 deletions(-)
+
+diff --git a/sys/androidmedia/gst-android-hardware-camera.c b/sys/androidmedia/gst-android-hardware-camera.c
+index a8497c6..87da670 100644
+--- a/sys/androidmedia/gst-android-hardware-camera.c
++++ b/sys/androidmedia/gst-android-hardware-camera.c
+@@ -960,7 +960,10 @@ _init_classes (void)
+         gst_amc_jni_object_make_global (env, local);
+   }
+ 
+-  fieldID =
++// This field 'EFFECT_SKETCH' WAS NOT PRESENT FOR ME ???? and so trying
++// To load this was considered a FATAL :(  Please don't waste time on
++// This and maybe check later with Xavier Or Olivier Crete.
++/*  fieldID =
+       gst_amc_jni_get_static_field_id (env, &err, klass, "EFFECT_EMBOSS",
+       "Ljava/lang/String;");
+   if (fieldID) {
+@@ -977,13 +980,17 @@ _init_classes (void)
+       android_hardware_camera_parameters.EFFECT_EMBOSS =
+           gst_amc_jni_object_make_global (env, local);
+     }
+-  } else {
++  } else {*/
+     android_hardware_camera_parameters.EFFECT_EMBOSS = NULL;
+-  }
++//  }
+ 
+-  fieldID =
++// This field 'EFFECT_SKETCH' WAS NOT PRESENT FOR ME ???? and so trying
++// To load this was considered a FATAL :(  Please don't waste time on
++// This and maybe check later with Xavier Or Olivier Crete.
++/*  fieldID =
+       gst_amc_jni_get_static_field_id (env, &err, klass, "EFFECT_SKETCH",
+       "Ljava/lang/String;");
++
+   if (fieldID) {
+     if (!gst_amc_jni_get_static_object_field (env, &err, klass, fieldID,
+             &android_hardware_camera_parameters.EFFECT_SKETCH))
+@@ -1000,7 +1007,7 @@ _init_classes (void)
+     }
+   } else {
+     android_hardware_camera_parameters.EFFECT_SKETCH = NULL;
+-  }
++//  }
+ 
+   fieldID =
+       gst_amc_jni_get_static_field_id (env, &err, klass, "EFFECT_NEON",
+diff --git a/sys/androidmedia/gstamc.c b/sys/androidmedia/gstamc.c
+index f72fd83..610906b 100644
+--- a/sys/androidmedia/gstamc.c
++++ b/sys/androidmedia/gstamc.c
+@@ -1726,7 +1726,7 @@ register_codecs (GstPlugin * plugin)
+     gint i;
+     gint n_types;
+ 
+-    GST_DEBUG ("Registering codec '%s'", codec_info->name);
++    GST_ERROR ("FRED: TRYING TO Register codec '%s'", codec_info->name);
+     for (i = 0; i < codec_info->n_supported_types; i++) {
+       GstAmcCodecType *codec_type = &codec_info->supported_types[i];
+ 
+@@ -1818,6 +1818,8 @@ register_codecs (GstPlugin * plugin)
+         rank = GST_RANK_MARGINAL;
+       }
+ 
++      GST_ERROR ("FRED: REGISTERING AMC ELEMENT '%s'", element_name);
++
+       ret |= gst_element_register (plugin, element_name, rank, subtype);
+       g_free (element_name);
+ 
+@@ -1908,7 +1910,7 @@ ahs_init (GstPlugin * plugin)
+ #endif
+ 
+ static gboolean
+-plugin_init (GstPlugin * plugin)
++plugin_init (GstPlugin * plugin, gpointer user_data)
+ {
+   gboolean init_ok = FALSE;
+ 
+@@ -1930,6 +1932,8 @@ plugin_init (GstPlugin * plugin)
+     init_ok = TRUE;
+ #endif
+ 
++  GST_ERROR ("FRED: AMC PROPERLY INITED !!!");
++
+   return init_ok;
+ }
+ 
+diff --git a/sys/androidmedia/gstjniutils.c b/sys/androidmedia/gstjniutils.c
+index 219268c..abfa949 100644
+--- a/sys/androidmedia/gstjniutils.c
++++ b/sys/androidmedia/gstjniutils.c
+@@ -144,9 +144,12 @@ gst_amc_jni_get_static_field_id (JNIEnv * env, GError ** err, jclass klass,
+ 
+   ret = (*env)->GetStaticFieldID (env, klass, name, type);
+   if ((*env)->ExceptionCheck (env) || !ret) {
+-    gst_amc_jni_set_error (env, err, GST_LIBRARY_ERROR,
++    // FIXME: For now, let's NOT error on this. as :
++    // java.lang.NoSuchFieldError: no \"Ljava/lang/String;\" field \"EFFECT_SKETCH\" in class \"Landroid/hardware/Camera$Parameters;\" or its superclasses  seems acceptable
++    (*env)->ExceptionClear (env);
++    /*gst_amc_jni_set_error (env, err, GST_LIBRARY_ERROR,
+         GST_LIBRARY_ERROR_FAILED, "Failed to get static field ID %s (%s)", name,
+-        type);
++        type);*/
+   }
+   return ret;
+ }
+@@ -609,13 +612,16 @@ check_application_class_loader (void)
+ 
+   module = g_module_open (NULL, G_MODULE_BIND_LOCAL);
+   if (!module) {
++    GST_ERROR ("FRED, ERROR: could not open G_MODULE_BIND_LOCAL");
+     return FALSE;
+   }
+   if (!g_module_symbol (module, "gst_android_get_application_class_loader",
+           (gpointer *) & get_class_loader)) {
++    GST_ERROR ("FRED: ERROR, could not find symbol gst_android_get_application_class_loader");
+     ret = FALSE;
+   }
+ 
++  GST_ERROR ("FRED: YES: application_class_loader retrieved : %p", get_class_loader);
+   g_module_close (module);
+ 
+   return ret;
+@@ -639,7 +645,7 @@ gst_amc_jni_initialize_java_vm (void)
+   gint ret;
+ 
+   if (java_vm) {
+-    GST_DEBUG ("Java VM already provided by the application");
++    GST_ERROR ("FRED !!! Java VM already provided by the application");
+     return initialize_classes ();
+   }
+ 
+@@ -657,45 +663,50 @@ gst_amc_jni_initialize_java_vm (void)
+    * VM on our own without using private C++ API!
+    */
+   if (!check_nativehelper ()) {
+-    GST_ERROR ("Can't safely check for VMs or start a VM");
++    GST_ERROR ("FRED: ERROR: Can't safely check for VMs or start a VM. JavaVM SHOULD have been passed here via a a call to gst_amc_jni_set_java_vm() from the APP !");
+     return FALSE;
+   }
+ 
+   if (!load_java_module (NULL)) {
+-    if (!load_java_module ("libdvm"))
++    if (!load_java_module ("libart"))
+       return FALSE;
+   }
+ 
+   n_vms = 0;
+-  if ((ret = get_created_java_vms (&java_vm, 1, &n_vms)) != JNI_OK)
++  if ((ret = get_created_java_vms (&java_vm, 1, &n_vms)) != JNI_OK) {
++    GST_ERROR ("Could NOT getCreatedJavaVMs");
+     goto get_created_failed;
++  }
+ 
+   if (n_vms > 0) {
+     GST_DEBUG ("Successfully got existing Java VM %p", java_vm);
+-  } else if (create_java_vm) {
+-    JNIEnv *env;
+-    JavaVMInitArgs vm_args;
+-    JavaVMOption options[4];
+-
+-    GST_DEBUG ("Found no existing Java VM, trying to start one");
+-
+-    options[0].optionString = "-verbose:jni";
+-    options[1].optionString = "-verbose:gc";
+-    options[2].optionString = "-Xcheck:jni";
+-    options[3].optionString = "-Xdebug";
+-
+-    vm_args.version = JNI_VERSION_1_4;
+-    vm_args.options = options;
+-    vm_args.nOptions = 4;
+-    vm_args.ignoreUnrecognized = JNI_TRUE;
+-    if ((ret = create_java_vm (&java_vm, &env, &vm_args)) != JNI_OK)
+-      goto create_failed;
+-    GST_DEBUG ("Successfully created Java VM %p", java_vm);
+-
+-    started_java_vm = TRUE;
+   } else {
+-    GST_ERROR ("JNI_CreateJavaVM not available");
+-    java_vm = NULL;
++    GST_ERROR ("Got 0 CreatedJavaVMs");
++    if (create_java_vm) {
++      JNIEnv *env;
++      JavaVMInitArgs vm_args;
++      JavaVMOption options[4];
++
++      GST_DEBUG ("Found no existing Java VM, trying to start one");
++
++      options[0].optionString = "-verbose:jni";
++      options[1].optionString = "-verbose:gc";
++      options[2].optionString = "-Xcheck:jni";
++      options[3].optionString = "-Xdebug";
++
++      vm_args.version = JNI_VERSION_1_4;
++      vm_args.options = options;
++      vm_args.nOptions = 4;
++      vm_args.ignoreUnrecognized = JNI_TRUE;
++      if ((ret = create_java_vm (&java_vm, &env, &vm_args)) != JNI_OK)
++        goto create_failed;
++      GST_DEBUG ("Successfully created Java VM %p", java_vm);
++
++      started_java_vm = TRUE;
++    } else {
++      GST_ERROR ("JNI_CreateJavaVM not available");
++      java_vm = NULL;
++    }
+   }
+ 
+   if (java_vm == NULL)
+@@ -782,7 +793,7 @@ gst_amc_jni_initialize_internal (gpointer data)
+ void
+ gst_amc_jni_set_java_vm (JavaVM * vm)
+ {
+-  GST_DEBUG ("Application provides Java VM %p", vm);
++  GST_ERROR ("FRED: Application provides Java VM %p", vm);
+   java_vm = vm;
+ }
+ 
+@@ -826,11 +837,11 @@ gst_amc_jni_get_application_class (JNIEnv * env, const gchar * name,
+   jclass class_loader_cls = NULL;
+   jmethodID load_class_id = 0;
+ 
+-  GST_LOG ("attempting to retrieve class %s", name);
++  GST_ERROR ("FRED: attempting to retrieve class %s", name);
+ 
+   if (!get_class_loader) {
+     g_set_error (err, GST_LIBRARY_ERROR, GST_LIBRARY_ERROR_FAILED,
+-        "Could not retrieve application class loader function");
++        "Could not retrieve application class loader function =  %p", get_class_loader);
+     goto done;
+   }
+ 
+-- 
+2.34.1
+
