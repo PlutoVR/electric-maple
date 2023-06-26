@@ -24,6 +24,9 @@
 #include <android/log.h>
 #include <GLES2/gl2ext.h>
 
+// FOR RYLIE: The below is one of those deps to monado that
+// still exist in current code. Eventually, would be nice
+// to remove the monado dep completely on client side.
 #include "os/os_threading.h"
 
 static int pfd[2];
@@ -44,7 +47,7 @@ thread_func(void *)
 	return 0;
 }
 
-// For seeing our U_LOG_E appear in LOGCAT :)
+// FOR RYLIE: For seeing our U_LOG_E appear in LOGCAT :)
 int
 start_logger(const char *app_name)
 {
@@ -66,8 +69,13 @@ start_logger(const char *app_name)
 	return 0;
 }
 
+// FOR RYLIE: This is a general state var shared accross both c++ and C sides
+// Take a look at gst_common.h...There's also 'vid' that's shared. eventually
+// merge state and vid into one single struct.
 static state_t state = {};
 
+// FOR RYLIE: THE APP_CMD_ START/RESUME will not fire if quest2 is NOT worn
+// unless the proper dev params on the headset have been set (haven't done that).
 static void
 onAppCmd(struct android_app *app, int32_t cmd)
 {
@@ -82,8 +90,11 @@ onAppCmd(struct android_app *app, int32_t cmd)
 	}
 }
 
-// FIXME: This below is a remnant of xrt_fs usage.
-//        in time, completely get rid of monado for that.
+// FOR RYLIE: The below is a remnant of xrt_fs usage (monado-provide "frame-server)
+//           in time, completely get rid of monado since the below's not used.
+//           what is now pushing the frame is gstsl in the glsinkbin gstreamer
+//           element, and it's making the frames available as gl textures directly.
+//           No need to deal with GstBuffer as it's done in the monado frameserver part.
 void
 sink_push_frame(struct xrt_frame_sink *xfs, struct xrt_frame *xf)
 {
@@ -102,6 +113,21 @@ sink_push_frame(struct xrt_frame_sink *xfs, struct xrt_frame *xf)
 	U_LOG_E("Called! %d %p %u %u %zu", st->frame_texture_id, xf->data, xf->width, xf->height, xf->stride);
 }
 
+// FOR RYLIE : The function was use by Moshi to render "something" on app start.
+//            mainly for making sure the renderer (implemented in Render.cpp) was
+//            working. In your case, when integrating to PlutosphereOXR, you're
+//            probably going to have to rework the whole renderer part. You'll still
+//            get a gl texture id when calling gst_app_sink_try_pull_sample(...) below,
+//            but I will let you do the binding on that potentiual quad layer as you
+//            see fit. Just don't forget to check if hw decoder gave you a TEXTURE_EXTERNAL
+//            (and probably not a TEXTURE_2D), which then would require the appropriate
+//            shader-related parameters to sample texture-external :
+//
+//            #extension GL_OES_EGL_image_external : require
+//            precision mediump float;
+//            uniform samplerExternalOES sTextureName;
+//
+//
 void
 writeRandomTexture(GLsizei width, GLsizei height, int way, GLubyte *data)
 {
@@ -160,6 +186,16 @@ writeRandomTexture(GLsizei width, GLsizei height, int way, GLubyte *data)
 	}
 }
 
+// FOR RYLIE: You see that Moshi's initial renderer was assuming Texture 2D with RGBA color format
+//           because that's what monado's "Frameserver" was giving us (extra slow however, with
+//           copies...). In your case when integrating into PlutosphereOXR, you'll be using gstgl's
+//           ability to render decoded frames (YUV) directly onto underlying android::Surface (nested
+//           inside whenever the glsinkbin element's being given the memory:GLMemory CAPS), which will
+//           come out to you when pulling the sample as gl texture IDs that you'll be able to use as
+//           samplers into your glsl shaders for rendering onto a quad (Or ?? pass directly to OpenXR
+//           on a quad layer ?)... and so most of the rendering bits in here, you'll have to leave out
+//           when integrating to Pluto's client app.
+//
 GLuint
 generateRandomTexture(GLsizei width, GLsizei height, int way)
 {
@@ -186,40 +222,18 @@ generateRandomTexture(GLsizei width, GLsizei height, int way)
 	return texture;
 }
 
-
-void
-generateRandomTextureOld(GLsizei width, GLsizei height, int way, GLuint *handle)
-{
-
-
-	// Allocate memory for the texture data
-	GLubyte *data = new GLubyte[width * height * 4];
-
-	writeRandomTexture(width, height, way, data);
-	glBindTexture(GL_TEXTURE_2D, *handle);
-	// This call is definitely what's crashing, which is real confusing.
-	U_LOG_E("%d %d", width, height);
-#if 0
-//    glPixelStorei(GL_UNPACK_ALIGNMENT, 1); // Set to 1 for tightly packed data
-
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
-
-#else
-	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, data);
-
-#endif
-	glBindTexture(GL_TEXTURE_2D, 0);
-
-	// Free the texture data
-	delete[] data;
-}
-
 void
 die_errno()
 {
 	U_LOG_E("Something happened! %s", strerror(errno));
 }
 
+// FOR RYLIE: you'll see, the connexion scheme is a bit complex, in 2 phases since we're
+// dealing with webrtc. There's a "signalling" server, exposed by the server par on
+// 127.0.0.1:8080 to do the "ICE transaction", which basically send an "offer" of possible
+// network interfaces for server and client and finds a matching pair for the webrtc
+// connection/stream between server and client. (This has all been tested working on the
+// quest2 with the webrtc pipeline and ICE callback (mostly implemented in gst_driver.c)
 
 void
 really_make_socket(struct state_t &st)
@@ -250,6 +264,7 @@ really_make_socket(struct state_t &st)
 
 	U_LOG_E("really_make_socket: Result is %d", iResult);
 }
+
 
 
 static void
@@ -324,7 +339,16 @@ create_spaces(struct state_t &st)
 	}
 }
 
-
+// FOR RYLIE: Our main loop on the main app thread. Very important stuff. Also note the
+// very important call to gst_app_sink_try_pull_sample(...) that retrieves the newest
+// sample from the appsink (connected to our glsinkbin end in gst_driver.c). Those are
+// then interpreted as gl texture ids to be bound to egl context.
+//
+// Important note about EGL contexts here. Note that gstgl (glsinkbin) HAS to get created
+// with RENDERING EGL CONTEXT current (that's happening in gst_driver.c when calling
+// gst_gl_context_get_current_gl_context(...). Reason's simple... when gstgl initializes
+// it'll create a SHARED egl context with whatever's current and so pay carefull attention
+// to the eglMakeCurrent here and there.
 void
 mainloop_one(struct state_t &state)
 {
@@ -477,7 +501,8 @@ mainloop_one(struct state_t &state)
 		U_LOG_E("Failed to wait for swapchain image (%d)", result);
 	}
 
-	// FIXME: we're not asking xrfs for a frame, we're checking ourselves with appsink
+	// FOR RYLIE: we're not asking xrfs for a frame, we're checking ourselves what appsink
+	// may have for us. That's why the state.xf logic's been disabled (not needed anymore)
 	// if (state.xf) {
 	U_LOG_E("FRED: mainloop_one: Trying to get the EGL lock");
 	os_mutex_lock(&state.egl_lock);
@@ -485,7 +510,13 @@ mainloop_one(struct state_t &state)
 		U_LOG_E("FRED: mainloop_one: Failed make egl context current");
 	}
 
-	// Get Newest sample from GST appsink
+	// FOR RYLIE : As mentioned, the glsinkbin -> appsink part of the gstreamer pipeline in gst_driver.c
+	// will output "samples" that might be signalled for using "new_sample_cb" in gst_driver (useful for
+	// testing if the gstreamer sink elements are giving us "anything"), but also on which we can "poll"
+	// to see and that's what we do here. Note that the non-try version of the call "gst_app_sink_pull_sample"
+	// WILL BLOCK until there's a sample.
+
+	// Get Newest sample from GST appsink. Waiting 1ms here before giving up (might want to adjust that time)
 	U_LOG_E("DEBUG: Trying to get new gstgl sample, waiting max 1ms\n");
 	g_autoptr(GstSample) sample =
 	    gst_app_sink_try_pull_sample(GST_APP_SINK(state.vid->appsink), (GstClockTime)(1000 * GST_USECOND));
@@ -500,11 +531,10 @@ mainloop_one(struct state_t &state)
 		/*gint width = GST_VIDEO_INFO_WIDTH (&info);
 		gint height = GST_VIDEO_INFO_HEIGHT (&info);*/
 
-		// FIXME: what shall we do with the size ?
+		// FOR RYLIE: Handle resize according to how it's done in PlutosphereOXR
 		/*if (width != state.vid->width || height != state.vid->height) {
 		    vid->width = width;
 		    vid->height = height;
-		    // FIXME: Handle resize
 		}*/
 
 		GstVideoFrame frame;
@@ -530,12 +560,12 @@ mainloop_one(struct state_t &state)
 
 		GstGLSyncMeta *sync_meta = gst_buffer_get_gl_sync_meta(buffer);
 		if (sync_meta) {
-			/* XXX: the set_sync() seems to be needed for resizing */
+			/* MOSHI: the set_sync() seems to be needed for resizing */
 			gst_gl_sync_meta_set_sync_point(sync_meta, state.vid->context);
 			gst_gl_sync_meta_wait(sync_meta, state.vid->context);
 		}
 
-		// FIXME: Might not be necessary !
+		// FIXME: Might not be necessary, since we're polling.
 		// This will make our main renderer pick up and render the gl texture.
 		state.vid->state->frame_available = true;
 
@@ -589,8 +619,6 @@ mainloop_one(struct state_t &state)
 	xrReleaseSwapchainImage(state.swapchain, NULL);
 
 	// Submit frame
-
-
 	XrFrameEndInfo endInfo = {};
 	endInfo.type = XR_TYPE_FRAME_END_INFO;
 	endInfo.displayTime = frameState.predictedDisplayTime;
@@ -659,13 +687,32 @@ getFilePath(JNIEnv *env, jobject activity)
 }
 #endif
 
+// FOR RYLIE : This is our main android app entry point. please note that there is
+// a PROFOUND difference between our webrtc/gstreamer-pipeline test application here
+// and PlutosphereOXR on which you'll have to integrate... The current test app
+// is a NO-JAVA one (AndroidManifest's hasCode=false), whereas PlutosphereOXR
+// is based on a java entrypoint (class MainActivity : NativeActivity() with the
+// onCreate(...) method). Since their app's also making use of native C/C++ code
+// and cmake, you'll be able to integrate most of what you find in here easily
+// but the crux of the integration will be about gstreamer-1.0 and the plugins
+// (especially androidmedia, which makes use of JNI).
+//
+// Read on, you'll see, most of the explanations around integrating libgstreamer-1.0
+// and the plugins is going to be in gst_driver.c.
 void
 android_main(struct android_app *app)
 {
 	start_logger("meow meow");
-	setenv("GST_DEBUG", "*:6", 1);
+
+	// FOR RYLIE : VERY VERY useful for debugging gstreamer.
+	// GST_DEBUG = *:3 will give you ONLY ERROR-level messages.
+	// GST_DEBUG = *:6 will give you ALL messages (make sure you BOOST your android-studio's
+	// Logcat buffer to be able to capture everything gstreamer'S going to spit at you !
+	// in Tools -> logcat -> Cycle Buffer Size (I set it to 102400 KB).
+
+	setenv("GST_DEBUG", "*:3", 1);
 	// setenv("GST_DEBUG", "*ssl*:9,*tls*:9,*webrtc*:9", 1);
-	// setenv("GST_DEBUG", "*CAPS*:6", 1);
+	// setenv("GST_DEBUG", "GST_CAPS:5", 1);
 
 	state.app = app;
 	state.java_vm = app->activity->vm;
@@ -673,11 +720,12 @@ android_main(struct android_app *app)
 	(*app->activity->vm).AttachCurrentThread(&state.jni, NULL);
 	app->onAppCmd = onAppCmd;
 
-	U_LOG_E("FRED: main: Trying to get the EGL lock");
 	os_mutex_init(&state.egl_lock);
+	U_LOG_E("FRED: main: Trying to get the EGL lock");
 	os_mutex_lock(&state.egl_lock);
 	initializeEGL(state);
 
+	// FOR RYLIE : This is a monado's frameserver remnant.
 	state.xf = nullptr;
 
 	// Initialize OpenXR loader
@@ -757,16 +805,17 @@ android_main(struct android_app *app)
 
 	state.frame_texture_id = generateRandomTexture(state.width, state.height, 2);
 
-	// FIXME: This call below is a remnant of xrt_fs usage. That CB is not even called.
+	// FOR RYLIE: This call below is a remnant of xrt_fs usage. That CB is not even called.
 	//        in time, completely get rid of monado for that.
 	state.frame_sink.push_frame = sink_push_frame;
-
 	struct xrt_frame_context xfctx = {};
+
+	// FOR RYLIE: This is where everything gstreamer starts.
 	U_LOG_E("FRED: Creating gst pipeline");
 	struct xrt_fs *blah = vf_fs_gst_pipeline(&xfctx, &state);
 	U_LOG_E("FRED: Done Creating gst pipeline");
 
-	U_LOG_E("FRED: Starting xrt_fs source. Not used, please remove.\n");
+	U_LOG_E("FRED: Starting xrt_fs source. Not used, please remove eventually.\n");
 	// FIXME: Eventually completely remove XRT_FS dependency here for driving the gst pipeline look
 	xrt_fs_stream_start(blah, &state.frame_sink, XRT_FS_CAPTURE_TYPE_TRACKING, 0);
 
@@ -820,6 +869,8 @@ android_main(struct android_app *app)
 		U_LOG_E("ERROR: Failed to get swapchain images (%d)\n", result);
 	}
 
+	// FOR RYLIE: The below framebuffer creation and redering-related calls will have to get
+	// adapted to PlutosphereOXR's reality.
 	U_LOG_E("FRED: Gen and bind gl texture and framebuffers.");
 	glGenFramebuffers(state.imageCount, state.framebuffers);
 
@@ -856,7 +907,7 @@ android_main(struct android_app *app)
 	really_make_socket(state);
 
 
-	// Mainloop
+	// Main rendering loop.
 	U_LOG_E("DEBUG: Starting main loop.\n");
 	while (!app->destroyRequested) {
 		mainloop_one(state);
