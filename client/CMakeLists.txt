@@ -27,6 +27,7 @@ function(setForce NAME VALUE)
 		)
 endfunction()
 
+setforce(XRT_FEATURE_COLOR_LOG OFF)
 setforce(XRT_FEATURE_COMPOSITOR_MAIN OFF)
 setforce(XRT_FEATURE_COMPOSITOR_NULL OFF)
 setforce(XRT_FEATURE_OPENXR OFF)
@@ -71,6 +72,7 @@ setforce(XRT_BUILD_DRIVER_VF OFF)
 setforce(XRT_BUILD_DRIVER_VIVE OFF)
 setforce(XRT_BUILD_DRIVER_WMR OFF)
 setforce(XRT_BUILD_DRIVER_SIMULAVR OFF)
+setforce(XRT_BUILD_DRIVER_STEAMVR_LIGHTHOUSE OFF)
 
 # There is no clean way to disable the prober/builders (as far as I can see?)
 # So we enable one driver so that the legacy builder does not die

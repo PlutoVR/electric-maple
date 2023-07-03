@@ -517,7 +517,7 @@ do_the_thing(struct pluto_compositor *c,
  */
 
 static xrt_result_t
-pluto_compositor_begin_session(struct xrt_compositor *xc, enum xrt_view_type type)
+pluto_compositor_begin_session(struct xrt_compositor *xc, const struct xrt_begin_session_info *info)
 {
 	struct pluto_compositor *c = pluto_compositor(xc);
 	PLUTO_COMP_DEBUG(c, "BEGIN_SESSION");
@@ -854,7 +854,12 @@ pluto_compositor_create_system(pluto_program &pp, struct xrt_system_compositor *
 	readback_extent.height = READBACK_H;
 	readback_extent.width = READBACK_W;
 
-	vk_image_readback_to_xf_pool_create(&c->base.vk, readback_extent, &c->pool, XRT_FORMAT_R8G8B8X8);
+	vk_image_readback_to_xf_pool_create( //
+	    &c->base.vk,                     // vk_bundle
+	    readback_extent,                 // extent
+	    &c->pool,                        // out_pool
+	    XRT_FORMAT_R8G8B8X8,             // xrt_format
+	    VK_FORMAT_R8G8B8A8_UNORM);       // vk_format
 
 	u_var_add_root(c, "Pluto compositor!", 0);
 	u_var_add_sink_debug(c, &c->hackers_debug_sink, "Meow!");
