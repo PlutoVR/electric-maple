@@ -40,8 +40,7 @@
 #define XR_LOAD(fn) xrGetInstanceProcAddr(state.instance, #fn, (PFN_xrVoidFunction *)&fn);
 
 #include "xrt/xrt_frameserver.h"
-// FIXME: set relative path through include-dir
-#include "/home/fredinfinite23/code/PlutoVR/linux-streaming-CLIENT2/monado/src/xrt/auxiliary/gstreamer/gstjniutils.h"
+#include "gstjniutils.h"
 
 struct state_t
 {

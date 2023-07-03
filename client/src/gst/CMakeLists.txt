@@ -2,9 +2,6 @@ add_library(pluto_vf STATIC gst_driver.c)
 target_link_libraries(
 	pluto_vf
 	PRIVATE
-		xrt-interfaces
-		aux_os
-		aux_util
 		${GST_LIBRARIES}
 		#-Wl,--whole-archive ${gstreamer_android_SOURCE_DIR}/arm64/lib/libgstreamer-1.0.a -Wl,--no-whole-archive
 		#${gstreamer_android_SOURCE_DIR}/arm64/lib/libgstreamer-1.0.so
@@ -19,8 +16,11 @@ target_link_libraries(
 		# ${LIBSOUP_LIBRARIES}
 		${JSONGLIB_LIBRARIES}
 		# ${GIO_LIBRARIES}
+	PUBLIC
 		OpenXR::openxr_loader
-		openxr_loader
+		xrt-interfaces
+		aux_os
+		aux_util
 		pluto_proto
 	)
 target_include_directories(
@@ -33,6 +33,5 @@ target_include_directories(
 		${LIBSOUP_INCLUDE_DIRS}
 		${JSONGLIB_INCLUDE_DIRS}
 		${GIO_INCLUDE_DIRS}
+	PUBLIC ${PROJECT_SOURCE_DIR}/gstreamer-util
 	)
-message(${GST_LIBRARIES})
-message(${ART_LIBRARIES})

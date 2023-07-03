@@ -22,7 +22,7 @@ android {
 
         externalNativeBuild {
             cmake {
-                arguments '-DANDROID_STL=c++_shared', "-DEIGEN3_INCLUDE_DIR=${project.eigenIncludeDir}", "-DOCULUS_OPENXR_MOBILE_SDK=${project.ovrOpenXRMobileSDK}", "-DANDROID_NDK=${project.androidNDK}"
+                arguments '-DANDROID_STL=c++_shared', "-DEIGEN3_INCLUDE_DIR=${project.eigenIncludeDir}" //, "-DOCULUS_OPENXR_MOBILE_SDK=${project.ovrOpenXRMobileSDK}", "-DANDROID_NDK=${project.androidNDK}"
             }
         }
         externalNativeBuild {
@@ -51,11 +51,11 @@ android {
         checkReleaseBuilds false
     }
     namespace 'com.plutovr.plutosphere.webrtc_client'
-    ndkVersion '22.1.7171670'
+    ndkVersion project.ndkVersion
 }
 
 dependencies {
-    implementation 'org.khronos.openxr:openxr_loader_for_android:1.0.20'
+    implementation 'org.khronos.openxr:openxr_loader_for_android:1.0.27'
 }
 
 //
