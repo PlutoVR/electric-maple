@@ -14,7 +14,7 @@ android {
 //            }
 //        }
         applicationId "com.plutovr.plutosphere.webrtc_client"
-        minSdkVersion 24
+        minSdkVersion 26
         // Version 30 breaks loader
         targetSdkVersion 29
         versionCode 1
