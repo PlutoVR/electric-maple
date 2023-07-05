@@ -662,11 +662,17 @@ android_main(struct android_app *app)
 
 	// Create OpenXR instance
 
-	const char *extensions[] = {"XR_KHR_opengl_es_enable"};
+	const char *extensions[] = {XR_KHR_OPENGL_ES_ENABLE_EXTENSION_NAME,
+	                            XR_KHR_ANDROID_CREATE_INSTANCE_EXTENSION_NAME};
+
+	XrInstanceCreateInfoAndroidKHR androidInfo = {};
+	androidInfo.type = XR_TYPE_INSTANCE_CREATE_INFO_ANDROID_KHR;
+	androidInfo.applicationActivity = app->activity->clazz;
+	androidInfo.applicationVM = app->activity->vm;
 
 	XrInstanceCreateInfo instanceInfo = {};
 	instanceInfo.type = XR_TYPE_INSTANCE_CREATE_INFO;
-	instanceInfo.next = nullptr;
+	instanceInfo.next = &androidInfo;
 
 	strncpy(instanceInfo.applicationInfo.engineName, "N/A", XR_MAX_APPLICATION_NAME_SIZE - 1);
 	instanceInfo.applicationInfo.engineName[XR_MAX_APPLICATION_NAME_SIZE - 1] = '\0';
