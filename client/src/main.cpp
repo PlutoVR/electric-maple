@@ -588,25 +588,28 @@ getFilePath(JNIEnv *env, jobject activity)
 	return result;
 }
 #else
-extern "C" const char* getFilePath(JNIEnv* env, jobject activity) {
-    jclass contextClass = env->GetObjectClass(activity);
-    jmethodID getExternalFilesDirMethod = env->GetMethodID(contextClass, "getExternalFilesDir", "(Ljava/lang/String;)Ljava/io/File;");
-    jstring directoryName = env->NewStringUTF("debug");
-    jobject directory = env->CallObjectMethod(activity, getExternalFilesDirMethod, directoryName);
-    env->DeleteLocalRef(directoryName);
-    env->DeleteLocalRef(contextClass);
-    if (directory == nullptr) {
-        return strdup("Failed to obtain external files directory");
-    }
-    jmethodID getPathMethod = env->GetMethodID(env->FindClass("java/io/File"), "getPath", "()Ljava/lang/String;");
-    jstring path = static_cast<jstring>(env->CallObjectMethod(directory, getPathMethod));
-    env->DeleteLocalRef(directory);
-    if (path == nullptr) {
-        return strdup("Failed to obtain path to external files directory");
-    }
-    const char* filePath = env->GetStringUTFChars(path, nullptr);
-    env->DeleteLocalRef(path);
-    return filePath;
+extern "C" const char *
+getFilePath(JNIEnv *env, jobject activity)
+{
+	jclass contextClass = env->GetObjectClass(activity);
+	jmethodID getExternalFilesDirMethod =
+	    env->GetMethodID(contextClass, "getExternalFilesDir", "(Ljava/lang/String;)Ljava/io/File;");
+	jstring directoryName = env->NewStringUTF("debug");
+	jobject directory = env->CallObjectMethod(activity, getExternalFilesDirMethod, directoryName);
+	env->DeleteLocalRef(directoryName);
+	env->DeleteLocalRef(contextClass);
+	if (directory == nullptr) {
+		return strdup("Failed to obtain external files directory");
+	}
+	jmethodID getPathMethod = env->GetMethodID(env->FindClass("java/io/File"), "getPath", "()Ljava/lang/String;");
+	jstring path = static_cast<jstring>(env->CallObjectMethod(directory, getPathMethod));
+	env->DeleteLocalRef(directory);
+	if (path == nullptr) {
+		return strdup("Failed to obtain path to external files directory");
+	}
+	const char *filePath = env->GetStringUTFChars(path, nullptr);
+	env->DeleteLocalRef(path);
+	return filePath;
 }
 #endif
 
@@ -615,8 +618,8 @@ android_main(struct android_app *app)
 {
 	start_logger("meow meow");
 	setenv("GST_DEBUG", "*:3", 1);
-	//setenv("GST_DEBUG", "*ssl*:9,*tls*:9,*webrtc*:9", 1);
-	//setenv("GST_DEBUG", "*CAPS*:6", 1);
+	// setenv("GST_DEBUG", "*ssl*:9,*tls*:9,*webrtc*:9", 1);
+	// setenv("GST_DEBUG", "*CAPS*:6", 1);
 
 	state.app = app;
 	state.java_vm = app->activity->vm;
@@ -626,16 +629,18 @@ android_main(struct android_app *app)
 
 	initializeEGL(state);
 
-  /*  ANativeActivity *activity = app->activity;
-    JNIEnv* env = state.jni;
-    jclass clazz = env->FindClass("android/Manifest$permission");
-    jfieldID field = env->GetStaticFieldID(clazz, "WRITE_EXTERNAL_STORAGE", "Ljava/lang/String;");
-    jstring permissionString = (jstring) env->GetStaticObjectField(clazz, field);
-    jint permission = env->CallIntMethod(activity->clazz, env->GetMethodID(clazz, "checkSelfPermission", "(Ljava/lang/String;)I"), permissionString);
+	/*  ANativeActivity *activity = app->activity;
+	  JNIEnv* env = state.jni;
+	  jclass clazz = env->FindClass("android/Manifest$permission");
+	  jfieldID field = env->GetStaticFieldID(clazz, "WRITE_EXTERNAL_STORAGE", "Ljava/lang/String;");
+	  jstring permissionString = (jstring) env->GetStaticObjectField(clazz, field);
+	  jint permission = env->CallIntMethod(activity->clazz, env->GetMethodID(clazz, "checkSelfPermission",
+	  "(Ljava/lang/String;)I"), permissionString);
 
-    if (permission != PackageManager.PERMISSION_GRANTED) {
-        env->CallVoidMethod(activity->clazz, env->GetMethodID(clazz, "requestPermissions", "([Ljava/lang/String;I)V"), env->NewObjectArray(1, env->FindClass("java/lang/String"), permissionString), 1);
-    }*/
+	  if (permission != PackageManager.PERMISSION_GRANTED) {
+	      env->CallVoidMethod(activity->clazz, env->GetMethodID(clazz, "requestPermissions",
+	  "([Ljava/lang/String;I)V"), env->NewObjectArray(1, env->FindClass("java/lang/String"), permissionString), 1);
+	  }*/
 
 	state.xf = nullptr;
 
@@ -807,7 +812,7 @@ android_main(struct android_app *app)
 	U_LOG_E("DEBUG: Setup Render\n");
 	setupRender();
 
-    eglMakeCurrent(state.display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+	eglMakeCurrent(state.display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
 
 	U_LOG_E("DEBUG: Really make socket\n");
 	really_make_socket(state);
