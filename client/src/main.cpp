@@ -16,6 +16,8 @@
 #include "gst/gst_common.h"
 #include "render.hpp"
 
+#include <openxr/openxr.h>
+#include <openxr/openxr_platform.h>
 #include <unistd.h>
 
 #include <android/native_activity.h>
@@ -23,11 +25,13 @@
 #include <android/asset_manager_jni.h>
 #include <android/log.h>
 
+#include "gst/app_log.h"
+
 // static GLuint global_data[1440*1584*4];
 
 static int pfd[2];
 static pthread_t thr;
-static const char *tag = "myapp";
+static const char *tag = "ElectricMaple";
 
 static void *
 thread_func(void *)
@@ -74,13 +78,13 @@ static void
 onAppCmd(struct android_app *app, int32_t cmd)
 {
 	switch (cmd) {
-	case APP_CMD_START: U_LOG_E("APP_CMD_START"); break;
-	case APP_CMD_RESUME: U_LOG_E("APP_CMD_RESUME"); break;
-	case APP_CMD_PAUSE: U_LOG_E("APP_CMD_PAUSE"); break;
-	case APP_CMD_STOP: U_LOG_E("APP_CMD_STOP"); break;
-	case APP_CMD_DESTROY: U_LOG_E("APP_CMD_DESTROY"); break;
-	case APP_CMD_INIT_WINDOW: U_LOG_E("APP_CMD_INIT_WINDOW"); break;
-	case APP_CMD_TERM_WINDOW: U_LOG_E("APP_CMD_TERM_WINDOW"); break;
+	case APP_CMD_START: ALOGE("APP_CMD_START"); break;
+	case APP_CMD_RESUME: ALOGE("APP_CMD_RESUME"); break;
+	case APP_CMD_PAUSE: ALOGE("APP_CMD_PAUSE"); break;
+	case APP_CMD_STOP: ALOGE("APP_CMD_STOP"); break;
+	case APP_CMD_DESTROY: ALOGE("APP_CMD_DESTROY"); break;
+	case APP_CMD_INIT_WINDOW: ALOGE("APP_CMD_INIT_WINDOW"); break;
+	case APP_CMD_TERM_WINDOW: ALOGE("APP_CMD_TERM_WINDOW"); break;
 	}
 }
 
@@ -88,9 +92,9 @@ onAppCmd(struct android_app *app, int32_t cmd)
 void
 sink_push_frame(struct xrt_frame_sink *xfs, struct xrt_frame *xf)
 {
-	U_LOG_E("sink_push_frame called!");
+	ALOGE("sink_push_frame called!");
 	if (!xf) {
-		U_LOG_E("what??");
+		ALOGE("what??");
 		return;
 	}
 	struct state_t *st = container_of(xfs, struct state_t, frame_sink);
@@ -100,7 +104,7 @@ sink_push_frame(struct xrt_frame_sink *xfs, struct xrt_frame *xf)
 		//		xrt_frame_reference(&xf, st->xf);
 		xrt_frame_reference(&st->xf, xf);
 	}
-	U_LOG_E("Called! %d %p %u %u %zu", st->frame_texture_id, xf->data, xf->width, xf->height, xf->stride);
+	ALOGE("Called! %d %p %u %u %zu", st->frame_texture_id, xf->data, xf->width, xf->height, xf->stride);
 }
 
 void
@@ -199,7 +203,7 @@ generateRandomTextureOld(GLsizei width, GLsizei height, int way, GLuint *handle)
 	writeRandomTexture(width, height, way, data);
 	glBindTexture(GL_TEXTURE_2D, *handle);
 	// This call is definitely what's crashing, which is real confusing.
-	U_LOG_E("%d %d", width, height);
+	ALOGE("%d %d", width, height);
 #if 0
 //    glPixelStorei(GL_UNPACK_ALIGNMENT, 1); // Set to 1 for tightly packed data
 
@@ -218,7 +222,7 @@ generateRandomTextureOld(GLsizei width, GLsizei height, int way, GLuint *handle)
 void
 die_errno()
 {
-	U_LOG_E("Something happened! %s", strerror(errno));
+	ALOGE("Something happened! %s", strerror(errno));
 }
 
 
@@ -233,7 +237,7 @@ really_make_socket(struct state_t &st)
 	// Doesn't work :(
 	st.socket_fd = socket(PF_INET, SOCK_SEQPACKET, IPPROTO_SCTP);
 #endif
-	U_LOG_E("Socket fd is %d, errno is %s", st.socket_fd, strerror(errno));
+	ALOGE("Socket fd is %d, errno is %s", st.socket_fd, strerror(errno));
 
 	// Connect to the parent process
 	sockaddr_in serverAddr;
@@ -249,7 +253,7 @@ really_make_socket(struct state_t &st)
 		die_errno();
 	}
 
-	U_LOG_E("really_make_socket: Result is %d", iResult);
+	ALOGE("really_make_socket: Result is %d", iResult);
 }
 
 
@@ -265,7 +269,7 @@ hmd_pose(struct state_t &st)
 	hmdLocalLocation.next = NULL;
 	result = xrLocateSpace(st.viewSpace, st.worldSpace, os_monotonic_get_ns(), &hmdLocalLocation);
 	if (result != XR_SUCCESS) {
-		U_LOG_E("Bad!");
+		ALOGE("Bad!");
 	}
 
 	XrPosef hmdLocalPose = hmdLocalLocation.pose;
@@ -295,7 +299,7 @@ hmd_pose(struct state_t &st)
 	int iResult = send(st.socket_fd, buffer, pluto_TrackingMessage_size, 0);
 
 	if (iResult <= 0) {
-		U_LOG_E("BAD! %d %s", iResult, strerror(errno));
+		ALOGE("BAD! %d %s", iResult, strerror(errno));
 		die_errno();
 	}
 }
@@ -307,21 +311,22 @@ create_spaces(struct state_t &st)
 	XrResult result = XR_SUCCESS;
 
 	XrReferenceSpaceCreateInfo spaceInfo = {.type = XR_TYPE_REFERENCE_SPACE_CREATE_INFO,
-	                                        .referenceSpaceType = XR_REFERENCE_SPACE_TYPE_STAGE,
+	                                        .referenceSpaceType =
+	                                            XR_REFERENCE_SPACE_TYPE_LOCAL, // XR_REFERENCE_SPACE_TYPE_STAGE,
 	                                        .poseInReferenceSpace = {{0.f, 0.f, 0.f, 1.f}, {0.f, 0.f, 0.f}}};
 
 
 	result = xrCreateReferenceSpace(state.session, &spaceInfo, &state.worldSpace);
 
 	if (XR_FAILED(result)) {
-		U_LOG_E("Failed to create reference space (%d)", result);
+		ALOGE("Failed to create reference space (%d)", result);
 	}
 	spaceInfo.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_VIEW;
 
 	result = xrCreateReferenceSpace(state.session, &spaceInfo, &state.viewSpace);
 
 	if (XR_FAILED(result)) {
-		U_LOG_E("Failed to create reference space (%d)", result);
+		ALOGE("Failed to create reference space (%d)", result);
 	}
 }
 
@@ -362,9 +367,9 @@ mainloop_one(struct state_t &state)
 			XrEventDataSessionStateChanged *event = (XrEventDataSessionStateChanged *)&buffer;
 
 			switch (event->state) {
-			case XR_SESSION_STATE_IDLE: U_LOG_I("OpenXR session is now IDLE"); break;
+			case XR_SESSION_STATE_IDLE: ALOGI("OpenXR session is now IDLE"); break;
 			case XR_SESSION_STATE_READY: {
-				U_LOG_I("OpenXR session is now READY, beginning session");
+				ALOGI("OpenXR session is now READY, beginning session");
 				XrSessionBeginInfo beginInfo = {};
 				beginInfo.type = XR_TYPE_SESSION_BEGIN_INFO;
 				beginInfo.primaryViewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
@@ -372,18 +377,18 @@ mainloop_one(struct state_t &state)
 				result = xrBeginSession(state.session, &beginInfo);
 
 				if (XR_FAILED(result)) {
-					U_LOG_I("Failed to begin OpenXR session (%d)", result);
+					ALOGI("Failed to begin OpenXR session (%d)", result);
 				}
 			} break;
-			case XR_SESSION_STATE_SYNCHRONIZED: U_LOG_I("OpenXR session is now SYNCHRONIZED"); break;
-			case XR_SESSION_STATE_VISIBLE: U_LOG_I("OpenXR session is now VISIBLE"); break;
-			case XR_SESSION_STATE_FOCUSED: U_LOG_I("OpenXR session is now FOCUSED"); break;
+			case XR_SESSION_STATE_SYNCHRONIZED: ALOGI("OpenXR session is now SYNCHRONIZED"); break;
+			case XR_SESSION_STATE_VISIBLE: ALOGI("OpenXR session is now VISIBLE"); break;
+			case XR_SESSION_STATE_FOCUSED: ALOGI("OpenXR session is now FOCUSED"); break;
 			case XR_SESSION_STATE_STOPPING:
-				U_LOG_I("OpenXR session is now STOPPING");
+				ALOGI("OpenXR session is now STOPPING");
 				xrEndSession(state.session);
 				break;
-			case XR_SESSION_STATE_LOSS_PENDING: U_LOG_I("OpenXR session is now LOSS_PENDING"); break;
-			case XR_SESSION_STATE_EXITING: U_LOG_I("OpenXR session is now EXITING"); break;
+			case XR_SESSION_STATE_LOSS_PENDING: ALOGI("OpenXR session is now LOSS_PENDING"); break;
+			case XR_SESSION_STATE_EXITING: ALOGI("OpenXR session is now EXITING"); break;
 			default: break;
 			}
 
@@ -395,7 +400,7 @@ mainloop_one(struct state_t &state)
 
 	// If session isn't ready, return. We'll be called again and will poll events again.
 	if (state.sessionState < XR_SESSION_STATE_READY) {
-		U_LOG_I("Waiting for session ready state!");
+		ALOGI("Waiting for session ready state!");
 		os_nanosleep(U_TIME_1MS_IN_NS * 100);
 		return;
 	}
@@ -407,7 +412,7 @@ mainloop_one(struct state_t &state)
 	result = xrWaitFrame(state.session, NULL, &frameState);
 
 	if (XR_FAILED(result)) {
-		U_LOG_E("xrWaitFrame failed");
+		ALOGE("xrWaitFrame failed");
 	}
 
 	XrFrameBeginInfo beginfo = {.type = XR_TYPE_FRAME_BEGIN_INFO};
@@ -415,7 +420,7 @@ mainloop_one(struct state_t &state)
 	result = xrBeginFrame(state.session, &beginfo);
 
 	if (XR_FAILED(result)) {
-		U_LOG_E("xrBeginFrame failed");
+		ALOGE("xrBeginFrame failed");
 	}
 
 	// Locate views, set up layers
@@ -435,7 +440,7 @@ mainloop_one(struct state_t &state)
 	result = xrLocateViews(state.session, &locateInfo, &viewState, 2, &viewCount, views);
 
 	if (XR_FAILED(result)) {
-		U_LOG_E("Failed to locate views");
+		ALOGE("Failed to locate views");
 	}
 
 	int width = state.width;
@@ -468,7 +473,7 @@ mainloop_one(struct state_t &state)
 	result = xrAcquireSwapchainImage(state.swapchain, NULL, &imageIndex);
 
 	if (XR_FAILED(result)) {
-		U_LOG_E("Failed to acquire swapchain image (%d)", result);
+		ALOGE("Failed to acquire swapchain image (%d)", result);
 	}
 
 	XrSwapchainImageWaitInfo waitInfo = {.type = XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO,
@@ -477,7 +482,7 @@ mainloop_one(struct state_t &state)
 	result = xrWaitSwapchainImage(state.swapchain, &waitInfo);
 
 	if (XR_FAILED(result)) {
-		U_LOG_E("Failed to wait for swapchain image (%d)", result);
+		ALOGE("Failed to wait for swapchain image (%d)", result);
 	}
 
 	if (state.xf) {
@@ -501,7 +506,7 @@ mainloop_one(struct state_t &state)
 
 
 		// FIXME: This will go away now that we have a GL_TEXTURE_EXTERNAL texture
-		U_LOG_E("DEBUG: Binding textures!");
+		ALOGE("DEBUG: Binding textures!");
 		glBindTexture(GL_TEXTURE_2D, state.frame_texture_id);
 		glPixelStorei(GL_UNPACK_ROW_LENGTH, 1440);
 		//            glPixelStorei(GL_UNPACK_ALIGNMENT, 2); // Set to 1 for tightly packed data
@@ -523,7 +528,7 @@ mainloop_one(struct state_t &state)
 		xrt_frame_reference(&state.xf, NULL);
 	}
 
-	U_LOG_E("DEBUG: Binding framebuffer\n");
+	// ALOGE("DEBUG: Binding framebuffer\n");
 	glBindFramebuffer(GL_FRAMEBUFFER, state.framebuffers[imageIndex]);
 
 	glViewport(0, 0, state.width * 2, state.height);
@@ -533,7 +538,7 @@ mainloop_one(struct state_t &state)
 	//    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	// Just display purple nothingness
-	U_LOG_E("DEBUG: DRAWING!\n");
+	// ALOGE("DEBUG: DRAWING!\n");
 	for (uint32_t eye = 0; eye < 2; eye++) {
 		glViewport(eye * state.width, 0, state.width, state.height);
 		draw(state.framebuffers[imageIndex], state.frame_texture_id);
@@ -616,8 +621,8 @@ getFilePath(JNIEnv *env, jobject activity)
 void
 android_main(struct android_app *app)
 {
-	start_logger("meow meow");
-	setenv("GST_DEBUG", "*:3", 1);
+	start_logger("ElectricMaple");
+	setenv("GST_DEBUG", "*:5", 1);
 	// setenv("GST_DEBUG", "*ssl*:9,*tls*:9,*webrtc*:9", 1);
 	// setenv("GST_DEBUG", "*CAPS*:6", 1);
 
@@ -657,7 +662,7 @@ android_main(struct android_app *app)
 	XrResult result = xrInitializeLoaderKHR((XrLoaderInitInfoBaseHeaderKHR *)&loaderInfo);
 
 	if (XR_FAILED(result)) {
-		U_LOG_E("Failed to initialize OpenXR loader\n");
+		ALOGE("Failed to initialize OpenXR loader\n");
 	}
 
 	// Create OpenXR instance
@@ -688,7 +693,7 @@ android_main(struct android_app *app)
 	result = xrCreateInstance(&instanceInfo, &state.instance);
 
 	if (XR_FAILED(result)) {
-		U_LOG_E("Failed to initialize OpenXR instance\n");
+		ALOGE("Failed to initialize OpenXR instance\n");
 	}
 
 	// OpenXR system
@@ -704,7 +709,7 @@ android_main(struct android_app *app)
 	    xrEnumerateViewConfigurations(state.instance, state.system, 2, &viewConfigurationCount, viewConfigurations);
 
 	if (XR_FAILED(result)) {
-		U_LOG_E("Failed to enumerate view configurations\n");
+		ALOGE("Failed to enumerate view configurations\n");
 	}
 
 
@@ -719,7 +724,7 @@ android_main(struct android_app *app)
 	                                           XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO, 2, &viewCount, viewInfo);
 
 	if (XR_FAILED(result) || viewCount != 2) {
-		U_LOG_E("Failed to enumerate view configuration views\n");
+		ALOGE("Failed to enumerate view configuration views\n");
 		return;
 	}
 
@@ -733,13 +738,13 @@ android_main(struct android_app *app)
 
 	struct xrt_frame_context xfctx = {};
 	struct xrt_fs *blah = vf_fs_videotestsource(&xfctx, &state);
-	U_LOG_E("Done creating videotestsrc\n");
+	ALOGE("Done creating videotestsrc\n");
 
-	U_LOG_E("Starting source\n");
+	ALOGE("Starting source\n");
 
 	// FIXME: Eventually completely remove XRT_FS dependency here for driving the gst pipeline look
 	xrt_fs_stream_start(blah, &state.frame_sink, XRT_FS_CAPTURE_TYPE_TRACKING, 0);
-	U_LOG_E("Done starting source\n");
+	ALOGE("Done starting source\n");
 
 	// OpenXR session
 
@@ -759,7 +764,7 @@ android_main(struct android_app *app)
 	result = xrCreateSession(state.instance, &sessionInfo, &state.session);
 
 	if (XR_FAILED(result)) {
-		U_LOG_E("Failed to create OpenXR session (%d)\n", result);
+		ALOGE("Failed to create OpenXR session (%d)\n", result);
 	}
 
 	// OpenXR swapchain
@@ -777,7 +782,7 @@ android_main(struct android_app *app)
 	result = xrCreateSwapchain(state.session, &swapchainInfo, &state.swapchain);
 
 	if (XR_FAILED(result)) {
-		U_LOG_E("Failed to create OpenXR swapchain (%d)\n", result);
+		ALOGE("Failed to create OpenXR swapchain (%d)\n", result);
 	}
 
 	for (uint32_t i = 0; i < 4; i++) {
@@ -787,7 +792,7 @@ android_main(struct android_app *app)
 	xrEnumerateSwapchainImages(state.swapchain, 4, &state.imageCount, (XrSwapchainImageBaseHeader *)state.images);
 
 	if (XR_FAILED(result)) {
-		U_LOG_E("Failed to get swapchain images (%d)\n", result);
+		ALOGE("Failed to get swapchain images (%d)\n", result);
 	}
 
 	glGenFramebuffers(state.imageCount, state.framebuffers);
@@ -807,25 +812,25 @@ android_main(struct android_app *app)
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, state.images[i].image, 0);
 		GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
 		if (status != GL_FRAMEBUFFER_COMPLETE) {
-			U_LOG_E("Failed to create framebuffer (%d)\n", status);
+			ALOGE("Failed to create framebuffer (%d)\n", status);
 		}
 	}
 
 
-	U_LOG_E("DEBUG: Create spaces\n");
+	ALOGE("DEBUG: Create spaces\n");
 	create_spaces(state);
 
-	U_LOG_E("DEBUG: Setup Render\n");
+	ALOGE("DEBUG: Setup Render\n");
 	setupRender();
 
 	eglMakeCurrent(state.display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
 
-	U_LOG_E("DEBUG: Really make socket\n");
+	ALOGE("DEBUG: Really make socket\n");
 	really_make_socket(state);
 
 
 	// Mainloop
-	U_LOG_E("DEBUG: Starting main loop.\n");
+	ALOGE("DEBUG: Starting main loop.\n");
 	while (!app->destroyRequested) {
 		mainloop_one(state);
 	}

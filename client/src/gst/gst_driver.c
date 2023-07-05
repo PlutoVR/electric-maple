@@ -9,6 +9,7 @@
  * @ingroup drv_vf
  */
 
+#include "gst/gstinfo.h"
 #include "os/os_time.h"
 #include "os/os_threading.h"
 
@@ -18,7 +19,6 @@
 #include "util/u_debug.h"
 #include "util/u_format.h"
 #include "util/u_frame.h"
-#include "util/u_logging.h"
 
 #include "gst_common.h"
 
@@ -48,7 +48,7 @@
 
 #include <json-glib/json-glib.h>
 
-
+#include "app_log.h"
 
 /*
  *
@@ -62,11 +62,6 @@
  *
  */
 
-#define VF_TRACE(d, ...) U_LOG_IFL_T(d->log_level, __VA_ARGS__)
-#define VF_DEBUG(d, ...) U_LOG_IFL_D(d->log_level, __VA_ARGS__)
-#define VF_INFO(d, ...) U_LOG_IFL_I(d->log_level, __VA_ARGS__)
-#define VF_WARN(d, ...) U_LOG_IFL_W(d->log_level, __VA_ARGS__)
-#define VF_ERROR(d, ...) U_LOG_IFL_E(d->log_level, __VA_ARGS__)
 
 DEBUG_GET_ONCE_LOG_OPTION(vf_log, "VF_LOG", U_LOGGING_TRACE)
 
@@ -181,10 +176,12 @@ bus_sync_handler_cb(GstBus *bus, GstMessage *msg, gpointer user_data)
 		const gchar *type;
 		gst_message_parse_context_type(msg, &type);
 		if (g_str_equal(type, GST_GL_DISPLAY_CONTEXT_TYPE)) {
+			ALOGI("Got message: Need display context");
 			g_autoptr(GstContext) context = gst_context_new(GST_GL_DISPLAY_CONTEXT_TYPE, TRUE);
 			gst_context_set_gl_display(context, vid->display);
 			gst_element_set_context(GST_ELEMENT(msg->src), context);
 		} else if (g_str_equal(type, "gst.gl.app_context")) {
+			ALOGI("Got message: Need app context");
 			g_autoptr(GstContext) app_context = gst_context_new("gst.gl.app_context", TRUE);
 			GstStructure *s = gst_context_writable_structure(app_context);
 			gst_structure_set(s, "context", GST_TYPE_GL_CONTEXT, vid->other_context, NULL);
@@ -294,9 +291,9 @@ vf_fs_mainloop(void *ptr)
 
 	struct vf_fs *vid = (struct vf_fs *)ptr;
 
-	VF_DEBUG(vid, "Let's run!");
+	ALOGD("Let's run!");
 	g_main_loop_run(vid->loop);
-	VF_DEBUG(vid, "Going out!");
+	ALOGD("Going out!");
 
 	// gst_object_unref(vid->testsink);
 	// gst_element_set_state(vid->source, GST_STATE_NULL);
@@ -324,9 +321,9 @@ vf_fs_mainloop(void *ptr)
 
   GstStateChangeReturn ret = gst_element_set_state(vid->pipeline, GST_STATE_PLAYING);
   if (ret == GST_STATE_CHANGE_FAILURE) {
-    U_LOG_E("Noooo");
+    ALOGE("Noooo");
   } else {
-    U_LOG_E("Successfully changed state!");
+    ALOGE("Successfully changed state!");
   }
 
   while (vid->is_running) {
@@ -429,7 +426,7 @@ vf_fs_frame(struct vf_fs *vid, GstSample *sample)
 	struct vf_frame *vff = U_TYPED_CALLOC(struct vf_frame);
 
 	if (!gst_video_frame_map(&vff->frame, &info, buffer, GST_MAP_READ)) {
-		VF_ERROR(vid, "Failed to map frame %d", seq);
+		ALOGE("Failed to map frame %d", seq);
 		// Yes, we should do this here because we don't want the destroy function to run.
 		free(vff);
 		return;
@@ -473,8 +470,8 @@ print_gst_error(GstMessage *message)
 	gchar *dbg_info = NULL;
 
 	gst_message_parse_error(message, &err, &dbg_info);
-	U_LOG_E("ERROR from element %s: %s", GST_OBJECT_NAME(message->src), err->message);
-	U_LOG_E("Debugging info: %s", (dbg_info) ? dbg_info : "none");
+	ALOGE("ERROR from element %s: %s", GST_OBJECT_NAME(message->src), err->message);
+	ALOGE("Debugging info: %s", (dbg_info) ? dbg_info : "none");
 	g_error_free(err);
 	g_free(dbg_info);
 }
@@ -485,11 +482,11 @@ on_source_message(GstBus *bus, GstMessage *message, struct vf_fs *vid)
 	/* nil */
 	switch (GST_MESSAGE_TYPE(message)) {
 	case GST_MESSAGE_EOS:
-		VF_DEBUG(vid, "Finished playback.");
+		ALOGD("Finished playback.");
 		stop_pipeline(vid);
 		break;
 	case GST_MESSAGE_ERROR:
-		VF_ERROR(vid, "Received error.");
+		ALOGE("Received error.");
 		print_gst_error(message);
 		stop_pipeline(vid);
 		break;
@@ -502,7 +499,7 @@ static gboolean
 sigint_handler(gpointer user_data)
 {
 	struct vf_fs *vid = user_data;
-	U_LOG_E("sigint_handler called!");
+	ALOGE("sigint_handler called!");
 	stop_pipeline(vid);
 	return G_SOURCE_REMOVE;
 }
@@ -510,7 +507,7 @@ sigint_handler(gpointer user_data)
 static gboolean
 gst_bus_cb(GstBus *bus, GstMessage *message, gpointer data)
 {
-	U_LOG_E("gst_bus_cb called!");
+	ALOGE("gst_bus_cb called!");
 	GstBin *pipeline = GST_BIN(data);
 
 	switch (GST_MESSAGE_TYPE(message)) {
@@ -543,12 +540,12 @@ gst_bus_cb(GstBus *bus, GstMessage *message, gpointer data)
 void
 send_sdp_answer(const gchar *sdp)
 {
-	U_LOG_E("send_sdp_answer called!");
+	ALOGE("send_sdp_answer called!");
 	JsonBuilder *builder;
 	JsonNode *root;
 	gchar *msg_str;
 
-	U_LOG_E("Send answer: %s\n", sdp);
+	ALOGE("Send answer: %s\n", sdp);
 
 	builder = json_builder_new();
 	json_builder_begin_object(builder);
@@ -572,12 +569,12 @@ send_sdp_answer(const gchar *sdp)
 static void
 webrtc_on_ice_candidate_cb(GstElement *webrtcbin, guint mlineindex, gchar *candidate)
 {
-	U_LOG_E("webrtc_on_ice_candidate_cb called!");
+	ALOGE("webrtc_on_ice_candidate_cb called!");
 	JsonBuilder *builder;
 	JsonNode *root;
 	gchar *msg_str;
 
-	U_LOG_E("Send candidate: %u %s\n", mlineindex, candidate);
+	ALOGE("Send candidate: %u %s\n", mlineindex, candidate);
 
 	builder = json_builder_new();
 	json_builder_begin_object(builder);
@@ -606,7 +603,7 @@ webrtc_on_ice_candidate_cb(GstElement *webrtcbin, guint mlineindex, gchar *candi
 static void
 on_answer_created(GstPromise *promise, gpointer user_data)
 {
-	U_LOG_E("on_answer_created called!");
+	ALOGE("on_answer_created called!");
 	GstWebRTCSessionDescription *answer = NULL;
 	gchar *sdp;
 
@@ -614,14 +611,14 @@ on_answer_created(GstPromise *promise, gpointer user_data)
 	gst_promise_unref(promise);
 
 	if (NULL == answer) {
-		U_LOG_E("on_answer_created : ERROR !  get_promise answer = null !");
+		ALOGE("on_answer_created : ERROR !  get_promise answer = null !");
 	}
 
 	g_signal_emit_by_name(webrtcbin, "set-local-description", answer, NULL);
 
 	sdp = gst_sdp_message_as_text(answer->sdp);
 	if (NULL == sdp) {
-		U_LOG_E("on_answer_created : ERROR !  sdp = null !");
+		ALOGE("on_answer_created : ERROR !  sdp = null !");
 	}
 	send_sdp_answer(sdp);
 	g_free(sdp);
@@ -632,12 +629,12 @@ on_answer_created(GstPromise *promise, gpointer user_data)
 static void
 process_sdp_offer(const gchar *sdp)
 {
-	U_LOG_E("process_sdp_offer called!");
+	ALOGE("process_sdp_offer called!");
 	GstSDPMessage *sdp_msg = NULL;
 	GstWebRTCSessionDescription *desc = NULL;
 
 
-	U_LOG_E("Received offer: %s\n\n", sdp);
+	ALOGE("Received offer: %s\n\n", sdp);
 
 	if (gst_sdp_message_new_from_text(sdp, &sdp_msg) != GST_SDP_OK) {
 		g_debug("Error parsing SDP description");
@@ -669,8 +666,8 @@ out:
 static void
 process_candidate(guint mlineindex, const gchar *candidate)
 {
-	U_LOG_E("process_candidate called!");
-	U_LOG_E("Received candidate: %d %s\n", mlineindex, candidate);
+	ALOGE("process_candidate called!");
+	ALOGE("Received candidate: %d %s\n", mlineindex, candidate);
 
 	g_signal_emit_by_name(webrtcbin, "add-ice-candidate", mlineindex, candidate);
 }
@@ -678,7 +675,7 @@ process_candidate(guint mlineindex, const gchar *candidate)
 static void
 message_cb(SoupWebsocketConnection *connection, gint type, GBytes *message, gpointer user_data)
 {
-	U_LOG_E("message_cb called!");
+	ALOGE("message_cb called!");
 	gsize length = 0;
 	const gchar *msg_data = g_bytes_get_data(message, &length);
 	JsonParser *parser = json_parser_new();
@@ -694,7 +691,7 @@ message_cb(SoupWebsocketConnection *connection, gint type, GBytes *message, gpoi
 		}
 
 		msg_type = json_object_get_string_member(msg, "msg");
-		U_LOG_E("Websocket message received: %s\n", msg_type);
+		ALOGE("Websocket message received: %s\n", msg_type);
 
 		if (g_str_equal(msg_type, "offer")) {
 			const gchar *offer_sdp = json_object_get_string_member(msg, "sdp");
@@ -719,14 +716,14 @@ out:
 // static void
 // data_channel_error_cb(GstWebRTCDataChannel *datachannel, void *data)
 // {
-// 	U_LOG_E("error\n");
+// 	ALOGE("error\n");
 // 	abort();
 // }
 
 // static void
 // data_channel_close_cb(GstWebRTCDataChannel *datachannel, gpointer timeout_src_id)
 // {
-// 	U_LOG_E("Data channel closed\n");
+// 	ALOGE("Data channel closed\n");
 
 // 	g_source_remove(GPOINTER_TO_UINT(timeout_src_id));
 // 	g_clear_object(&datachannel);
@@ -735,7 +732,7 @@ out:
 // static void
 // data_channel_message_string_cb(GstWebRTCDataChannel *datachannel, gchar *str, void *data)
 // {
-// 	U_LOG_E("Received data channel message: %s\n", str);
+// 	ALOGE("Received data channel message: %s\n", str);
 // }
 
 // static gboolean
@@ -751,7 +748,7 @@ out:
 // {
 // 	guint timeout_src_id;
 
-// 	U_LOG_E("Successfully created datachannel\n");
+// 	ALOGE("Successfully created datachannel\n");
 
 // 	g_assert_null(datachannel);
 
@@ -796,7 +793,7 @@ GST_PLUGIN_STATIC_DECLARE(playback); // "FFMPEG "
 static void
 websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 {
-	U_LOG_E("Fred : websocket_connected_cb called!\n");
+	ALOGE("Fred : websocket_connected_cb called!\n");
 
 	GST_PLUGIN_STATIC_REGISTER(app);        // Definitely needed
 	GST_PLUGIN_STATIC_REGISTER(autodetect); // Definitely needed
@@ -828,12 +825,12 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 
 	ws = soup_session_websocket_connect_finish(SOUP_SESSION(session), res, &error);
 	if (error) {
-		U_LOG_E("Error creating websocket: %s\n", error->message);
+		ALOGE("Error creating websocket: %s\n", error->message);
 		g_clear_error(&error);
 	} else {
 		GstBus *bus;
 
-		U_LOG_E("YO !! : Websocket connected\n");
+		ALOGW("YO !! : Websocket connected\n");
 		g_signal_connect(ws, "message", G_CALLBACK(message_cb), NULL);
 
 		// decodebin3 seems to .. hang?
@@ -844,8 +841,9 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 
 
 		gchar *pipeline_string = g_strdup_printf(
-		    "webrtcbin name=webrtc bundle-policy=max-bundle ! rtph264depay ! amcviddec-omxqcomvideodecoderavc "
-		    "! "
+		    "webrtcbin name=webrtc bundle-policy=max-bundle ! "
+		    "rtph264depay ! "
+		    "amcviddec-omxqcomvideodecoderavc ! "
 		    "glsinkbin name=glsink ! "
 		    "appsink name=testsink");
 
@@ -862,12 +860,12 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 
 		printf("launching pipeline\n");
 		if (NULL == vid) {
-			U_LOG_E("FRED: NULL VID");
+			ALOGE("FRED: NULL VID");
 		}
 		vid->pipeline = gst_parse_launch(pipeline_string, &error);
 		if (vid->pipeline == NULL) {
-			U_LOG_E("FRED: Failed creating pipeline : Bad source");
-			U_LOG_E("%s", error->message);
+			ALOGE("FRED: Failed creating pipeline : Bad source");
+			ALOGE("%s", error->message);
 			abort();
 		}
 		gst_object_ref_sink(vid->pipeline);
@@ -880,7 +878,7 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 		//  We'll need and active egl context below
 		if (eglMakeCurrent(vid->state->display, vid->state->surface, vid->state->surface,
 		                   vid->state->context) == EGL_FALSE) {
-			U_LOG_E("FRED: websocket_connected_cb: Failed make egl context current");
+			ALOGE("FRED: websocket_connected_cb: Failed make egl context current");
 		}
 
 		GstGLPlatform gl_platform = GST_GL_PLATFORM_EGL;
@@ -916,7 +914,7 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 		// This is already done.
 		/*int ret = os_thread_helper_start(&vid->play_thread, vf_fs_mainloop, vid);
 		if (ret != 0) {
-		        VF_ERROR(vid, "Failed to start thread '%i'", ret);
+		        ALOGE( "Failed to start thread '%i'", ret);
 		        vid->is_running = FALSE;
 		        free(vid);
 		}*/
@@ -938,7 +936,7 @@ blah(int argc, char *argv[])
 	g_option_context_add_main_entries(option_context, options, NULL);
 
 	if (!g_option_context_parse(option_context, &argc, &argv, &error)) {
-		U_LOG_E("option parsing failed: %s\n", error->message);
+		ALOGE("option parsing failed: %s\n", error->message);
 		exit(1);
 	}
 
@@ -1029,7 +1027,7 @@ vf_fs_stream_start(struct xrt_fs *xfs,
 
 	// gst_element_set_state(vid->source, GST_STATE_PLAYING);
 
-	VF_TRACE(vid, "info: Started!");
+	ALOGV("info: Started!");
 
 	// we're off to the races!
 	return true;
@@ -1099,11 +1097,11 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 
 	GstBus *bus = NULL;
 
-	U_LOG_E("FRED: alloc_and_init_common\n");
+	ALOGE("FRED: alloc_and_init_common\n");
 
 	int ret = os_thread_helper_init(&vid->play_thread);
 	if (ret < 0) {
-		VF_ERROR(vid, "Failed to init thread");
+		ALOGE("Failed to init thread");
 		// g_free(pipeline_string);
 		free(vid);
 		return NULL;
@@ -1120,7 +1118,7 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 	g_option_context_add_main_entries(option_context, options, NULL);
 
 	if (!g_option_context_parse(option_context, NULL, NULL, &error)) {
-		U_LOG_E("option parsing failed: %s\n", error->message);
+		ALOGE("option parsing failed: %s\n", error->message);
 		exit(1);
 	}
 
@@ -1131,7 +1129,7 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 	soup_session = soup_session_new();
 
 #ifdef PL_LIBSOUP2
-	U_LOG_E("FRED: calling soup_session_websocket_connect_async. websocket_uri = %s\n", websocket_uri);
+	ALOGE("FRED: calling soup_session_websocket_connect_async. websocket_uri = %s\n", websocket_uri);
 	soup_session_websocket_connect_async(soup_session,                                     // session
 	                                     soup_message_new(SOUP_METHOD_GET, websocket_uri), // message
 	                                     NULL,                                             // origin
@@ -1148,7 +1146,7 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 	                                     0,                                                // io_prority
 	                                     NULL,                                             // cancellable
 	                                     websocket_connected_cb,                           // callback
-	                                     NULL);                                            // user_data
+	                                     vid);                                             // user_data
 
 #endif
 
@@ -1158,8 +1156,8 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 	g_free(pipeline_string);
 
 	if (vid->source == NULL) {
-		VF_ERROR(vid, "Bad source");
-        VF_ERROR(vid, "%s", error->message);
+		ALOGE( "Bad source");
+        ALOGE( "%s", error->message);
 		g_main_loop_unref(vid->loop);
 		free(vid);
 		return NULL;
@@ -1176,12 +1174,12 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 
 #if 0
 	// We need one sample to determine frame size.
-	VF_DEBUG(vid, "Waiting for frame");
+	ALOGD("Waiting for frame");
 	{
 		GstStateChangeReturn ret = gst_element_set_state(vid->source, GST_STATE_PLAYING);
 
 		if (ret == GST_STATE_CHANGE_FAILURE) {
-			VF_ERROR(vid, "WHAT.");
+			ALOGE( "WHAT.");
 		}
 	}
 #endif
@@ -1191,12 +1189,12 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 		os_nanosleep(100 * 1000 * 1000);
 	}
 #endif
-	VF_DEBUG(vid, "Got first sample");
+	ALOGD("Got first sample");
 	// gst_element_set_state(vid->source, GST_STATE_PAUSED);
 
 	ret = os_thread_helper_start(&vid->play_thread, vf_fs_mainloop, vid);
 	if (ret != 0) {
-		VF_ERROR(vid, "Failed to start thread '%i'", ret);
+		ALOGE("Failed to start thread '%i'", ret);
 		g_main_loop_unref(vid->loop);
 		free(vid);
 		return NULL;
