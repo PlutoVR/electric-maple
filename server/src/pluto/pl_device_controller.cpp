@@ -188,9 +188,8 @@ pluto_controller_create(pluto_program &pp, enum xrt_device_name device_name, enu
 	default: U_LOG_E("Device type not supported!"); return nullptr;
 	}
 
-	// This indicates you won't be using Monado's built-in tracking algorithms.
-	enum u_device_alloc_flags flags = (enum u_device_alloc_flags)(U_DEVICE_ALLOC_TRACKING_NONE);
-
+	// We don't need anything special from allocate except inputs and outputs.
+	u_device_alloc_flags flags{};
 	struct pluto_controller *pc = U_DEVICE_ALLOCATE(struct pluto_controller, flags, input_count, output_count);
 
 	// Functions.
@@ -201,6 +200,7 @@ pluto_controller_create(pluto_program &pp, enum xrt_device_name device_name, enu
 	pc->base.destroy = controller_destroy;
 
 	// Data.
+	pc->base.tracking_origin = &pp.tracking_origin;
 	pc->base.binding_profiles = binding_profiles_touch;
 	pc->base.binding_profile_count = ARRAY_SIZE(binding_profiles_touch);
 	pc->base.orientation_tracking_supported = true;

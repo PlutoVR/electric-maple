@@ -139,6 +139,11 @@ pluto_system_devices_init(struct pluto_program *sp)
 	sp->xsysd_base.destroy = pluto_system_devices_destroy;
 
 
+	xrt_tracking_origin &origin = sp->tracking_origin;
+	origin.type = XRT_TRACKING_TYPE_OTHER;
+	origin.offset = (xrt_pose)XRT_POSE_IDENTITY;
+	snprintf(origin.name, ARRAY_SIZE(origin.name), "Quest Tracking Space (Pluto)");
+
 	struct pluto_hmd *ph = pluto_hmd_create(*sp);
 	struct pluto_controller *pcl = pluto_controller_create( //
 	    *sp,                                                //

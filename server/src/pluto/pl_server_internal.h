@@ -65,6 +65,9 @@ struct pluto_program
 	//! System devices base.
 	struct xrt_system_devices xsysd_base;
 
+	//! Shared tracking origin for all devices.
+	struct xrt_tracking_origin tracking_origin;
+
 	// convenience
 	struct pluto_hmd *head;
 	struct pluto_controller *left;
