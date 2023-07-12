@@ -1,0 +1,60 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    compileSdk 30
+
+
+    defaultConfig {
+        applicationId "com.plutovr.plutosphere.webrtc_client_pancake"
+        minSdkVersion 24
+        // Version 30 breaks loader
+        targetSdkVersion 29
+        versionCode 1
+        versionName "1.0"
+
+        externalNativeBuild {
+            cmake {
+                arguments '-DANDROID_STL=c++_shared', "-DEIGEN3_INCLUDE_DIR=${project.eigenIncludeDir}"
+            }
+        }
+        externalNativeBuild {
+            ndk {
+                abiFilters 'arm64-v8a'
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    externalNativeBuild {
+        cmake {
+            path "../CMakeLists.txt"
+        }
+    }
+    buildFeatures {
+        prefab true
+    }
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+    namespace 'com.plutovr.plutosphere.webrtc_client'
+    ndkVersion project.ndkVersion
+}
+
+dependencies {
+    implementation 'org.khronos.openxr:openxr_loader_for_android:1.0.28'
+}
+
+//
+//ext {
+//    // If you are building on Windows, you will need to explicitly set eigenIncludeDir in your
+//    // local.properties file since the default value provided below only makes sense on *nix
+//    eigenIncludeDir = project.findProperty('eigenIncludeDir') ?: '/usr/include/eigen3'
+//}
