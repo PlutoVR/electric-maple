@@ -12,6 +12,5 @@ patches/
 __pycache__/
 
 .cache/
-
-# Moshi's SyncThing does things sometimes.
-**syncthing**
+.cxx/
+local.properties
