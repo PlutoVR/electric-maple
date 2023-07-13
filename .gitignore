@@ -4,6 +4,7 @@ out/
 
 cmake-build-*/
 build/
+builddir/
 deps/
 
 CMakeSettings.json
@@ -14,3 +15,10 @@ __pycache__/
 .cache/
 .cxx/
 local.properties
+
+.*
+!.clang-format
+!.clang-tdy
+!.cmake-format
+!.gitignore
+!.gitmodules
