@@ -1,3 +1,6 @@
+// Copyright 2020-2023, Collabora, Ltd.
+// SPDX-License-Identifier: BSL-1.0
+
 #pragma once
 
 #include <android/log.h>

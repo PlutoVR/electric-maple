@@ -335,6 +335,8 @@ vf_fs_mainloop(void *ptr)
   return NULL;
 }*/
 
+/// Sets pipeline state to null, and stops+destroys the frame server thread
+/// before cleaning up gstreamer objects
 static void
 stop_pipeline(struct vf_fs *vid)
 {
@@ -841,9 +843,10 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 
 
 		gchar *pipeline_string = g_strdup_printf(
-		    "webrtcbin name=webrtc bundle-policy=max-bundle ! "
-		    "rtph264depay ! "
-		    "amcviddec-omxqcomvideodecoderavc ! "
+		    // "webrtcbin name=webrtc bundle-policy=max-bundle ! "
+		    // "rtph264depay ! "
+		    // "amcviddec-omxqcomvideodecoderavc ! "
+		    "videotestsrc !"
 		    "glsinkbin name=glsink ! "
 		    "appsink name=testsink");
 
@@ -1108,12 +1111,16 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 	}
 
 	// FIXME: is this needed ?
+	// uses the global-default main context.
+	// creates, but does not run the loop: it will be run on the other thread
+	// once we start that thread
 	vid->loop = g_main_loop_new(NULL, FALSE);
 
 	GOptionContext *option_context;
 	SoupSession *soup_session;
 	GError *error = NULL;
 
+	// TODO get rid of this g_option arg parsing, unneeded here.
 	option_context = g_option_context_new(NULL);
 	g_option_context_add_main_entries(option_context, options, NULL);
 
@@ -1128,7 +1135,7 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 
 	soup_session = soup_session_new();
 
-#ifdef PL_LIBSOUP2
+#if SOUP_MAJOR_VERSION == 2
 	ALOGE("FRED: calling soup_session_websocket_connect_async. websocket_uri = %s\n", websocket_uri);
 	soup_session_websocket_connect_async(soup_session,                                     // session
 	                                     soup_message_new(SOUP_METHOD_GET, websocket_uri), // message

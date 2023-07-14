@@ -6,16 +6,79 @@
  * @author Moshi Turner <moses@collabora.com>
  */
 
+#include "gst/app_log.h"
+#include <EGL/egl.h>
+#include <GLES3/gl3.h>
 #include <cstdio>
+#include <cstdlib>
 #include "render.hpp"
+#include "util/u_logging.h"
 // #include "common.hpp"
+
+bool
+checkGLError(const char *func, int line)
+{
+	GLenum err = glGetError();
+	if (err != GL_NO_ERROR) {
+		U_LOG_E("RYLIE OpenGL error: %d, %s:%d", err, func, line);
+		return false;
+	}
+	return true;
+}
+
+#define CHECK_GL_ERROR() checkGLError(__FUNCTION__, __LINE__)
+
+void
+checkGLErrorWrap(const char *when, const char *expr, const char *func, int line)
+{
+	GLenum err = glGetError();
+	if (err != GL_NO_ERROR) {
+		U_LOG_E("RYLIE OpenGL error: %s %s: %d, %s:%d", when, expr, err, func, line);
+	}
+}
+
+#define GL(EXPR)                                                                                                       \
+	do {                                                                                                           \
+		checkGLErrorWrap("before", #EXPR, __FUNCTION__, __LINE__);                                             \
+		EXPR;                                                                                                  \
+		checkGLErrorWrap("after", #EXPR, __FUNCTION__, __LINE__);                                              \
+	} while (0)
+
+
+bool
+checkEGLError(const char *func, int line)
+{
+	EGLint err = eglGetError();
+	if (err != EGL_SUCCESS) {
+		U_LOG_E("RYLIE EGL error: %d, %s:%d", err, func, line);
+		return false;
+	}
+	return true;
+}
+
+#define CHECK_EGL_ERROR() checkEGLError(__FUNCTION__, __LINE__)
+
+void
+checkEGLErrorWrap(const char *when, const char *expr, const char *func, int line)
+{
+	EGLint err = eglGetError();
+	if (err != EGL_SUCCESS) {
+		U_LOG_E("RYLIE EGL error: %s %s: %d, %s:%d", when, expr, err, func, line);
+	}
+}
+
+#define EGL(EXPR)                                                                                                      \
+	do {                                                                                                           \
+		checkEGLErrorWrap("before", #EXPR, __FUNCTION__, __LINE__);                                            \
+		EXPR;                                                                                                  \
+		checkEGLErrorWrap("after", #EXPR, __FUNCTION__, __LINE__);                                             \
+	} while (0)
 
 // Initialize EGL context. We'll need this going forward.
 void
 initializeEGL(struct state_t &state)
 {
-	state.display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
-
+	EGL(state.display = eglGetDisplay(EGL_DEFAULT_DISPLAY));
 	if (state.display == EGL_NO_DISPLAY) {
 		printf("Failed to get EGL display");
 		return;
@@ -23,6 +86,7 @@ initializeEGL(struct state_t &state)
 
 	bool success = eglInitialize(state.display, NULL, NULL);
 
+	CHECK_EGL_ERROR();
 	if (!success) {
 		printf("Failed to initialize EGL");
 		return;
@@ -30,22 +94,31 @@ initializeEGL(struct state_t &state)
 
 	EGLint configCount;
 	EGLConfig configs[1024];
-	success = eglGetConfigs(state.display, configs, 1024, &configCount);
+	EGL(success = eglGetConfigs(state.display, configs, 1024, &configCount));
 
+	CHECK_EGL_ERROR();
 	if (!success) {
 		printf("Failed to get EGL configs");
 		return;
 	}
 
-	const EGLint attributes[] = {EGL_RED_SIZE,   8, EGL_GREEN_SIZE,   8, EGL_BLUE_SIZE, 8, EGL_ALPHA_SIZE, 8,
-	                             EGL_DEPTH_SIZE, 0, EGL_STENCIL_SIZE, 0, EGL_SAMPLES,   0, EGL_NONE};
+	const EGLint attributes[] = {
+	    EGL_RED_SIZE,     8, //
+	    EGL_GREEN_SIZE,   8, //
+	    EGL_BLUE_SIZE,    8, //
+	    EGL_ALPHA_SIZE,   8, //
+	    EGL_DEPTH_SIZE,   0, //
+	    EGL_STENCIL_SIZE, 0, //
+	    EGL_SAMPLES,      0, //
+	    EGL_NONE,
+	};
 
 	for (EGLint i = 0; i < configCount && !state.config; i++) {
 		EGLint renderableType;
 		EGLint surfaceType;
 
-		eglGetConfigAttrib(state.display, configs[i], EGL_RENDERABLE_TYPE, &renderableType);
-		eglGetConfigAttrib(state.display, configs[i], EGL_SURFACE_TYPE, &surfaceType);
+		EGL(eglGetConfigAttrib(state.display, configs[i], EGL_RENDERABLE_TYPE, &renderableType));
+		EGL(eglGetConfigAttrib(state.display, configs[i], EGL_SURFACE_TYPE, &surfaceType));
 
 		if ((renderableType & EGL_OPENGL_ES3_BIT) == 0) {
 			continue;
@@ -62,7 +135,7 @@ initializeEGL(struct state_t &state)
 			}
 
 			EGLint value;
-			eglGetConfigAttrib(state.display, configs[i], attributes[a], &value);
+			EGL(eglGetConfigAttrib(state.display, configs[i], attributes[a], &value));
 			if (value != attributes[a + 1]) {
 				break;
 			}
@@ -74,23 +147,26 @@ initializeEGL(struct state_t &state)
 	}
 
 	EGLint contextAttributes[] = {EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE};
+	EGL(state.context = eglCreateContext(state.display, state.config, EGL_NO_CONTEXT, contextAttributes));
 
-	if ((state.context = eglCreateContext(state.display, state.config, EGL_NO_CONTEXT, contextAttributes)) ==
-	    EGL_NO_CONTEXT) {
-		printf("Failed to create EGL context");
+	if (state.context == EGL_NO_CONTEXT) {
+		U_LOG_E("Failed to create EGL context");
+		abort();
 	}
+	CHECK_EGL_ERROR();
 
 	EGLint surfaceAttributes[] = {EGL_WIDTH, 16, EGL_HEIGHT, 16, EGL_NONE};
-
-	if ((state.surface = eglCreatePbufferSurface(state.display, state.config, surfaceAttributes)) ==
-	    EGL_NO_SURFACE) {
+	EGL(state.surface = eglCreatePbufferSurface(state.display, state.config, surfaceAttributes));
+	if (state.surface == EGL_NO_SURFACE) {
 		printf("Failed to create EGL surface");
 		eglDestroyContext(state.display, state.context);
 		return;
 	}
+	CHECK_EGL_ERROR();
 
 	if (eglMakeCurrent(state.display, state.surface, state.surface, state.context) == EGL_FALSE) {
 		printf("Failed to make EGL context current");
+		CHECK_EGL_ERROR();
 		eglDestroySurface(state.display, state.surface);
 		eglDestroyContext(state.display, state.context);
 	}
@@ -157,26 +233,29 @@ setupShaders()
 {
 	// Compile the vertex shader
 	GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
-	glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
-	glCompileShader(vertexShader);
+	CHECK_GL_ERROR();
+	GL(glShaderSource(vertexShader, 1, &vertexShaderSource, NULL));
+	GL(glCompileShader(vertexShader));
 	checkShaderCompilation(vertexShader);
 
 	// Compile the fragment shader
 	GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-	glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
-	glCompileShader(fragmentShader);
+	CHECK_GL_ERROR();
+	GL(glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL));
+	GL(glCompileShader(fragmentShader));
 	checkShaderCompilation(fragmentShader);
 
 	// Create and link the shader program
 	shaderProgram = glCreateProgram();
-	glAttachShader(shaderProgram, vertexShader);
-	glAttachShader(shaderProgram, fragmentShader);
-	glLinkProgram(shaderProgram);
+	CHECK_GL_ERROR();
+	GL(glAttachShader(shaderProgram, vertexShader));
+	GL(glAttachShader(shaderProgram, fragmentShader));
+	GL(glLinkProgram(shaderProgram));
 	checkProgramLinking(shaderProgram);
 
 	// Clean up the shaders as they're no longer needed
-	glDeleteShader(vertexShader);
-	glDeleteShader(fragmentShader);
+	GL(glDeleteShader(vertexShader));
+	GL(glDeleteShader(fragmentShader));
 }
 
 void
@@ -195,20 +274,20 @@ setupQuadVertexData()
 	                          1.0f,  1.0f,  1.0f, 1.0f, -1.0f, 1.0f,  0.0f, 1.0f};
 #endif
 
-	glGenVertexArrays(1, &quadVAO);
-	glGenBuffers(1, &quadVBO);
+	GL(glGenVertexArrays(1, &quadVAO));
+	GL(glGenBuffers(1, &quadVBO));
 
-	glBindVertexArray(quadVAO);
-	glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
+	GL(glBindVertexArray(quadVAO));
+	GL(glBindBuffer(GL_ARRAY_BUFFER, quadVBO));
+	GL(glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW));
 
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), (GLvoid *)0);
-	glEnableVertexAttribArray(0);
+	GL(glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), (GLvoid *)0));
+	GL(glEnableVertexAttribArray(0));
 
-	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), (GLvoid *)(3 * sizeof(GLfloat)));
-	glEnableVertexAttribArray(1);
+	GL(glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), (GLvoid *)(3 * sizeof(GLfloat))));
+	GL(glEnableVertexAttribArray(1));
 
-	glBindVertexArray(0);
+	GL(glBindVertexArray(0));
 }
 
 void
@@ -225,9 +304,13 @@ draw(GLuint framebuffer, GLuint texture)
 
 	// Clear the framebuffer
 
-
+	EGLContext eglc = eglGetCurrentContext();
+	if (eglc == EGL_NO_CONTEXT) {
+		U_LOG_E("No EGL context");
+		abort();
+    }
 	// Use the shader program
-	glUseProgram(shaderProgram);
+	GL(glUseProgram(shaderProgram));
 
 	// Bind the texture
 	glActiveTexture(GL_TEXTURE0);

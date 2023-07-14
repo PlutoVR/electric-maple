@@ -484,7 +484,7 @@ mainloop_one(struct state_t &state)
 	if (XR_FAILED(result)) {
 		ALOGE("Failed to wait for swapchain image (%d)", result);
 	}
-
+    eglMakeCurrent(state.display, state.surface, EGL_NO_SURFACE, state.context);
 	if (state.xf) {
 		//	if (false) {
 
@@ -622,7 +622,7 @@ void
 android_main(struct android_app *app)
 {
 	start_logger("ElectricMaple");
-	setenv("GST_DEBUG", "*:5", 1);
+	setenv("GST_DEBUG", "*:3", 1);
 	// setenv("GST_DEBUG", "*ssl*:9,*tls*:9,*webrtc*:9", 1);
 	// setenv("GST_DEBUG", "*CAPS*:6", 1);
 
@@ -789,6 +789,7 @@ android_main(struct android_app *app)
 		state.images[i].type = XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_ES_KHR;
 	}
 
+	// TODO if the swapchain has more than 4 images this will error and we aren't checking it
 	xrEnumerateSwapchainImages(state.swapchain, 4, &state.imageCount, (XrSwapchainImageBaseHeader *)state.images);
 
 	if (XR_FAILED(result)) {
@@ -798,7 +799,9 @@ android_main(struct android_app *app)
 	glGenFramebuffers(state.imageCount, state.framebuffers);
 
 
+	// if there is a frame: we probably just made one above
 	if (state.xf) {
+		ALOGI("state.xf is non-null");
 		glBindTexture(GL_TEXTURE_2D, state.frame_texture_id);
 		glPixelStorei(GL_UNPACK_ROW_LENGTH, state.xf->stride / 4);
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, state.xf->width, state.xf->height, 0, GL_RGBA, GL_UNSIGNED_BYTE,
