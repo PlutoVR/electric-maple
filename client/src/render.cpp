@@ -20,7 +20,7 @@ checkGLError(const char *func, int line)
 {
 	GLenum err = glGetError();
 	if (err != GL_NO_ERROR) {
-		U_LOG_E("RYLIE OpenGL error: %d, %s:%d", err, func, line);
+		ALOGE("RYLIE OpenGL error: %d, %s:%d", err, func, line);
 		return false;
 	}
 	return true;
@@ -33,7 +33,7 @@ checkGLErrorWrap(const char *when, const char *expr, const char *func, int line)
 {
 	GLenum err = glGetError();
 	if (err != GL_NO_ERROR) {
-		U_LOG_E("RYLIE OpenGL error: %s %s: %d, %s:%d", when, expr, err, func, line);
+		ALOGE("RYLIE OpenGL error: %s %s: %d, %s:%d", when, expr, err, func, line);
 	}
 }
 
@@ -50,7 +50,7 @@ checkEGLError(const char *func, int line)
 {
 	EGLint err = eglGetError();
 	if (err != EGL_SUCCESS) {
-		U_LOG_E("RYLIE EGL error: %d, %s:%d", err, func, line);
+		ALOGE("RYLIE EGL error: %d, %s:%d", err, func, line);
 		return false;
 	}
 	return true;
@@ -63,7 +63,7 @@ checkEGLErrorWrap(const char *when, const char *expr, const char *func, int line
 {
 	EGLint err = eglGetError();
 	if (err != EGL_SUCCESS) {
-		U_LOG_E("RYLIE EGL error: %s %s: %d, %s:%d", when, expr, err, func, line);
+		ALOGE("RYLIE EGL error: %s %s: %d, %s:%d", when, expr, err, func, line);
 	}
 }
 
@@ -80,7 +80,7 @@ initializeEGL(struct state_t &state)
 {
 	EGL(state.display = eglGetDisplay(EGL_DEFAULT_DISPLAY));
 	if (state.display == EGL_NO_DISPLAY) {
-		printf("Failed to get EGL display");
+		ALOGE("Failed to get EGL display");
 		return;
 	}
 
@@ -88,7 +88,7 @@ initializeEGL(struct state_t &state)
 
 	CHECK_EGL_ERROR();
 	if (!success) {
-		printf("Failed to initialize EGL");
+		ALOGE("Failed to initialize EGL");
 		return;
 	}
 
@@ -136,7 +136,7 @@ initializeEGL(struct state_t &state)
 	EGL(state.context = eglCreateContext(state.display, state.config, EGL_NO_CONTEXT, contextAttributes));
 
 	if (state.context == EGL_NO_CONTEXT) {
-		U_LOG_E("Failed to create EGL context");
+		ALOGE("Failed to create EGL context");
 		abort();
 	}
 	CHECK_EGL_ERROR();
@@ -144,14 +144,14 @@ initializeEGL(struct state_t &state)
 	EGLint surfaceAttributes[] = {EGL_WIDTH, 16, EGL_HEIGHT, 16, EGL_NONE};
 	EGL(state.surface = eglCreatePbufferSurface(state.display, state.config, surfaceAttributes));
 	if (state.surface == EGL_NO_SURFACE) {
-		printf("Failed to create EGL surface");
+		ALOGE("Failed to create EGL surface");
 		eglDestroyContext(state.display, state.context);
 		return;
 	}
 	CHECK_EGL_ERROR();
 
 	if (eglMakeCurrent(state.display, state.surface, state.surface, state.context) == EGL_FALSE) {
-		printf("Failed to make EGL context current");
+		ALOGE("Failed to make EGL context current");
 		CHECK_EGL_ERROR();
 		eglDestroySurface(state.display, state.surface);
 		eglDestroyContext(state.display, state.context);
@@ -197,7 +197,7 @@ checkShaderCompilation(GLuint shader)
 	glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
 	if (!success) {
 		glGetShaderInfoLog(shader, 512, NULL, infoLog);
-		printf("Shader compilation failed: %s\n", infoLog);
+		ALOGE("Shader compilation failed: %s\n", infoLog);
 	}
 }
 
@@ -210,7 +210,7 @@ checkProgramLinking(GLuint program)
 	glGetProgramiv(program, GL_LINK_STATUS, &success);
 	if (!success) {
 		glGetProgramInfoLog(program, 512, NULL, infoLog);
-		printf("Shader program linking failed: %s\n", infoLog);
+		ALOGE("Shader program linking failed: %s\n", infoLog);
 	}
 }
 
@@ -292,9 +292,9 @@ draw(GLuint framebuffer, GLuint texture)
 
 	EGLContext eglc = eglGetCurrentContext();
 	if (eglc == EGL_NO_CONTEXT) {
-		U_LOG_E("No EGL context");
+		ALOGE("No EGL context");
 		abort();
-    }
+	}
 	// Use the shader program
 	GL(glUseProgram(shaderProgram));
 
@@ -319,7 +319,7 @@ draw(GLuint framebuffer, GLuint texture)
 		case GL_OUT_OF_MEMORY: errorStr = "GL_OUT_OF_MEMORY"; break;
 		default: errorStr = "Unknown error"; break;
 		}
-		printf("error! %s", errorStr);
+		ALOGE("error! %s", errorStr);
 	}
 
 	// Unbind the framebuffer
