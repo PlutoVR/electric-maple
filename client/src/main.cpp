@@ -487,7 +487,7 @@ mainloop_one(struct state_t &state)
 	}
 
 	ALOGI("mainloop_one: Making EGL context current");
-	eglMakeCurrent(state.display, state.surface, EGL_NO_SURFACE, state.context);
+	eglMakeCurrent(state.display, EGL_NO_SURFACE /* state.surface */, EGL_NO_SURFACE, state.context);
 	if (state.xf) {
 		//	if (false) {
 
