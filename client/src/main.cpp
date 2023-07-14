@@ -6,6 +6,7 @@
  * @author Moshi Turner <moses@collabora.com>
  */
 
+#include <EGL/egl.h>
 #include <cmath>
 #include <cstdlib>
 #include <ctime>
@@ -484,7 +485,9 @@ mainloop_one(struct state_t &state)
 	if (XR_FAILED(result)) {
 		ALOGE("Failed to wait for swapchain image (%d)", result);
 	}
-    eglMakeCurrent(state.display, state.surface, EGL_NO_SURFACE, state.context);
+
+	ALOGI("mainloop_one: Making EGL context current");
+	eglMakeCurrent(state.display, state.surface, EGL_NO_SURFACE, state.context);
 	if (state.xf) {
 		//	if (false) {
 
@@ -564,6 +567,9 @@ mainloop_one(struct state_t &state)
 	hmd_pose(state);
 
 	xrEndFrame(state.session, &endInfo);
+
+	ALOGI("mainloop_one: Making EGL context not-current");
+	eglMakeCurrent(state.display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
 }
 
 #if 0
@@ -740,12 +746,6 @@ android_main(struct android_app *app)
 	struct xrt_fs *blah = vf_fs_videotestsource(&xfctx, &state);
 	ALOGE("Done creating videotestsrc\n");
 
-	ALOGE("Starting source\n");
-
-	// FIXME: Eventually completely remove XRT_FS dependency here for driving the gst pipeline look
-	xrt_fs_stream_start(blah, &state.frame_sink, XRT_FS_CAPTURE_TYPE_TRACKING, 0);
-	ALOGE("Done starting source\n");
-
 	// OpenXR session
 
 	PFN_xrGetOpenGLESGraphicsRequirementsKHR xrGetOpenGLESGraphicsRequirementsKHR = NULL;
@@ -827,6 +827,13 @@ android_main(struct android_app *app)
 	setupRender();
 
 	eglMakeCurrent(state.display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+	ALOGE("DEBUG: Un-make EGL context current\n");
+
+
+	ALOGE("Starting source\n");
+	// FIXME: Eventually completely remove XRT_FS dependency here for driving the gst pipeline look
+	xrt_fs_stream_start(blah, &state.frame_sink, XRT_FS_CAPTURE_TYPE_TRACKING, 0);
+	ALOGE("Done starting source\n");
 
 	ALOGE("DEBUG: Really make socket\n");
 	really_make_socket(state);
