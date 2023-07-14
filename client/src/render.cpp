@@ -140,6 +140,7 @@ initializeEGL(struct state_t &state)
 		abort();
 	}
 	CHECK_EGL_ERROR();
+	ALOGI("EGL: Created context");
 
 	EGLint surfaceAttributes[] = {EGL_WIDTH, 16, EGL_HEIGHT, 16, EGL_NONE};
 	EGL(state.surface = eglCreatePbufferSurface(state.display, state.config, surfaceAttributes));
@@ -149,6 +150,7 @@ initializeEGL(struct state_t &state)
 		return;
 	}
 	CHECK_EGL_ERROR();
+	ALOGI("EGL: Created surface");
 
 	if (eglMakeCurrent(state.display, state.surface, state.surface, state.context) == EGL_FALSE) {
 		ALOGE("Failed to make EGL context current");
@@ -156,6 +158,7 @@ initializeEGL(struct state_t &state)
 		eglDestroySurface(state.display, state.surface);
 		eglDestroyContext(state.display, state.context);
 	}
+	ALOGI("EGL: Made context current");
 }
 
 // Vertex shader source code

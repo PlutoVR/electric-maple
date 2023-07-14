@@ -44,42 +44,46 @@
 
 struct state_t
 {
-    struct android_app *app;
-    JNIEnv *jni;
-    JavaVM *java_vm;
-    bool hasPermissions;
-    // ANativeWindow *window; // Are we going to need this ?
-    EGLDisplay display;
-    EGLContext context;
-    EGLConfig config;
-    EGLSurface surface;
-    XrInstance instance;
-    XrSystemId system;
-    XrSession session;
-    XrSessionState sessionState;
-    XrSpace worldSpace;
-    XrSpace viewSpace;
-    XrSwapchain swapchain;
-    XrSwapchainImageOpenGLESKHR images[4];
-    GLuint framebuffers[4];
-    GLuint shader_program;
-    uint32_t imageCount;
-    uint32_t width;
-    uint32_t height;
+	struct android_app *app;
+	JNIEnv *jni;
+	JavaVM *java_vm;
+	bool hasPermissions;
+	// ANativeWindow *window; // Are we going to need this ?
 
-    int socket_fd;
-    struct sockaddr_in socket_addr;
+	EGLDisplay display;
+	// context created in initializeEGL
+	EGLContext context;
+	// config used to create context
+	EGLConfig config;
+	// 16x16 pbuffer surface
+	EGLSurface surface;
+	XrInstance instance;
+	XrSystemId system;
+	XrSession session;
+	XrSessionState sessionState;
+	XrSpace worldSpace;
+	XrSpace viewSpace;
+	XrSwapchain swapchain;
+	XrSwapchainImageOpenGLESKHR images[4];
+	GLuint framebuffers[4];
+	GLuint shader_program;
+	uint32_t imageCount;
+	uint32_t width;
+	uint32_t height;
 
-    // this is bad, we want an xrt_frame_node etc.
+	int socket_fd;
+	struct sockaddr_in socket_addr;
 
-    int way;
+	// this is bad, we want an xrt_frame_node etc.
 
-    struct xrt_frame_sink frame_sink;
-    struct xrt_frame *xf;
-    // this is the GL texture id used by the main renderer. This is what gst/ code should also be using.
-    GLuint frame_texture_id;
-    GLenum frame_texture_target;
-    GLboolean frame_available;
+	int way;
+
+	struct xrt_frame_sink frame_sink;
+	struct xrt_frame *xf;
+	// this is the GL texture id used by the main renderer. This is what gst/ code should also be using.
+	GLuint frame_texture_id;
+	GLenum frame_texture_target;
+	GLboolean frame_available;
 };
 
 #ifdef __cplusplus

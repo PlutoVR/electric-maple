@@ -96,7 +96,8 @@ struct vf_fs
 	GstGLContext *gst_gl_other_context;
 
 	GstGLDisplay *display;
-	GstGLContext *other_context;
+	/// Wrapped version of the android_main/render context
+	GstGLContext *android_main_context;
 	GstGLContext *context;
 	GstElement *appsink;
 	// GLenum texture_target; // WE SHOULD USE RENDER'S texture target
@@ -184,7 +185,7 @@ bus_sync_handler_cb(GstBus *bus, GstMessage *msg, gpointer user_data)
 			ALOGI("Got message: Need app context");
 			g_autoptr(GstContext) app_context = gst_context_new("gst.gl.app_context", TRUE);
 			GstStructure *s = gst_context_writable_structure(app_context);
-			gst_structure_set(s, "context", GST_TYPE_GL_CONTEXT, vid->other_context, NULL);
+			gst_structure_set(s, "context", GST_TYPE_GL_CONTEXT, vid->android_main_context, NULL);
 			gst_element_set_context(GST_ELEMENT(msg->src), app_context);
 		}
 	}
@@ -291,9 +292,9 @@ vf_fs_mainloop(void *ptr)
 
 	struct vf_fs *vid = (struct vf_fs *)ptr;
 
-	ALOGD("Let's run!");
+	ALOGD("vf_fs_mainloop: running GMainLoop!");
 	g_main_loop_run(vid->loop);
-	ALOGD("Going out!");
+	ALOGD("vf_fs_mainloop: g_main_loop_run returned, will unref");
 
 	// gst_object_unref(vid->testsink);
 	// gst_element_set_state(vid->source, GST_STATE_NULL);
@@ -345,7 +346,7 @@ stop_pipeline(struct vf_fs *vid)
 	os_thread_helper_destroy(&vid->play_thread);
 	gst_clear_object(&vid->pipeline);
 	gst_clear_object(&vid->display);
-	gst_clear_object(&vid->other_context);
+	gst_clear_object(&vid->android_main_context);
 	gst_clear_object(&vid->context);
 }
 
@@ -675,7 +676,7 @@ process_candidate(guint mlineindex, const gchar *candidate)
 }
 
 static void
-message_cb(SoupWebsocketConnection *connection, gint type, GBytes *message, gpointer user_data)
+ws_on_message_cb(SoupWebsocketConnection *connection, gint type, GBytes *message, gpointer user_data)
 {
 	ALOGE("message_cb called!");
 	gsize length = 0;
@@ -833,7 +834,7 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 		GstBus *bus;
 
 		ALOGW("YO !! : Websocket connected\n");
-		g_signal_connect(ws, "message", G_CALLBACK(message_cb), NULL);
+		g_signal_connect(ws, "message", G_CALLBACK(ws_on_message_cb), NULL);
 
 		// decodebin3 seems to .. hang?
 		// omxh264dec doesn't seem to exist
@@ -843,10 +844,10 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 
 
 		gchar *pipeline_string = g_strdup_printf(
-		    // "webrtcbin name=webrtc bundle-policy=max-bundle ! "
-		    // "rtph264depay ! "
-		    // "amcviddec-omxqcomvideodecoderavc ! "
-		    "videotestsrc !"
+		    "webrtcbin name=webrtc bundle-policy=max-bundle ! "
+		    "rtph264depay ! "
+		    "amcviddec-omxqcomvideodecoderavc ! "
+		    // "videotestsrc !"
 		    "glsinkbin name=glsink ! "
 		    "appsink name=testsink");
 
@@ -861,7 +862,7 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 		*/
 
 
-		printf("launching pipeline\n");
+		ALOGI("launching pipeline\n");
 		if (NULL == vid) {
 			ALOGE("FRED: NULL VID");
 		}
@@ -873,10 +874,12 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 		}
 		gst_object_ref_sink(vid->pipeline);
 
-		printf("getting webrtcbin\n");
+		ALOGI("getting webrtcbin\n");
 		webrtcbin = gst_bin_get_by_name(GST_BIN(vid->pipeline), "webrtc");
 		g_signal_connect(webrtcbin, "on-ice-candidate", G_CALLBACK(webrtc_on_ice_candidate_cb), NULL);
 
+		// TODO no way to know if the android_main thread still has this context active, and no locking
+		// TODO race condition!
 		// E_LOG_E("DEBUG: display=%p, surface=%p, ");
 		//  We'll need and active egl context below
 		if (eglMakeCurrent(vid->state->display, vid->state->surface, vid->state->surface,
@@ -884,13 +887,14 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 			ALOGE("FRED: websocket_connected_cb: Failed make egl context current");
 		}
 
-		GstGLPlatform gl_platform = GST_GL_PLATFORM_EGL;
-		guintptr gl_handle = gst_gl_context_get_current_gl_context(gl_platform);
-		GstGLAPI gl_api = gst_gl_context_get_current_gl_api(gl_platform, NULL, NULL);
+		const GstGLPlatform egl_platform = GST_GL_PLATFORM_EGL;
+		guintptr android_main_egl_context_handle = gst_gl_context_get_current_gl_context(egl_platform);
+		GstGLAPI gl_api = gst_gl_context_get_current_gl_api(egl_platform, NULL, NULL);
 		vid->gst_gl_display = g_object_ref_sink(gst_gl_display_new());
-		vid->other_context =
-		    g_object_ref_sink(gst_gl_context_new_wrapped(vid->gst_gl_display, gl_handle, gl_platform, gl_api));
+		vid->android_main_context = g_object_ref_sink(gst_gl_context_new_wrapped(
+		    vid->gst_gl_display, android_main_egl_context_handle, egl_platform, gl_api));
 
+		// get out app sink and set the caps
 		g_autoptr(GstCaps) caps = gst_caps_from_string(SINK_CAPS);
 		vid->appsink = gst_bin_get_by_name(GST_BIN(vid->pipeline), "testsink");
 		g_object_set(vid->appsink, "caps", caps, NULL);
@@ -899,12 +903,15 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 		/*g_autoptr(GstElement) glsinkbin = gst_bin_get_by_name(vid->pipeline, "glsink");
 		g_object_set(glsinkbin, "sink", vid->appsink, NULL);*/
 
+		// call bus_sync_handler_cb every time a message is posted on the bus, in the posting thread.
 		bus = gst_element_get_bus(vid->pipeline);
 		gst_bus_set_sync_handler(bus, bus_sync_handler_cb, vid, NULL);
+
+		// start playing
 		gst_element_set_state(vid->pipeline, GST_STATE_PLAYING);
 
 		// setup_sink(vid);
-		printf("done getting webrtcbin\n");
+		ALOGI("done getting webrtcbin\n");
 
 		// FIXME: Implement this when implementing data channel
 		// g_signal_connect(webrtcbin, "on-data-channel", G_CALLBACK(webrtc_on_data_channel_cb), NULL);
@@ -1196,7 +1203,7 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 		os_nanosleep(100 * 1000 * 1000);
 	}
 #endif
-	ALOGD("Got first sample");
+	ALOGD("started async connect call, about to spawn vf_fs_mainloop");
 	// gst_element_set_state(vid->source, GST_STATE_PAUSED);
 
 	ret = os_thread_helper_start(&vid->play_thread, vf_fs_mainloop, vid);
