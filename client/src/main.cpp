@@ -486,8 +486,16 @@ mainloop_one(struct state_t &state)
 		ALOGE("Failed to wait for swapchain image (%d)", result);
 	}
 
-	ALOGI("mainloop_one: Making EGL context current");
-	eglMakeCurrent(state.display, EGL_NO_SURFACE /* state.surface */, EGL_NO_SURFACE, state.context);
+	// ALOGI("mainloop_one: Making EGL context current");
+	EGLBoolean bret = eglMakeCurrent( //
+	    state.display,                //
+	    EGL_NO_SURFACE,               //
+	    EGL_NO_SURFACE,               //
+	    state.context);               //
+	if (!bret) {
+		ALOGE("eglMakeCurrent(Make): false, %u", eglGetError());
+	}
+
 	if (state.xf) {
 		//	if (false) {
 
@@ -568,8 +576,14 @@ mainloop_one(struct state_t &state)
 
 	xrEndFrame(state.session, &endInfo);
 
-	ALOGI("mainloop_one: Making EGL context not-current");
-	eglMakeCurrent(state.display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+	bret = eglMakeCurrent( //
+	    state.display,     //
+	    EGL_NO_SURFACE,    //
+	    EGL_NO_SURFACE,    //
+	    EGL_NO_CONTEXT);   //
+	if (bret != EGL_TRUE) {
+		ALOGE("eglMakeCurrent(Un-make): false, %u", eglGetError());
+	}
 }
 
 #if 0
