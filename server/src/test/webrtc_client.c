@@ -45,8 +45,8 @@ gst_bus_cb(GstBus *bus, GstMessage *message, gpointer data)
 
 	switch (GST_MESSAGE_TYPE(message)) {
 	case GST_MESSAGE_ERROR: {
-		GError *gerr;
-		gchar *debug_msg;
+		GError *gerr = NULL;
+		gchar *debug_msg = NULL;
 		gst_message_parse_error(message, &gerr, &debug_msg);
 		GST_DEBUG_BIN_TO_DOT_FILE(pipeline, GST_DEBUG_GRAPH_SHOW_ALL, "mss-pipeline-ERROR");
 		g_error("Error: %s (%s)", gerr->message, debug_msg);
@@ -54,8 +54,8 @@ gst_bus_cb(GstBus *bus, GstMessage *message, gpointer data)
 		g_free(debug_msg);
 	} break;
 	case GST_MESSAGE_WARNING: {
-		GError *gerr;
-		gchar *debug_msg;
+		GError *gerr = NULL;
+		gchar *debug_msg = NULL;
 		gst_message_parse_warning(message, &gerr, &debug_msg);
 		GST_DEBUG_BIN_TO_DOT_FILE(pipeline, GST_DEBUG_GRAPH_SHOW_ALL, "mss-pipeline-WARNING");
 		g_warning("Warning: %s (%s)", gerr->message, debug_msg);
@@ -73,9 +73,9 @@ gst_bus_cb(GstBus *bus, GstMessage *message, gpointer data)
 void
 send_sdp_answer(const gchar *sdp)
 {
-	JsonBuilder *builder;
-	JsonNode *root;
-	gchar *msg_str;
+	JsonBuilder *builder = NULL;
+	JsonNode *root = NULL;
+	gchar *msg_str = NULL;
 
 	g_print("Send answer: %s\n", sdp);
 
@@ -101,9 +101,9 @@ send_sdp_answer(const gchar *sdp)
 static void
 webrtc_on_ice_candidate_cb(GstElement *webrtcbin, guint mlineindex, gchar *candidate)
 {
-	JsonBuilder *builder;
-	JsonNode *root;
-	gchar *msg_str;
+	JsonBuilder *builder = NULL;
+	JsonNode *root = NULL;
+	gchar *msg_str = NULL;
 
 	g_print("Send candidate: %u %s\n", mlineindex, candidate);
 
@@ -135,7 +135,7 @@ static void
 on_answer_created(GstPromise *promise, gpointer user_data)
 {
 	GstWebRTCSessionDescription *answer = NULL;
-	gchar *sdp;
+	gchar *sdp = NULL;
 
 	gst_structure_get(gst_promise_get_reply(promise), "answer", GST_TYPE_WEBRTC_SESSION_DESCRIPTION, &answer, NULL);
 	gst_promise_unref(promise);
