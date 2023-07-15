@@ -13,8 +13,17 @@
 static gchar *websocket_uri = NULL;
 
 static GOptionEntry options[] = {
-    {"websocket-uri", 'u', 0, G_OPTION_ARG_STRING, &websocket_uri, "Websocket URI of webrtc signaling connection"},
-    {NULL}};
+    {
+        .long_name = "websocket-uri",
+        .short_name = 'u',
+        .flags = 0,
+        .arg = G_OPTION_ARG_STRING,
+        .arg_data = &websocket_uri,
+        .description = "Websocket URI of webrtc signaling connection",
+        .arg_description = "Websocket URI of webrtc signaling connection",
+    },
+    {0},
+};
 
 #define WEBSOCKET_URI_DEFAULT "ws://127.0.0.1:8080/ws"
 
@@ -262,6 +271,7 @@ main(int argc, char *argv[])
 	GOptionContext *option_context;
 	GMainLoop *loop;
 	SoupSession *soup_session;
+	SoupMessage *soup_message;
 	GError *error = NULL;
 
 	gst_init(&argc, &argv);
@@ -279,26 +289,26 @@ main(int argc, char *argv[])
 	}
 
 	soup_session = soup_session_new();
+	soup_message = soup_message_new(SOUP_METHOD_GET, websocket_uri);
 
 #ifdef PL_LIBSOUP2
-	soup_session_websocket_connect_async(soup_session,                                     // session
-	                                     soup_message_new(SOUP_METHOD_GET, websocket_uri), // message
-	                                     NULL,                                             // origin
-	                                     NULL,                                             // protocols
-	                                     NULL,                                             // cancellable
-	                                     websocket_connected_cb,                           // callback
-	                                     NULL);                                            // user_data
+	soup_session_websocket_connect_async(soup_session,           // session
+	                                     soup_message,           // message
+	                                     NULL,                   // origin
+	                                     NULL,                   // protocols
+	                                     NULL,                   // cancellable
+	                                     websocket_connected_cb, // callback
+	                                     NULL);                  // user_data
 
 #else
-	soup_session_websocket_connect_async(soup_session,                                     // session
-	                                     soup_message_new(SOUP_METHOD_GET, websocket_uri), // message
-	                                     NULL,                                             // origin
-	                                     NULL,                                             // protocols
-	                                     0,                                                // io_prority
-	                                     NULL,                                             // cancellable
-	                                     websocket_connected_cb,                           // callback
-	                                     NULL);                                            // user_data
-
+	soup_session_websocket_connect_async(soup_session,           // session
+	                                     soup_message,           // message
+	                                     NULL,                   // origin
+	                                     NULL,                   // protocols
+	                                     0,                      // io_prority
+	                                     NULL,                   // cancellable
+	                                     websocket_connected_cb, // callback
+	                                     NULL);                  // user_data
 #endif
 
 	loop = g_main_loop_new(NULL, FALSE);
