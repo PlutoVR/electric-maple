@@ -848,7 +848,7 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 		    "rtph264depay ! "
 		    "amcviddec-omxqcomvideodecoderavc ! "
 		    // "videotestsrc !"
-		    "glsinkbin name=glsink ! "
+		    // "glsinkbin name=glsink ! "
 		    "appsink name=testsink");
 
 		/*
