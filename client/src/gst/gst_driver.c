@@ -515,19 +515,21 @@ gst_bus_cb(GstBus *bus, GstMessage *message, gpointer data)
 
 	switch (GST_MESSAGE_TYPE(message)) {
 	case GST_MESSAGE_ERROR: {
-		GError *gerr;
-		gchar *debug_msg;
+		GError *gerr = NULL;
+		gchar *debug_msg = NULL;
 		gst_message_parse_error(message, &gerr, &debug_msg);
 		GST_DEBUG_BIN_TO_DOT_FILE(pipeline, GST_DEBUG_GRAPH_SHOW_ALL, "mss-pipeline-ERROR");
+		ALOGE("Error: %s (%s)", gerr->message, debug_msg);
 		g_error("Error: %s (%s)", gerr->message, debug_msg);
 		g_error_free(gerr);
 		g_free(debug_msg);
 	} break;
 	case GST_MESSAGE_WARNING: {
-		GError *gerr;
-		gchar *debug_msg;
+		GError *gerr = NULL;
+		gchar *debug_msg = NULL;
 		gst_message_parse_warning(message, &gerr, &debug_msg);
 		GST_DEBUG_BIN_TO_DOT_FILE(pipeline, GST_DEBUG_GRAPH_SHOW_ALL, "mss-pipeline-WARNING");
+		ALOGW("Warning: %s (%s)", gerr->message, debug_msg);
 		g_warning("Warning: %s (%s)", gerr->message, debug_msg);
 		g_error_free(gerr);
 		g_free(debug_msg);
