@@ -2,16 +2,18 @@
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
- * @brief  Video file frameserver implementation
+ * @brief  Electric Maple XR streaming frameserver, based on video file frameserver implementation
+ * @author Ryan Pavlik <rpavlik@collabora.com>
+ * @author Moshi Turner <moses@collabora.com>
+ * @author Jakob Bornecrantz <jakob@collabora.com>
  * @author Christoph Haag <christoph.haag@collabora.com>
  * @author Pete Black <pblack@collabora.com>
- * @author Jakob Bornecrantz <jakob@collabora.com>
- * @ingroup drv_vf
+ * @ingroup xrt_fs_em
  */
+#include "gst_common.h"
 
-#include "gst/gstinfo.h"
-#include "gst/gstmessage.h"
-#include "gst/gstutils.h"
+#include "app_log.h"
+
 #include "os/os_time.h"
 #include "os/os_threading.h"
 
@@ -29,18 +31,21 @@
 #include <assert.h>
 
 #include <glib.h>
-#include <gst/gst.h>
-#include <gst/gl/gl.h>
 #include <gst/app/gstappsink.h>
+#include <gst/gl/gl.h>
+#include <gst/gst.h>
 #include <gst/gstelement.h>
+#include <gst/gstinfo.h>
+#include <gst/gstmessage.h>
+#include <gst/gstutils.h>
 #include <gst/video/video-frame.h>
+
+#include "gstjniutils.h"
 
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
 #include <GLES2/gl2.h>
 #include <GLES2/gl2ext.h>
-
-#define PL_LIBSOUP2
 
 
 #define GST_USE_UNSTABLE_API
@@ -51,7 +56,6 @@
 
 #include <json-glib/json-glib.h>
 
-#include "app_log.h"
 
 /*
  *
@@ -81,12 +85,12 @@ DEBUG_GET_ONCE_LOG_OPTION(vf_log, "VF_LOG", U_LOGGING_TRACE)
 	"texture-target = (string) { 2D, external-oes } "
 
 /*!
- * A frame server operating on a video file.
+ * A frame server for "Electric Maple" XR streaming
  *
  * @implements xrt_frame_node
  * @implements xrt_fs
  */
-struct vf_fs
+struct em_fs
 {
 	struct xrt_fs base;
 
@@ -139,7 +143,7 @@ struct vf_fs
  *
  * @implements xrt_frame
  */
-struct vf_frame
+struct em_frame
 {
 	struct xrt_frame base;
 
@@ -149,12 +153,7 @@ struct vf_frame
 };
 
 
-
 static gchar *websocket_uri = NULL;
-
-static GOptionEntry options[] = {
-    {"websocket-uri", 'u', 0, G_OPTION_ARG_STRING, &websocket_uri, "Websocket URI of webrtc signaling connection"},
-    {NULL}};
 
 #define WEBSOCKET_URI_DEFAULT "ws://127.0.0.1:8080/ws"
 
@@ -163,10 +162,6 @@ static SoupWebsocketConnection *ws = NULL;
 static GstElement *webrtcbin =
     NULL; // We need webrtcbin for the offer/promise management... no obvious way to pass 'vid' all the way through
 static GstWebRTCDataChannel *datachannel = NULL;
-
-//!@todo SORRY
-// FIXME : Check if this was added for vid lifetime reasons.
-static struct vf_fs *the_vf_fs = NULL;
 
 
 static void
@@ -199,7 +194,7 @@ message_debug(const char *function, GstMessage *msg)
 static GstBusSyncReply
 bus_sync_handler_cb(GstBus *bus, GstMessage *msg, gpointer user_data)
 {
-	struct vf_fs *vid = user_data;
+	struct em_fs *vid = user_data;
 	LOG_MSG(msg);
 
 	/* Do not let GstGL retrieve the display handle on its own
@@ -226,7 +221,7 @@ bus_sync_handler_cb(GstBus *bus, GstMessage *msg, gpointer user_data)
 }
 
 static void
-render_gl_texture(struct vf_fs *vid)
+render_gl_texture(struct em_fs *vid)
 {
 	// FIXME: Render GL texture using vid->texture_target and vid->texture_id
 #if 0
@@ -261,7 +256,7 @@ render_gl_texture(struct vf_fs *vid)
 }
 
 static gboolean
-render_frame(struct vf_fs *vid)
+render_frame(struct em_fs *vid)
 {
 	g_autoptr(GstSample) sample = gst_app_sink_pull_sample(GST_APP_SINK(vid->appsink));
 	if (sample == NULL) {
@@ -318,15 +313,15 @@ render_frame(struct vf_fs *vid)
 }
 
 static void *
-vf_fs_mainloop(void *ptr)
+em_fs_mainloop(void *ptr)
 {
 	SINK_TRACE_MARKER();
 
-	struct vf_fs *vid = (struct vf_fs *)ptr;
+	struct em_fs *vid = (struct em_fs *)ptr;
 
-	ALOGD("vf_fs_mainloop: running GMainLoop!");
+	ALOGD("em_fs_mainloop: running GMainLoop!");
 	g_main_loop_run(vid->loop);
-	ALOGD("vf_fs_mainloop: g_main_loop_run returned, will unref");
+	ALOGD("em_fs_mainloop: g_main_loop_run returned, will unref");
 
 	// gst_object_unref(vid->testsink);
 	// gst_element_set_state(vid->source, GST_STATE_NULL);
@@ -339,9 +334,9 @@ vf_fs_mainloop(void *ptr)
 }
 
 /*static void *
-vf_fs_mainloop(void *ptr)
+em_fs_mainloop(void *ptr)
 {
-  struct vf_fs *vid = ptr;
+  struct em_fs *vid = ptr;
 
   SINK_TRACE_MARKER();
 
@@ -371,7 +366,7 @@ vf_fs_mainloop(void *ptr)
 /// Sets pipeline state to null, and stops+destroys the frame server thread
 /// before cleaning up gstreamer objects
 static void
-stop_pipeline(struct vf_fs *vid)
+stop_pipeline(struct em_fs *vid)
 {
 	vid->is_running = false;
 	gst_element_set_state(vid->pipeline, GST_STATE_NULL);
@@ -391,19 +386,19 @@ stop_pipeline(struct vf_fs *vid)
 /*!
  * Cast to derived type.
  */
-static inline struct vf_fs *
+static inline struct em_fs *
 vf_fs(struct xrt_fs *xfs)
 {
-	return (struct vf_fs *)xfs;
+	return (struct em_fs *)xfs;
 }
 
 /*!
  * Cast to derived type.
  */
-static inline struct vf_frame *
+static inline struct em_frame *
 vf_frame(struct xrt_frame *xf)
 {
-	return (struct vf_frame *)xf;
+	return (struct em_frame *)xf;
 }
 
 
@@ -418,7 +413,7 @@ vf_frame_destroy(struct xrt_frame *xf)
 {
 	SINK_TRACE_MARKER();
 
-	struct vf_frame *vff = vf_frame(xf);
+	struct em_frame *vff = vf_frame(xf);
 
 	gst_video_frame_unmap(&vff->frame);
 
@@ -439,7 +434,7 @@ vf_frame_destroy(struct xrt_frame *xf)
 
 
 static void
-vf_fs_frame(struct vf_fs *vid, GstSample *sample)
+em_fs_frame(struct em_fs *vid, GstSample *sample)
 {
 	SINK_TRACE_MARKER();
 
@@ -458,7 +453,7 @@ vf_fs_frame(struct vf_fs *vid, GstSample *sample)
 	gst_video_info_from_caps(&info, caps);
 
 	static int seq = 0;
-	struct vf_frame *vff = U_TYPED_CALLOC(struct vf_frame);
+	struct em_frame *vff = U_TYPED_CALLOC(struct em_frame);
 
 	if (!gst_video_frame_map(&vff->frame, &info, buffer, GST_MAP_READ)) {
 		ALOGE("Failed to map frame %d", seq);
@@ -512,7 +507,7 @@ print_gst_error(GstMessage *message)
 }
 
 static gboolean
-on_source_message(GstBus *bus, GstMessage *message, struct vf_fs *vid)
+on_source_message(GstBus *bus, GstMessage *message, struct em_fs *vid)
 {
 	LOG_MSG(message);
 	/* nil */
@@ -534,7 +529,7 @@ on_source_message(GstBus *bus, GstMessage *message, struct vf_fs *vid)
 static gboolean
 sigint_handler(gpointer user_data)
 {
-	struct vf_fs *vid = user_data;
+	struct em_fs *vid = user_data;
 	ALOGE("sigint_handler called!");
 	stop_pipeline(vid);
 	return G_SOURCE_REMOVE;
@@ -577,7 +572,7 @@ gst_bus_cb(GstBus *bus, GstMessage *message, gpointer data)
 }
 
 void
-send_sdp_answer(struct vf_fs *vid, const gchar *sdp)
+send_sdp_answer(struct em_fs *vid, const gchar *sdp)
 {
 	ALOGE("send_sdp_answer called!");
 	JsonBuilder *builder;
@@ -643,7 +638,7 @@ webrtc_on_ice_candidate_cb(GstElement *webrtcbin, guint mlineindex, gchar *candi
 static void
 on_answer_created(GstPromise *promise, gpointer user_data)
 {
-	struct vf_fs *vid = (struct vf_fs *)user_data;
+	struct em_fs *vid = (struct em_fs *)user_data;
 	ALOGE("on_answer_created called!");
 	GstWebRTCSessionDescription *answer = NULL;
 	gchar *sdp;
@@ -669,7 +664,7 @@ on_answer_created(GstPromise *promise, gpointer user_data)
 }
 
 static void
-process_sdp_offer(struct vf_fs *vid, const gchar *sdp)
+process_sdp_offer(struct em_fs *vid, const gchar *sdp)
 {
 	ALOGE("process_sdp_offer called!");
 	GstSDPMessage *sdp_msg = NULL;
@@ -717,7 +712,7 @@ process_candidate(guint mlineindex, const gchar *candidate)
 static void
 ws_on_message_cb(SoupWebsocketConnection *connection, gint type, GBytes *message, gpointer user_data)
 {
-	struct vf_fs *vid = (struct vf_fs *)user_data;
+	struct em_fs *vid = (struct em_fs *)user_data;
 	ALOGE("%s called!", __FUNCTION__);
 	gsize length = 0;
 	const gchar *msg_data = g_bytes_get_data(message, &length);
@@ -835,10 +830,12 @@ GST_PLUGIN_STATIC_DECLARE(overlaycomposition);
 GST_PLUGIN_STATIC_DECLARE(playback); // "FFMPEG "
 // GST_PLUGIN_STATIC_DECLARE(webrtcnice);
 
+#define RYLIE "RYLIE: "
+
 static void
-websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
+em_init_gst_and_capture_context(struct em_fs *vid, EGLDisplay display, EGLContext context)
 {
-	ALOGE("Fred : websocket_connected_cb called!\n");
+	ALOGV(RYLIE "register gstreamer");
 
 	GST_PLUGIN_STATIC_REGISTER(app);        // Definitely needed
 	GST_PLUGIN_STATIC_REGISTER(autodetect); // Definitely needed
@@ -861,12 +858,42 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 	GST_PLUGIN_STATIC_REGISTER(overlaycomposition);
 
 	GST_PLUGIN_STATIC_REGISTER(playback); // "FFMPEG "
-	                                      // GST_PLUGIN_STATIC_REGISTER(webrtcnice);
+	// GST_PLUGIN_STATIC_REGISTER(webrtcnice);
+
+	ALOGI(RYLIE "wrapping egl context");
+
+	EGLContext old_context = eglGetCurrentContext();
+	EGLSurface old_read_surface = eglGetCurrentSurface(EGL_READ);
+	EGLSurface old_draw_surface = eglGetCurrentSurface(EGL_DRAW);
+
+	ALOGV(RYLIE "eglMakeCurrent make-current");
+
+	// E_LOG_E("DEBUG: display=%p, surface=%p, ");
+	//  We'll need and active egl context below
+	if (eglMakeCurrent(display, EGL_NO_SURFACE /* vid->state->surface */, EGL_NO_SURFACE, context) == EGL_FALSE) {
+		ALOGV(RYLIE "em_init_gst_and_capture_context: Failed make egl context current");
+	}
+
+	const GstGLPlatform egl_platform = GST_GL_PLATFORM_EGL;
+	guintptr android_main_egl_context_handle = gst_gl_context_get_current_gl_context(egl_platform);
+	GstGLAPI gl_api = gst_gl_context_get_current_gl_api(egl_platform, NULL, NULL);
+	vid->gst_gl_display = g_object_ref_sink(gst_gl_display_new());
+	vid->android_main_context = g_object_ref_sink(
+	    gst_gl_context_new_wrapped(vid->gst_gl_display, android_main_egl_context_handle, egl_platform, gl_api));
+
+	ALOGV(RYLIE "eglMakeCurrent un-make-current");
+	eglMakeCurrent(display, old_draw_surface, old_read_surface, old_context);
+}
+
+static void
+websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
+{
+	ALOGE("Fred : websocket_connected_cb called!\n");
 
 	GError *error = NULL;
 
 	g_assert(!ws);
-	struct vf_fs *vid = (struct vf_fs *)user_data;
+	struct em_fs *vid = (struct em_fs *)user_data;
 
 	ws = soup_session_websocket_connect_finish(SOUP_SESSION(session), res, &error);
 	if (error) {
@@ -902,24 +929,6 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 		    "framerate = " GST_VIDEO_FPS_RANGE ", "                             \
 		    "texture-target = (string) { 2D, external-oes } "                   \
 		*/
-
-		ALOGI("wrapping egl context");
-
-		// TODO no way to know if the android_main thread still has this context active, and no locking
-		// TODO race condition!
-		// E_LOG_E("DEBUG: display=%p, surface=%p, ");
-		//  We'll need and active egl context below
-		if (eglMakeCurrent(vid->state->display, vid->state->surface, vid->state->surface,
-		                   vid->state->context) == EGL_FALSE) {
-			ALOGE("FRED: websocket_connected_cb: Failed make egl context current");
-		}
-
-		const GstGLPlatform egl_platform = GST_GL_PLATFORM_EGL;
-		guintptr android_main_egl_context_handle = gst_gl_context_get_current_gl_context(egl_platform);
-		GstGLAPI gl_api = gst_gl_context_get_current_gl_api(egl_platform, NULL, NULL);
-		vid->gst_gl_display = g_object_ref_sink(gst_gl_display_new());
-		vid->android_main_context = g_object_ref_sink(gst_gl_context_new_wrapped(
-		    vid->gst_gl_display, android_main_egl_context_handle, egl_platform, gl_api));
 
 		ALOGI("launching pipeline\n");
 		if (NULL == vid) {
@@ -967,70 +976,8 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 		gst_element_set_state(vid->pipeline, GST_STATE_PLAYING);
 
 		vid->is_running = TRUE;
-		// This is already done.
-		/*int ret = os_thread_helper_start(&vid->play_thread, vf_fs_mainloop, vid);
-		if (ret != 0) {
-		        ALOGE( "Failed to start thread '%i'", ret);
-		        vid->is_running = FALSE;
-		        free(vid);
-		}*/
 	}
 }
-
-#if 0
-int
-blah(int argc, char *argv[])
-{
-	GOptionContext *option_context;
-	GMainLoop *loop;
-	SoupSession *soup_session;
-	GError *error = NULL;
-
-	gst_init(&argc, &argv);
-
-	option_context = g_option_context_new(NULL);
-	g_option_context_add_main_entries(option_context, options, NULL);
-
-	if (!g_option_context_parse(option_context, &argc, &argv, &error)) {
-		ALOGE("option parsing failed: %s\n", error->message);
-		exit(1);
-	}
-
-	if (!websocket_uri) {
-		websocket_uri = g_strdup(WEBSOCKET_URI_DEFAULT);
-	}
-
-	soup_session = soup_session_new();
-
-#ifdef PL_LIBSOUP2
-	soup_session_websocket_connect_async(soup_session,                                     // session
-	                                     soup_message_new(SOUP_METHOD_GET, websocket_uri), // message
-	                                     NULL,                                             // origin
-	                                     NULL,                                             // protocols
-	                                     NULL,                                             // cancellable
-	                                     websocket_connected_cb,                           // callback
-	                                     NULL);                                            // user_data
-
-#else
-	soup_session_websocket_connect_async(soup_session,                                     // session
-	                                     soup_message_new(SOUP_METHOD_GET, websocket_uri), // message
-	                                     NULL,                                             // origin
-	                                     NULL,                                             // protocols
-	                                     0,                                                // io_prority
-	                                     NULL,                                             // cancellable
-	                                     websocket_connected_cb,                           // callback
-	                                     NULL);                                            // user_data
-
-#endif
-
-	loop = g_main_loop_new(NULL, FALSE);
-	g_unix_signal_add(SIGINT, sigint_handler, loop);
-
-	g_main_loop_run(loop);
-	g_main_loop_unref(loop);
-	g_clear_pointer(&websocket_uri, g_free);
-}
-#endif
 
 
 /*
@@ -1040,9 +987,9 @@ blah(int argc, char *argv[])
  */
 
 static bool
-vf_fs_enumerate_modes(struct xrt_fs *xfs, struct xrt_fs_mode **out_modes, uint32_t *out_count)
+em_fs_enumerate_modes(struct xrt_fs *xfs, struct xrt_fs_mode **out_modes, uint32_t *out_count)
 {
-	struct vf_fs *vid = vf_fs(xfs);
+	struct em_fs *vid = vf_fs(xfs);
 
 	struct xrt_fs_mode *modes = U_TYPED_ARRAY_CALLOC(struct xrt_fs_mode, 1);
 	if (modes == NULL) {
@@ -1061,20 +1008,20 @@ vf_fs_enumerate_modes(struct xrt_fs *xfs, struct xrt_fs_mode **out_modes, uint32
 }
 
 static bool
-vf_fs_configure_capture(struct xrt_fs *xfs, struct xrt_fs_capture_parameters *cp)
+em_fs_configure_capture(struct xrt_fs *xfs, struct xrt_fs_capture_parameters *cp)
 {
-	// struct vf_fs *vid = vf_fs(xfs);
+	// struct em_fs *vid = vf_fs(xfs);
 	//! @todo
 	return false;
 }
 
 static bool
-vf_fs_stream_start(struct xrt_fs *xfs,
+em_fs_stream_start(struct xrt_fs *xfs,
                    struct xrt_frame_sink *xs,
                    enum xrt_fs_capture_type capture_type,
                    uint32_t descriptor_index)
 {
-	struct vf_fs *vid = vf_fs(xfs);
+	struct em_fs *vid = vf_fs(xfs);
 
 	vid->sink = xs;
 	vid->is_running = true;
@@ -1090,22 +1037,22 @@ vf_fs_stream_start(struct xrt_fs *xfs,
 }
 
 static bool
-vf_fs_stream_stop(struct xrt_fs *xfs)
+em_fs_stream_stop(struct xrt_fs *xfs)
 {
-	struct vf_fs *vid = vf_fs(xfs);
+	struct em_fs *vid = vf_fs(xfs);
 	stop_pipeline(vid);
 	return true;
 }
 
 static bool
-vf_fs_is_running(struct xrt_fs *xfs)
+em_fs_is_running(struct xrt_fs *xfs)
 {
-	struct vf_fs *vid = vf_fs(xfs);
+	struct em_fs *vid = vf_fs(xfs);
 	return vid->is_running;
 }
 
 static void
-vf_fs_destroy(struct vf_fs *vid)
+em_fs_destroy(struct em_fs *vid)
 {
 	stop_pipeline(vid);
 	free(vid);
@@ -1119,17 +1066,17 @@ vf_fs_destroy(struct vf_fs *vid)
  */
 
 static void
-vf_fs_node_break_apart(struct xrt_frame_node *node)
+em_fs_node_break_apart(struct xrt_frame_node *node)
 {
-	struct vf_fs *vid = container_of(node, struct vf_fs, node);
-	vf_fs_stream_stop(&vid->base);
+	struct em_fs *vid = container_of(node, struct em_fs, node);
+	em_fs_stream_stop(&vid->base);
 }
 
 static void
-vf_fs_node_destroy(struct xrt_frame_node *node)
+em_fs_node_destroy(struct xrt_frame_node *node)
 {
-	struct vf_fs *vid = container_of(node, struct vf_fs, node);
-	vf_fs_destroy(vid);
+	struct em_fs *vid = container_of(node, struct em_fs, node);
+	em_fs_destroy(vid);
 }
 
 
@@ -1140,13 +1087,15 @@ vf_fs_node_destroy(struct xrt_frame_node *node)
  */
 
 static struct xrt_fs *
-alloc_and_init_common(struct xrt_frame_context *xfctx,      //
-                      struct state_t *state,                //
-                      enum xrt_format format,               //
-                      enum xrt_stereo_format stereo_format) //
+alloc_and_init_common(struct xrt_frame_context *xfctx,
+                      struct state_t *state,
+                      enum xrt_format format,
+                      enum xrt_stereo_format stereo_format,
+                      EGLDisplay display,
+                      EGLContext context)
 {
-	struct vf_fs *vid = U_TYPED_CALLOC(struct vf_fs);
-	the_vf_fs = vid;
+	struct em_fs *vid = U_TYPED_CALLOC(struct em_fs);
+	// the_vf_fs = vid;
 	vid->format = format;
 	vid->stereo_format = stereo_format;
 	vid->state = state;
@@ -1154,6 +1103,8 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 	GstBus *bus = NULL;
 
 	ALOGE("FRED: alloc_and_init_common\n");
+
+	em_init_gst_and_capture_context(vid, display, context);
 
 	int ret = os_thread_helper_init(&vid->play_thread);
 	if (ret < 0) {
@@ -1172,15 +1123,6 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 	GOptionContext *option_context;
 	SoupSession *soup_session;
 	GError *error = NULL;
-
-	// TODO get rid of this g_option arg parsing, unneeded here.
-	option_context = g_option_context_new(NULL);
-	g_option_context_add_main_entries(option_context, options, NULL);
-
-	if (!g_option_context_parse(option_context, NULL, NULL, &error)) {
-		ALOGE("option parsing failed: %s\n", error->message);
-		exit(1);
-	}
 
 	if (!websocket_uri) {
 		websocket_uri = g_strdup(WEBSOCKET_URI_DEFAULT);
@@ -1249,10 +1191,10 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 		os_nanosleep(100 * 1000 * 1000);
 	}
 #endif
-	ALOGD("started async connect call, about to spawn vf_fs_mainloop");
+	ALOGD("started async connect call, about to spawn em_fs_mainloop");
 	// gst_element_set_state(vid->source, GST_STATE_PAUSED);
 
-	ret = os_thread_helper_start(&vid->play_thread, vf_fs_mainloop, vid);
+	ret = os_thread_helper_start(&vid->play_thread, em_fs_mainloop, vid);
 	if (ret != 0) {
 		ALOGE("Failed to start thread '%i'", ret);
 		g_main_loop_unref(vid->loop);
@@ -1260,13 +1202,13 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 		return NULL;
 	}
 
-	vid->base.enumerate_modes = vf_fs_enumerate_modes;
-	vid->base.configure_capture = vf_fs_configure_capture;
-	vid->base.stream_start = vf_fs_stream_start;
-	vid->base.stream_stop = vf_fs_stream_stop;
-	vid->base.is_running = vf_fs_is_running;
-	vid->node.break_apart = vf_fs_node_break_apart;
-	vid->node.destroy = vf_fs_node_destroy;
+	vid->base.enumerate_modes = em_fs_enumerate_modes;
+	vid->base.configure_capture = em_fs_configure_capture;
+	vid->base.stream_start = em_fs_stream_start;
+	vid->base.stream_stop = em_fs_stream_stop;
+	vid->base.is_running = em_fs_is_running;
+	vid->node.break_apart = em_fs_node_break_apart;
+	vid->node.destroy = em_fs_node_destroy;
 	vid->log_level = debug_get_log_option_vf_log();
 
 	// It's now safe to add it to the context.
@@ -1283,7 +1225,10 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 }
 
 struct xrt_fs *
-vf_fs_videotestsource(struct xrt_frame_context *xfctx, struct state_t *state)
+em_fs_create_streaming_client(struct xrt_frame_context *xfctx,
+                              struct state_t *state,
+                              EGLDisplay display,
+                              EGLContext context)
 {
 	gst_init(0, NULL);
 	gst_amc_jni_set_java_vm(state->java_vm);
@@ -1299,5 +1244,5 @@ vf_fs_videotestsource(struct xrt_frame_context *xfctx, struct state_t *state)
 	//     "appsink name=testsink caps=video/x-raw,format=RGBx,width=%u,height=%u",
 	//     width, height, width, height);
 
-	return alloc_and_init_common(xfctx, state, format, stereo_format);
+	return alloc_and_init_common(xfctx, state, format, stereo_format, display, context);
 }

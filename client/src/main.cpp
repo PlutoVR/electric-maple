@@ -6,27 +6,32 @@
  * @author Moshi Turner <moses@collabora.com>
  */
 
-#include <EGL/egl.h>
-#include <cmath>
-#include <cstdlib>
-#include <ctime>
-#include <array>
-#include <errno.h>
 
-#include <assert.h>
+#include "gst/app_log.h"
 #include "gst/gst_common.h"
 #include "render.hpp"
+#include "pluto.pb.h"
+#include "pb_encode.h"
+
+#include "os/os_time.h"
+#include "util/u_time.h"
+
+#include <EGL/egl.h>
+#include <android/asset_manager_jni.h>
+#include <android/log.h>
+#include <android/native_activity.h>
 
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
-#include <unistd.h>
 
-#include <android/native_activity.h>
+#include <array>
+#include <assert.h>
+#include <cmath>
+#include <cstdlib>
+#include <ctime>
+#include <errno.h>
 #include <jni.h>
-#include <android/asset_manager_jni.h>
-#include <android/log.h>
-
-#include "gst/app_log.h"
+#include <unistd.h>
 
 // static GLuint global_data[1440*1584*4];
 
@@ -757,7 +762,7 @@ android_main(struct android_app *app)
 	state.frame_sink.push_frame = sink_push_frame;
 
 	struct xrt_frame_context xfctx = {};
-	struct xrt_fs *blah = vf_fs_videotestsource(&xfctx, &state);
+	struct xrt_fs *client = em_fs_create_streaming_client(&xfctx, &state, state.display, state.context);
 	ALOGE("Done creating videotestsrc\n");
 
 	// OpenXR session
@@ -846,7 +851,7 @@ android_main(struct android_app *app)
 
 	ALOGE("Starting source\n");
 	// FIXME: Eventually completely remove XRT_FS dependency here for driving the gst pipeline look
-	xrt_fs_stream_start(blah, &state.frame_sink, XRT_FS_CAPTURE_TYPE_TRACKING, 0);
+	xrt_fs_stream_start(client, &state.frame_sink, XRT_FS_CAPTURE_TYPE_TRACKING, 0);
 	ALOGE("Done starting source\n");
 
 	ALOGE("DEBUG: Really make socket\n");

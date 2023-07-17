@@ -1,21 +1,19 @@
-// Copyright 2020-2021, Collabora, Ltd.
+// Copyright 2020-2023, Collabora, Ltd.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
  * @brief  Header
+ * @author Ryan Pavlik <rpavlik@collabora.com>
+ * @author Moshi Turner <moses@collabora.com>
+ * @author Jakob Bornecrantz <jakob@collabora.com>
  * @author Christoph Haag <christoph.haag@collabora.com>
- * @ingroup drv_vf
+ * @ingroup xrt_fs_em
  */
 
 #pragma once
 
-#define XR_USE_PLATFORM_ANDROID
-#define XR_USE_GRAPHICS_API_OPENGL_ES
 
 #include "xrt/xrt_frame.h"
-#include "util/u_logging.h"
-#include "util/u_time.h"
-#include "os/os_time.h"
 
 #include <android_native_app_glue.h>
 #include <GLES3/gl3.h>
@@ -27,9 +25,6 @@
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
 
-#include "pluto.pb.h"
-#include "pb_encode.h"
-
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -40,7 +35,6 @@
 #define XR_LOAD(fn) xrGetInstanceProcAddr(state.instance, #fn, (PFN_xrVoidFunction *)&fn);
 
 #include "xrt/xrt_frameserver.h"
-#include "gstjniutils.h"
 
 struct state_t
 {
@@ -93,27 +87,15 @@ extern "C" {
 static const char *dotfilepath = "mrow";
 
 /*!
- * @defgroup drv_vf Video Fileframeserver driver
- * @ingroup drv
+ * Create an Electric Maple XR streaming frameserver with default parameters.
  *
- * @brief Frameserver using a video file.
- */
-
-/*!
- * Create a vf frameserver by opening a video file.
- *
- * @ingroup drv_vf
+ * Must call from a thread in which we can safely make @p context active.
  */
 struct xrt_fs *
-vf_fs_open_file(struct xrt_frame_context *xfctx, const char *path);
-
-/*!
- * Create a vf frameserver that uses the videotestsource.
- *
- * @ingroup drv_vf
- */
-struct xrt_fs *
-vf_fs_videotestsource(struct xrt_frame_context *xfctx, struct state_t *state);
+em_fs_create_streaming_client(struct xrt_frame_context *xfctx,
+                              struct state_t *state,
+                              EGLDisplay display,
+                              EGLContext context);
 
 
 #ifdef __cplusplus
