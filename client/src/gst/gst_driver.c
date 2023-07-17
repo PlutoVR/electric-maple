@@ -10,6 +10,8 @@
  */
 
 #include "gst/gstinfo.h"
+#include "gst/gstmessage.h"
+#include "gst/gstutils.h"
 #include "os/os_time.h"
 #include "os/os_threading.h"
 
@@ -165,10 +167,39 @@ static GstWebRTCDataChannel *datachannel = NULL;
 // FIXME : Check if this was added for vid lifetime reasons.
 static struct vf_fs *the_vf_fs = NULL;
 
+
+static void
+message_debug(const char *function, GstMessage *msg)
+{
+	const char *src_name = GST_MESSAGE_SRC_NAME(msg);
+	const char *type_name = GST_MESSAGE_TYPE_NAME(msg);
+	GstState old_state;
+	GstState new_state;
+	GstStreamStatusType stream_status;
+	GstElement *owner = NULL;
+	switch (GST_MESSAGE_TYPE(msg)) {
+	case GST_MESSAGE_STATE_CHANGED:
+		gst_message_parse_state_changed(msg, &old_state, &new_state, NULL);
+		ALOGI("%s: %s: %s: %s to %s", function, src_name, type_name, gst_element_state_get_name(old_state),
+		      gst_element_state_get_name(new_state));
+		break;
+	case GST_MESSAGE_STREAM_STATUS:
+		gst_message_parse_stream_status(msg, &stream_status, &owner);
+		ALOGI("%s: %s: %s: %d", function, src_name, type_name, stream_status);
+		break;
+	default: ALOGI("%s: %s: %s", function, src_name, type_name);
+	}
+}
+#define LOG_MSG(MSG)                                                                                                   \
+	do {                                                                                                           \
+		message_debug(__FUNCTION__, MSG);                                                                      \
+	} while (0)
+
 static GstBusSyncReply
 bus_sync_handler_cb(GstBus *bus, GstMessage *msg, gpointer user_data)
 {
 	struct vf_fs *vid = user_data;
+	LOG_MSG(msg);
 
 	/* Do not let GstGL retrieve the display handle on its own
 	 * because then it believes it owns it and calls eglTerminate()
@@ -482,6 +513,7 @@ print_gst_error(GstMessage *message)
 static gboolean
 on_source_message(GstBus *bus, GstMessage *message, struct vf_fs *vid)
 {
+	LOG_MSG(message);
 	/* nil */
 	switch (GST_MESSAGE_TYPE(message)) {
 	case GST_MESSAGE_EOS:
@@ -510,7 +542,8 @@ sigint_handler(gpointer user_data)
 static gboolean
 gst_bus_cb(GstBus *bus, GstMessage *message, gpointer data)
 {
-	ALOGE("gst_bus_cb called!");
+	LOG_MSG(message);
+
 	GstBin *pipeline = GST_BIN(data);
 
 	switch (GST_MESSAGE_TYPE(message)) {
@@ -519,8 +552,8 @@ gst_bus_cb(GstBus *bus, GstMessage *message, gpointer data)
 		gchar *debug_msg = NULL;
 		gst_message_parse_error(message, &gerr, &debug_msg);
 		GST_DEBUG_BIN_TO_DOT_FILE(pipeline, GST_DEBUG_GRAPH_SHOW_ALL, "mss-pipeline-ERROR");
-		ALOGE("Error: %s (%s)", gerr->message, debug_msg);
-		g_error("Error: %s (%s)", gerr->message, debug_msg);
+		ALOGE("gst_bus_cb: Error: %s (%s)", gerr->message, debug_msg);
+		g_error("gst_bus_cb: Error: %s (%s)", gerr->message, debug_msg);
 		g_error_free(gerr);
 		g_free(debug_msg);
 	} break;
@@ -529,13 +562,13 @@ gst_bus_cb(GstBus *bus, GstMessage *message, gpointer data)
 		gchar *debug_msg = NULL;
 		gst_message_parse_warning(message, &gerr, &debug_msg);
 		GST_DEBUG_BIN_TO_DOT_FILE(pipeline, GST_DEBUG_GRAPH_SHOW_ALL, "mss-pipeline-WARNING");
-		ALOGW("Warning: %s (%s)", gerr->message, debug_msg);
-		g_warning("Warning: %s (%s)", gerr->message, debug_msg);
+		ALOGW("gst_bus_cb: Warning: %s (%s)", gerr->message, debug_msg);
+		g_warning("gst_bus_cb: Warning: %s (%s)", gerr->message, debug_msg);
 		g_error_free(gerr);
 		g_free(debug_msg);
 	} break;
 	case GST_MESSAGE_EOS: {
-		g_error("Got EOS!!");
+		g_error("gst_bus_cb: Got EOS!!");
 	} break;
 	default: break;
 	}
@@ -598,6 +631,7 @@ webrtc_on_ice_candidate_cb(GstElement *webrtcbin, guint mlineindex, gchar *candi
 	root = json_builder_get_root(builder);
 
 	msg_str = json_to_string(root, TRUE);
+	ALOGD("%s: candidate message: %s", __FUNCTION__, msg_str);
 	soup_websocket_connection_send_text(ws, msg_str);
 	g_clear_pointer(&msg_str, g_free);
 
@@ -680,11 +714,13 @@ process_candidate(guint mlineindex, const gchar *candidate)
 static void
 ws_on_message_cb(SoupWebsocketConnection *connection, gint type, GBytes *message, gpointer user_data)
 {
-	ALOGE("message_cb called!");
+	ALOGE("%s called!", __FUNCTION__);
 	gsize length = 0;
 	const gchar *msg_data = g_bytes_get_data(message, &length);
 	JsonParser *parser = json_parser_new();
 	GError *error = NULL;
+
+	// TODO convert gsize to gssize after range check
 
 	if (json_parser_load_from_data(parser, msg_data, length, &error)) {
 		JsonObject *msg = json_node_get_object(json_parser_get_root(parser));
@@ -863,22 +899,7 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 		    "texture-target = (string) { 2D, external-oes } "                   \
 		*/
 
-
-		ALOGI("launching pipeline\n");
-		if (NULL == vid) {
-			ALOGE("FRED: NULL VID");
-		}
-		vid->pipeline = gst_parse_launch(pipeline_string, &error);
-		if (vid->pipeline == NULL) {
-			ALOGE("FRED: Failed creating pipeline : Bad source");
-			ALOGE("%s", error->message);
-			abort();
-		}
-		gst_object_ref_sink(vid->pipeline);
-
-		ALOGI("getting webrtcbin\n");
-		webrtcbin = gst_bin_get_by_name(GST_BIN(vid->pipeline), "webrtc");
-		g_signal_connect(webrtcbin, "on-ice-candidate", G_CALLBACK(webrtc_on_ice_candidate_cb), NULL);
+		ALOGI("wrapping egl context");
 
 		// TODO no way to know if the android_main thread still has this context active, and no locking
 		// TODO race condition!
@@ -896,21 +917,37 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 		vid->android_main_context = g_object_ref_sink(gst_gl_context_new_wrapped(
 		    vid->gst_gl_display, android_main_egl_context_handle, egl_platform, gl_api));
 
+		ALOGI("launching pipeline\n");
+		if (NULL == vid) {
+			ALOGE("FRED: NULL VID");
+		}
+		vid->pipeline = gst_parse_launch(pipeline_string, &error);
+		if (vid->pipeline == NULL) {
+			ALOGE("FRED: Failed creating pipeline : Bad source");
+			ALOGE("%s", error->message);
+			abort();
+		}
+		gst_object_ref_sink(vid->pipeline);
+
+		ALOGI("getting webrtcbin\n");
+		webrtcbin = gst_bin_get_by_name(GST_BIN(vid->pipeline), "webrtc");
+		g_assert_nonnull(webrtcbin);
+		g_assert(G_IS_OBJECT(webrtcbin));
+		g_signal_connect(webrtcbin, "on-ice-candidate", G_CALLBACK(webrtc_on_ice_candidate_cb), NULL);
+
 		// get out app sink and set the caps
 		g_autoptr(GstCaps) caps = gst_caps_from_string(SINK_CAPS);
 		vid->appsink = gst_bin_get_by_name(GST_BIN(vid->pipeline), "testsink");
 		g_object_set(vid->appsink, "caps", caps, NULL);
 
 		// ALREADY CREATED IN PIPELINE STR
-		/*g_autoptr(GstElement) glsinkbin = gst_bin_get_by_name(vid->pipeline, "glsink");
-		g_object_set(glsinkbin, "sink", vid->appsink, NULL);*/
+		g_autoptr(GstElement) glsinkbin = gst_bin_get_by_name(GST_BIN(vid->pipeline), "glsink");
+		g_object_set(glsinkbin, "sink", vid->appsink, NULL);
 
 		// call bus_sync_handler_cb every time a message is posted on the bus, in the posting thread.
+		// probably not needed, the gst_bus_cb is probably better/sufficient
 		bus = gst_element_get_bus(vid->pipeline);
 		gst_bus_set_sync_handler(bus, bus_sync_handler_cb, vid, NULL);
-
-		// start playing
-		gst_element_set_state(vid->pipeline, GST_STATE_PLAYING);
 
 		// setup_sink(vid);
 		ALOGI("done getting webrtcbin\n");
@@ -921,6 +958,9 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 		// bus = gst_element_get_bus(vid->pipeline);
 		gst_bus_add_watch(bus, gst_bus_cb, vid->pipeline);
 		gst_clear_object(&bus);
+
+		// start playing
+		gst_element_set_state(vid->pipeline, GST_STATE_PLAYING);
 
 		vid->is_running = TRUE;
 		// This is already done.
