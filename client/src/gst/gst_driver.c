@@ -24,6 +24,7 @@
 
 #include "gst_common.h"
 
+#include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>
 
@@ -576,7 +577,7 @@ gst_bus_cb(GstBus *bus, GstMessage *message, gpointer data)
 }
 
 void
-send_sdp_answer(const gchar *sdp)
+send_sdp_answer(struct vf_fs *vid, const gchar *sdp)
 {
 	ALOGE("send_sdp_answer called!");
 	JsonBuilder *builder;
@@ -642,6 +643,7 @@ webrtc_on_ice_candidate_cb(GstElement *webrtcbin, guint mlineindex, gchar *candi
 static void
 on_answer_created(GstPromise *promise, gpointer user_data)
 {
+	struct vf_fs *vid = (struct vf_fs *)user_data;
 	ALOGE("on_answer_created called!");
 	GstWebRTCSessionDescription *answer = NULL;
 	gchar *sdp;
@@ -651,6 +653,7 @@ on_answer_created(GstPromise *promise, gpointer user_data)
 
 	if (NULL == answer) {
 		ALOGE("on_answer_created : ERROR !  get_promise answer = null !");
+		abort();
 	}
 
 	g_signal_emit_by_name(webrtcbin, "set-local-description", answer, NULL);
@@ -659,14 +662,14 @@ on_answer_created(GstPromise *promise, gpointer user_data)
 	if (NULL == sdp) {
 		ALOGE("on_answer_created : ERROR !  sdp = null !");
 	}
-	send_sdp_answer(sdp);
+	send_sdp_answer(vid, sdp);
 	g_free(sdp);
 
 	gst_webrtc_session_description_free(answer);
 }
 
 static void
-process_sdp_offer(const gchar *sdp)
+process_sdp_offer(struct vf_fs *vid, const gchar *sdp)
 {
 	ALOGE("process_sdp_offer called!");
 	GstSDPMessage *sdp_msg = NULL;
@@ -693,7 +696,7 @@ process_sdp_offer(const gchar *sdp)
 
 		g_signal_emit_by_name(
 		    webrtcbin, "create-answer", NULL,
-		    gst_promise_new_with_change_func((GstPromiseChangeFunc)on_answer_created, NULL, NULL));
+		    gst_promise_new_with_change_func((GstPromiseChangeFunc)on_answer_created, vid, NULL));
 	} else {
 		gst_sdp_message_free(sdp_msg);
 	}
@@ -714,6 +717,7 @@ process_candidate(guint mlineindex, const gchar *candidate)
 static void
 ws_on_message_cb(SoupWebsocketConnection *connection, gint type, GBytes *message, gpointer user_data)
 {
+	struct vf_fs *vid = (struct vf_fs *)user_data;
 	ALOGE("%s called!", __FUNCTION__);
 	gsize length = 0;
 	const gchar *msg_data = g_bytes_get_data(message, &length);
@@ -736,7 +740,7 @@ ws_on_message_cb(SoupWebsocketConnection *connection, gint type, GBytes *message
 
 		if (g_str_equal(msg_type, "offer")) {
 			const gchar *offer_sdp = json_object_get_string_member(msg, "sdp");
-			process_sdp_offer(offer_sdp);
+			process_sdp_offer(vid, offer_sdp);
 		} else if (g_str_equal(msg_type, "candidate")) {
 			JsonObject *candidate;
 
@@ -872,7 +876,7 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 		GstBus *bus;
 
 		ALOGW("YO !! : Websocket connected\n");
-		g_signal_connect(ws, "message", G_CALLBACK(ws_on_message_cb), NULL);
+		g_signal_connect(ws, "message", G_CALLBACK(ws_on_message_cb), vid);
 
 		// decodebin3 seems to .. hang?
 		// omxh264dec doesn't seem to exist
@@ -933,7 +937,7 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 		webrtcbin = gst_bin_get_by_name(GST_BIN(vid->pipeline), "webrtc");
 		g_assert_nonnull(webrtcbin);
 		g_assert(G_IS_OBJECT(webrtcbin));
-		g_signal_connect(webrtcbin, "on-ice-candidate", G_CALLBACK(webrtc_on_ice_candidate_cb), NULL);
+		g_signal_connect(webrtcbin, "on-ice-candidate", G_CALLBACK(webrtc_on_ice_candidate_cb), vid);
 
 		// get out app sink and set the caps
 		g_autoptr(GstCaps) caps = gst_caps_from_string(SINK_CAPS);
@@ -941,8 +945,8 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 		g_object_set(vid->appsink, "caps", caps, NULL);
 
 		// ALREADY CREATED IN PIPELINE STR
-		g_autoptr(GstElement) glsinkbin = gst_bin_get_by_name(GST_BIN(vid->pipeline), "glsink");
-		g_object_set(glsinkbin, "sink", vid->appsink, NULL);
+		// g_autoptr(GstElement) glsinkbin = gst_bin_get_by_name(GST_BIN(vid->pipeline), "glsink");
+		// g_object_set(glsinkbin, "sink", vid->appsink, NULL);
 
 		// call bus_sync_handler_cb every time a message is posted on the bus, in the posting thread.
 		// probably not needed, the gst_bus_cb is probably better/sufficient
