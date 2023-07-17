@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
- * @brief  Electric Maple XR streaming frameserver, based on video file frameserver implementation
+ * @brief  ElectricMaple XR streaming frameserver, based on video file frameserver implementation
  * @author Ryan Pavlik <rpavlik@collabora.com>
  * @author Moshi Turner <moses@collabora.com>
  * @author Jakob Bornecrantz <jakob@collabora.com>
@@ -11,14 +11,13 @@
  * @ingroup xrt_fs_em
  */
 #include "gst_common.h"
-
+#include "gst_internal.h"
 #include "app_log.h"
 
 #include "os/os_time.h"
 #include "os/os_threading.h"
 
 #include "util/u_trace_marker.h"
-#include "util/u_var.h"
 #include "util/u_misc.h"
 #include "util/u_debug.h"
 #include "util/u_format.h"
@@ -96,6 +95,8 @@ struct em_fs
 
 	struct os_thread_helper play_thread;
 
+	struct em_handshake handshake;
+
 	GMainLoop *loop;
 	GstElement *pipeline;
 	GstGLDisplay *gst_gl_display;
@@ -158,14 +159,10 @@ static gchar *websocket_uri = NULL;
 #define WEBSOCKET_URI_DEFAULT "ws://127.0.0.1:8080/ws"
 
 //!@todo Don't use global state
-static SoupWebsocketConnection *ws = NULL;
-static GstElement *webrtcbin =
-    NULL; // We need webrtcbin for the offer/promise management... no obvious way to pass 'vid' all the way through
 static GstWebRTCDataChannel *datachannel = NULL;
 
-
-static void
-message_debug(const char *function, GstMessage *msg)
+void
+em_gst_message_debug(const char *function, GstMessage *msg)
 {
 	const char *src_name = GST_MESSAGE_SRC_NAME(msg);
 	const char *type_name = GST_MESSAGE_TYPE_NAME(msg);
@@ -186,10 +183,6 @@ message_debug(const char *function, GstMessage *msg)
 	default: ALOGI("%s: %s: %s", function, src_name, type_name);
 	}
 }
-#define LOG_MSG(MSG)                                                                                                   \
-	do {                                                                                                           \
-		message_debug(__FUNCTION__, MSG);                                                                      \
-	} while (0)
 
 static GstBusSyncReply
 bus_sync_handler_cb(GstBus *bus, GstMessage *msg, gpointer user_data)
@@ -371,6 +364,7 @@ stop_pipeline(struct em_fs *vid)
 	vid->is_running = false;
 	gst_element_set_state(vid->pipeline, GST_STATE_NULL);
 	os_thread_helper_destroy(&vid->play_thread);
+	em_handshake_fini(&vid->handshake);
 	gst_clear_object(&vid->pipeline);
 	gst_clear_object(&vid->display);
 	gst_clear_object(&vid->android_main_context);
@@ -571,187 +565,6 @@ gst_bus_cb(GstBus *bus, GstMessage *message, gpointer data)
 	return TRUE;
 }
 
-void
-send_sdp_answer(struct em_fs *vid, const gchar *sdp)
-{
-	ALOGE("send_sdp_answer called!");
-	JsonBuilder *builder;
-	JsonNode *root;
-	gchar *msg_str;
-
-	ALOGE("Send answer: %s\n", sdp);
-
-	builder = json_builder_new();
-	json_builder_begin_object(builder);
-	json_builder_set_member_name(builder, "msg");
-	json_builder_add_string_value(builder, "answer");
-
-	json_builder_set_member_name(builder, "sdp");
-	json_builder_add_string_value(builder, sdp);
-	json_builder_end_object(builder);
-
-	root = json_builder_get_root(builder);
-
-	msg_str = json_to_string(root, TRUE);
-	soup_websocket_connection_send_text(ws, msg_str);
-	g_clear_pointer(&msg_str, g_free);
-
-	json_node_unref(root);
-	g_object_unref(builder);
-}
-
-static void
-webrtc_on_ice_candidate_cb(GstElement *webrtcbin, guint mlineindex, gchar *candidate)
-{
-	ALOGE("webrtc_on_ice_candidate_cb called!");
-	JsonBuilder *builder;
-	JsonNode *root;
-	gchar *msg_str;
-
-	ALOGE("Send candidate: %u %s\n", mlineindex, candidate);
-
-	builder = json_builder_new();
-	json_builder_begin_object(builder);
-	json_builder_set_member_name(builder, "msg");
-	json_builder_add_string_value(builder, "candidate");
-
-	json_builder_set_member_name(builder, "candidate");
-	json_builder_begin_object(builder);
-	json_builder_set_member_name(builder, "candidate");
-	json_builder_add_string_value(builder, candidate);
-	json_builder_set_member_name(builder, "sdpMLineIndex");
-	json_builder_add_int_value(builder, mlineindex);
-	json_builder_end_object(builder);
-	json_builder_end_object(builder);
-
-	root = json_builder_get_root(builder);
-
-	msg_str = json_to_string(root, TRUE);
-	ALOGD("%s: candidate message: %s", __FUNCTION__, msg_str);
-	soup_websocket_connection_send_text(ws, msg_str);
-	g_clear_pointer(&msg_str, g_free);
-
-	json_node_unref(root);
-	g_object_unref(builder);
-}
-
-static void
-on_answer_created(GstPromise *promise, gpointer user_data)
-{
-	struct em_fs *vid = (struct em_fs *)user_data;
-	ALOGE("on_answer_created called!");
-	GstWebRTCSessionDescription *answer = NULL;
-	gchar *sdp;
-
-	gst_structure_get(gst_promise_get_reply(promise), "answer", GST_TYPE_WEBRTC_SESSION_DESCRIPTION, &answer, NULL);
-	gst_promise_unref(promise);
-
-	if (NULL == answer) {
-		ALOGE("on_answer_created : ERROR !  get_promise answer = null !");
-		abort();
-	}
-
-	g_signal_emit_by_name(webrtcbin, "set-local-description", answer, NULL);
-
-	sdp = gst_sdp_message_as_text(answer->sdp);
-	if (NULL == sdp) {
-		ALOGE("on_answer_created : ERROR !  sdp = null !");
-	}
-	send_sdp_answer(vid, sdp);
-	g_free(sdp);
-
-	gst_webrtc_session_description_free(answer);
-}
-
-static void
-process_sdp_offer(struct em_fs *vid, const gchar *sdp)
-{
-	ALOGE("process_sdp_offer called!");
-	GstSDPMessage *sdp_msg = NULL;
-	GstWebRTCSessionDescription *desc = NULL;
-
-
-	ALOGE("Received offer: %s\n\n", sdp);
-
-	if (gst_sdp_message_new_from_text(sdp, &sdp_msg) != GST_SDP_OK) {
-		g_debug("Error parsing SDP description");
-		goto out;
-	}
-
-	desc = gst_webrtc_session_description_new(GST_WEBRTC_SDP_TYPE_OFFER, sdp_msg);
-	if (desc) {
-		GstPromise *promise;
-
-		promise = gst_promise_new();
-
-		g_signal_emit_by_name(webrtcbin, "set-remote-description", desc, promise);
-
-		gst_promise_wait(promise);
-		gst_promise_unref(promise);
-
-		g_signal_emit_by_name(
-		    webrtcbin, "create-answer", NULL,
-		    gst_promise_new_with_change_func((GstPromiseChangeFunc)on_answer_created, vid, NULL));
-	} else {
-		gst_sdp_message_free(sdp_msg);
-	}
-
-out:
-	g_clear_pointer(&desc, gst_webrtc_session_description_free);
-}
-
-static void
-process_candidate(guint mlineindex, const gchar *candidate)
-{
-	ALOGE("process_candidate called!");
-	ALOGE("Received candidate: %d %s\n", mlineindex, candidate);
-
-	g_signal_emit_by_name(webrtcbin, "add-ice-candidate", mlineindex, candidate);
-}
-
-static void
-ws_on_message_cb(SoupWebsocketConnection *connection, gint type, GBytes *message, gpointer user_data)
-{
-	struct em_fs *vid = (struct em_fs *)user_data;
-	ALOGE("%s called!", __FUNCTION__);
-	gsize length = 0;
-	const gchar *msg_data = g_bytes_get_data(message, &length);
-	JsonParser *parser = json_parser_new();
-	GError *error = NULL;
-
-	// TODO convert gsize to gssize after range check
-
-	if (json_parser_load_from_data(parser, msg_data, length, &error)) {
-		JsonObject *msg = json_node_get_object(json_parser_get_root(parser));
-		const gchar *msg_type;
-
-		if (!json_object_has_member(msg, "msg")) {
-			// Invalid message
-			goto out;
-		}
-
-		msg_type = json_object_get_string_member(msg, "msg");
-		ALOGE("Websocket message received: %s\n", msg_type);
-
-		if (g_str_equal(msg_type, "offer")) {
-			const gchar *offer_sdp = json_object_get_string_member(msg, "sdp");
-			process_sdp_offer(vid, offer_sdp);
-		} else if (g_str_equal(msg_type, "candidate")) {
-			JsonObject *candidate;
-
-			candidate = json_object_get_object_member(msg, "candidate");
-
-			process_candidate(json_object_get_int_member(candidate, "sdpMLineIndex"),
-			                  json_object_get_string_member(candidate, "candidate"));
-		}
-	} else {
-		g_debug("Error parsing message: %s", error->message);
-		g_clear_error(&error);
-	}
-
-out:
-	g_object_unref(parser);
-}
 
 // static void
 // data_channel_error_cb(GstWebRTCDataChannel *datachannel, void *data)
@@ -885,25 +698,15 @@ em_init_gst_and_capture_context(struct em_fs *vid, EGLDisplay display, EGLContex
 	eglMakeCurrent(display, old_draw_surface, old_read_surface, old_context);
 }
 
-static void
-websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
+static GstElement *
+launch_pipeline(gpointer user_data)
 {
-	ALOGE("Fred : websocket_connected_cb called!\n");
 
 	GError *error = NULL;
 
-	g_assert(!ws);
 	struct em_fs *vid = (struct em_fs *)user_data;
-
-	ws = soup_session_websocket_connect_finish(SOUP_SESSION(session), res, &error);
-	if (error) {
-		ALOGE("Error creating websocket: %s\n", error->message);
-		g_clear_error(&error);
-	} else {
+	{
 		GstBus *bus;
-
-		ALOGW("YO !! : Websocket connected\n");
-		g_signal_connect(ws, "message", G_CALLBACK(ws_on_message_cb), vid);
 
 		// decodebin3 seems to .. hang?
 		// omxh264dec doesn't seem to exist
@@ -934,7 +737,7 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 		if (NULL == vid) {
 			ALOGE("FRED: NULL VID");
 		}
-		vid->pipeline = gst_parse_launch(pipeline_string, &error);
+		vid->pipeline = gst_object_ref_sink(gst_parse_launch(pipeline_string, &error));
 		if (vid->pipeline == NULL) {
 			ALOGE("FRED: Failed creating pipeline : Bad source");
 			ALOGE("%s", error->message);
@@ -942,28 +745,19 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 		}
 		gst_object_ref_sink(vid->pipeline);
 
-		ALOGI("getting webrtcbin\n");
-		webrtcbin = gst_bin_get_by_name(GST_BIN(vid->pipeline), "webrtc");
-		g_assert_nonnull(webrtcbin);
-		g_assert(G_IS_OBJECT(webrtcbin));
-		g_signal_connect(webrtcbin, "on-ice-candidate", G_CALLBACK(webrtc_on_ice_candidate_cb), vid);
-
 		// get out app sink and set the caps
 		g_autoptr(GstCaps) caps = gst_caps_from_string(SINK_CAPS);
 		vid->appsink = gst_bin_get_by_name(GST_BIN(vid->pipeline), "testsink");
 		g_object_set(vid->appsink, "caps", caps, NULL);
 
 		// ALREADY CREATED IN PIPELINE STR
-		// g_autoptr(GstElement) glsinkbin = gst_bin_get_by_name(GST_BIN(vid->pipeline), "glsink");
-		// g_object_set(glsinkbin, "sink", vid->appsink, NULL);
+		g_autoptr(GstElement) glsinkbin = gst_bin_get_by_name(GST_BIN(vid->pipeline), "glsink");
+		g_object_set(glsinkbin, "sink", vid->appsink, NULL);
 
 		// call bus_sync_handler_cb every time a message is posted on the bus, in the posting thread.
 		// probably not needed, the gst_bus_cb is probably better/sufficient
 		bus = gst_element_get_bus(vid->pipeline);
 		gst_bus_set_sync_handler(bus, bus_sync_handler_cb, vid, NULL);
-
-		// setup_sink(vid);
-		ALOGI("done getting webrtcbin\n");
 
 		// FIXME: Implement this when implementing data channel
 		// g_signal_connect(webrtcbin, "on-data-channel", G_CALLBACK(webrtc_on_data_channel_cb), NULL);
@@ -976,6 +770,7 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 		gst_element_set_state(vid->pipeline, GST_STATE_PLAYING);
 
 		vid->is_running = TRUE;
+		return vid->pipeline;
 	}
 }
 
@@ -1120,77 +915,14 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,
 	// once we start that thread
 	vid->loop = g_main_loop_new(NULL, FALSE);
 
-	GOptionContext *option_context;
-	SoupSession *soup_session;
 	GError *error = NULL;
 
 	if (!websocket_uri) {
 		websocket_uri = g_strdup(WEBSOCKET_URI_DEFAULT);
 	}
 
-	soup_session = soup_session_new();
+	em_handshake_init(&vid->handshake, launch_pipeline, vid, websocket_uri);
 
-#if SOUP_MAJOR_VERSION == 2
-	ALOGE("FRED: calling soup_session_websocket_connect_async. websocket_uri = %s\n", websocket_uri);
-	soup_session_websocket_connect_async(soup_session,                                     // session
-	                                     soup_message_new(SOUP_METHOD_GET, websocket_uri), // message
-	                                     NULL,                                             // origin
-	                                     NULL,                                             // protocols
-	                                     NULL,                                             // cancellable
-	                                     websocket_connected_cb,                           // callback
-	                                     vid);                                             // user_data
-
-#else
-	soup_session_websocket_connect_async(soup_session,                                     // session
-	                                     soup_message_new(SOUP_METHOD_GET, websocket_uri), // message
-	                                     NULL,                                             // origin
-	                                     NULL,                                             // protocols
-	                                     0,                                                // io_prority
-	                                     NULL,                                             // cancellable
-	                                     websocket_connected_cb,                           // callback
-	                                     vid);                                             // user_data
-
-#endif
-
-
-#if 0
-	vid->source = gst_parse_launch(pipeline_string, &error);
-	g_free(pipeline_string);
-
-	if (vid->source == NULL) {
-		ALOGE( "Bad source");
-        ALOGE( "%s", error->message);
-		g_main_loop_unref(vid->loop);
-		free(vid);
-		return NULL;
-	}
-
-	vid->testsink = gst_bin_get_by_name(GST_BIN(vid->source), "testsink");
-	g_object_set(G_OBJECT(vid->testsink), "emit-signals", TRUE, "sync", TRUE, NULL);
-	g_signal_connect(vid->testsink, "new-sample", G_CALLBACK(on_new_sample_from_sink), vid);
-
-	bus = gst_element_get_bus(vid->source);
-	gst_bus_add_watch(bus, (GstBusFunc)on_source_message, vid);
-	gst_object_unref(bus);
-#endif
-
-#if 0
-	// We need one sample to determine frame size.
-	ALOGD("Waiting for frame");
-	{
-		GstStateChangeReturn ret = gst_element_set_state(vid->source, GST_STATE_PLAYING);
-
-		if (ret == GST_STATE_CHANGE_FAILURE) {
-			ALOGE( "WHAT.");
-		}
-	}
-#endif
-// OK so it's stuck waiting here, alright.
-#if 0
-	while (!vid->got_sample) {
-		os_nanosleep(100 * 1000 * 1000);
-	}
-#endif
 	ALOGD("started async connect call, about to spawn em_fs_mainloop");
 	// gst_element_set_state(vid->source, GST_STATE_PAUSED);
 
@@ -1213,13 +945,6 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,
 
 	// It's now safe to add it to the context.
 	xrt_frame_context_add(xfctx, &vid->node);
-
-	// Start the variable tracking after we know what device we have.
-	// clang-format off
-	u_var_add_root(vid, "Video File Frameserver", true);
-	u_var_add_ro_text(vid, vid->base.name, "Card");
-	u_var_add_log_level(vid, &vid->log_level, "Log Level");
-	// clang-format on
 
 	return &(vid->base);
 }

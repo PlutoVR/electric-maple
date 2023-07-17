@@ -87,7 +87,7 @@ extern "C" {
 static const char *dotfilepath = "mrow";
 
 /*!
- * Create an Electric Maple XR streaming frameserver with default parameters.
+ * Create an ElectricMaple XR streaming frameserver with default parameters.
  *
  * Must call from a thread in which we can safely make @p context active.
  */
