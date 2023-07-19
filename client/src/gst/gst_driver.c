@@ -542,10 +542,10 @@ gst_bus_cb(GstBus *bus, GstMessage *message, gpointer data)
 		gchar *debug_msg = NULL;
 		gst_message_parse_error(message, &gerr, &debug_msg);
 		GST_DEBUG_BIN_TO_DOT_FILE(pipeline, GST_DEBUG_GRAPH_SHOW_ALL, "pipeline-error");
-        gchar* dotdata =         gst_debug_bin_to_dot_data(pipeline, GST_DEBUG_GRAPH_SHOW_ALL);
-        ALOGE("gst_bus_cb: DOT data: %s", dotdata);
+		gchar *dotdata = gst_debug_bin_to_dot_data(pipeline, GST_DEBUG_GRAPH_SHOW_ALL);
+		ALOGE("gst_bus_cb: DOT data: %s", dotdata);
 
-        ALOGE("gst_bus_cb: Error: %s (%s)", gerr->message, debug_msg);
+		ALOGE("gst_bus_cb: Error: %s (%s)", gerr->message, debug_msg);
 		g_error("gst_bus_cb: Error: %s (%s)", gerr->message, debug_msg);
 		g_error_free(gerr);
 		g_free(debug_msg);
@@ -645,6 +645,8 @@ GST_PLUGIN_STATIC_DECLARE(overlaycomposition);
 
 GST_PLUGIN_STATIC_DECLARE(playback); // "FFMPEG "
 // GST_PLUGIN_STATIC_DECLARE(webrtcnice);
+GST_PLUGIN_STATIC_DECLARE(debugutilsbad);
+
 
 #define RYLIE "RYLIE: "
 
@@ -675,6 +677,7 @@ em_init_gst_and_capture_context(struct em_fs *vid, EGLDisplay display, EGLContex
 
 	GST_PLUGIN_STATIC_REGISTER(playback); // "FFMPEG "
 	// GST_PLUGIN_STATIC_REGISTER(webrtcnice);
+	GST_PLUGIN_STATIC_REGISTER(debugutilsbad);
 
 	ALOGI(RYLIE "wrapping egl context");
 
@@ -729,7 +732,9 @@ launch_pipeline(gpointer user_data)
 		    // "gldownload !"
 		    // "appsink name=testsink"
 		    // "fakevideosink"
-		    "glsinkbin sink=fakevideosink");
+		    "glsinkbin sink=fakevideosink"
+		    //
+		);
 
 		/*
 		#define SINK_CAPS \
