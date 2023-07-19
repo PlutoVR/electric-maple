@@ -722,6 +722,7 @@ launch_pipeline(gpointer user_data)
 		    "amcviddec-omxqcomvideodecoderavc ! "
 		    // "videotestsrc !"
 		    // "glsinkbin name=glsink ! "
+		    "glcolorconvert ! gldownload !"
 		    "appsink name=testsink");
 
 		/*
@@ -747,13 +748,13 @@ launch_pipeline(gpointer user_data)
 		gst_object_ref_sink(vid->pipeline);
 
 		// get out app sink and set the caps
-		g_autoptr(GstCaps) caps = gst_caps_from_string(SINK_CAPS);
 		vid->appsink = gst_bin_get_by_name(GST_BIN(vid->pipeline), "testsink");
-		g_object_set(vid->appsink, "caps", caps, NULL);
+		// g_autoptr(GstCaps) caps = gst_caps_from_string(SINK_CAPS);
+		// g_object_set(vid->appsink, glcolorconvert ! gldownload !"caps", caps, NULL);
 
 		// ALREADY CREATED IN PIPELINE STR
-		g_autoptr(GstElement) glsinkbin = gst_bin_get_by_name(GST_BIN(vid->pipeline), "glsink");
-		g_object_set(glsinkbin, "sink", vid->appsink, NULL);
+		// g_autoptr(GstElement) glsinkbin = gst_bin_get_by_name(GST_BIN(vid->pipeline), "glsink");
+		// g_object_set(glsinkbin, "sink", vid->appsink, NULL);
 
 		// call bus_sync_handler_cb every time a message is posted on the bus, in the posting thread.
 		// probably not needed, the gst_bus_cb is probably better/sufficient
