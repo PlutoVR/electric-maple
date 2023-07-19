@@ -647,9 +647,9 @@ void
 android_main(struct android_app *app)
 {
 	start_logger("ElectricMaple");
-	setenv("GST_DEBUG", "*:3", 1);
+	// setenv("GST_DEBUG", "*:3", 1);
 	// setenv("GST_DEBUG", "*ssl*:9,*tls*:9,*webrtc*:9", 1);
-	// setenv("GST_DEBUG", "*CAPS*:6", 1);
+	setenv("GST_DEBUG", "*CAPS*:6", 1);
 
 	state.app = app;
 	state.java_vm = app->activity->vm;
