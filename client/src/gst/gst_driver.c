@@ -732,8 +732,9 @@ launch_pipeline(gpointer user_data)
 		    // "gldownload !"
 		    // "appsink name=testsink"
 		    // "fakevideosink"
-		    "glsinkbin sink=fakevideosink"
+		    // "glsinkbin sink=fakevideosink"
 		    //
+		    "glimagesinkelement"
 		);
 
 		/*
