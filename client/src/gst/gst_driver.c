@@ -541,8 +541,11 @@ gst_bus_cb(GstBus *bus, GstMessage *message, gpointer data)
 		GError *gerr = NULL;
 		gchar *debug_msg = NULL;
 		gst_message_parse_error(message, &gerr, &debug_msg);
-		GST_DEBUG_BIN_TO_DOT_FILE(pipeline, GST_DEBUG_GRAPH_SHOW_ALL, "/sdcard/pipeline-error.dot");
-		ALOGE("gst_bus_cb: Error: %s (%s)", gerr->message, debug_msg);
+		GST_DEBUG_BIN_TO_DOT_FILE(pipeline, GST_DEBUG_GRAPH_SHOW_ALL, "pipeline-error");
+        gchar* dotdata =         gst_debug_bin_to_dot_data(pipeline, GST_DEBUG_GRAPH_SHOW_ALL);
+        ALOGE("gst_bus_cb: DOT data: %s", dotdata);
+
+        ALOGE("gst_bus_cb: Error: %s (%s)", gerr->message, debug_msg);
 		g_error("gst_bus_cb: Error: %s (%s)", gerr->message, debug_msg);
 		g_error_free(gerr);
 		g_free(debug_msg);
@@ -551,7 +554,7 @@ gst_bus_cb(GstBus *bus, GstMessage *message, gpointer data)
 		GError *gerr = NULL;
 		gchar *debug_msg = NULL;
 		gst_message_parse_warning(message, &gerr, &debug_msg);
-		GST_DEBUG_BIN_TO_DOT_FILE(pipeline, GST_DEBUG_GRAPH_SHOW_ALL, "/sdcard/pipeline-warning.dot");
+		GST_DEBUG_BIN_TO_DOT_FILE(pipeline, GST_DEBUG_GRAPH_SHOW_ALL, "pipeline-warning");
 		ALOGW("gst_bus_cb: Warning: %s (%s)", gerr->message, debug_msg);
 		g_warning("gst_bus_cb: Warning: %s (%s)", gerr->message, debug_msg);
 		g_error_free(gerr);
@@ -722,9 +725,11 @@ launch_pipeline(gpointer user_data)
 		    "amcviddec-omxqcomvideodecoderavc ! "
 		    // "videotestsrc !"
 		    // "glsinkbin name=glsink ! "
-//		    "glcolorconvert ! "
-            "gldownload !"
-		    "appsink name=testsink");
+		    //		    "glcolorconvert ! "
+		    // "gldownload !"
+		    // "appsink name=testsink"
+		    // "fakevideosink"
+		    "glsinkbin sink=fakevideosink");
 
 		/*
 		#define SINK_CAPS \
@@ -748,7 +753,7 @@ launch_pipeline(gpointer user_data)
 		}
 
 		// get out app sink and set the caps
-		vid->appsink = gst_bin_get_by_name(GST_BIN(vid->pipeline), "testsink");
+		// vid->appsink = gst_bin_get_by_name(GST_BIN(vid->pipeline), "testsink");
 		// g_autoptr(GstCaps) caps = gst_caps_from_string(SINK_CAPS);
 		// g_object_set(vid->appsink, glcolorconvert ! gldownload !"caps", caps, NULL);
 
