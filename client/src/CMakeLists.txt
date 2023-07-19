@@ -30,7 +30,7 @@ target_link_libraries(
 	PRIVATE
 		# VERY important here to have --whole-archive for libgstreamer-1.0 because gstandroid's gst_android_get_application_class_loader will be dlloaded by the amc plugin and if not, clang does not add those symbols.
 		-Wl,--whole-archive
-		${gstreamer_android_SOURCE_DIR}/arm64/lib/libgstreamer-1.0.a
+		${GST_ARCH_DIR}/lib/libgstreamer-1.0.a
 		-Wl,--no-whole-archive
 		android
 		OpenXR::openxr_loader

@@ -3,7 +3,9 @@ target_link_libraries(
 	pluto_vf
 	PRIVATE
 		${GST_LIBRARIES}
-		#-Wl,--whole-archive ${gstreamer_android_SOURCE_DIR}/arm64/lib/libgstreamer-1.0.a -Wl,--no-whole-archive
+		# -Wl,--whole-archive
+		# ${GST_ARCH_DIR}/lib/libgstreamer-1.0.a
+		# -Wl,--no-whole-archive
 		#${gstreamer_android_SOURCE_DIR}/arm64/lib/libgstreamer-1.0.so
 		#${ART_LIBRARIES}
 		#${ADBD_LIBRARIES}
