@@ -718,6 +718,7 @@ launch_pipeline(gpointer user_data)
 		gchar *pipeline_string = g_strdup_printf(
 		    "webrtcbin name=webrtc bundle-policy=max-bundle ! "
 		    "rtph264depay ! "
+		    "h264parse !"
 		    "amcviddec-omxqcomvideodecoderavc ! "
 		    // "videotestsrc !"
 		    // "glsinkbin name=glsink ! "
