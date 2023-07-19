@@ -541,7 +541,7 @@ gst_bus_cb(GstBus *bus, GstMessage *message, gpointer data)
 		GError *gerr = NULL;
 		gchar *debug_msg = NULL;
 		gst_message_parse_error(message, &gerr, &debug_msg);
-		GST_DEBUG_BIN_TO_DOT_FILE(pipeline, GST_DEBUG_GRAPH_SHOW_ALL, "mss-pipeline-ERROR");
+		GST_DEBUG_BIN_TO_DOT_FILE(pipeline, GST_DEBUG_GRAPH_SHOW_ALL, "/sdcard/pipeline-error.dot");
 		ALOGE("gst_bus_cb: Error: %s (%s)", gerr->message, debug_msg);
 		g_error("gst_bus_cb: Error: %s (%s)", gerr->message, debug_msg);
 		g_error_free(gerr);
@@ -551,7 +551,7 @@ gst_bus_cb(GstBus *bus, GstMessage *message, gpointer data)
 		GError *gerr = NULL;
 		gchar *debug_msg = NULL;
 		gst_message_parse_warning(message, &gerr, &debug_msg);
-		GST_DEBUG_BIN_TO_DOT_FILE(pipeline, GST_DEBUG_GRAPH_SHOW_ALL, "mss-pipeline-WARNING");
+		GST_DEBUG_BIN_TO_DOT_FILE(pipeline, GST_DEBUG_GRAPH_SHOW_ALL, "/sdcard/pipeline-warning.dot");
 		ALOGW("gst_bus_cb: Warning: %s (%s)", gerr->message, debug_msg);
 		g_warning("gst_bus_cb: Warning: %s (%s)", gerr->message, debug_msg);
 		g_error_free(gerr);
@@ -722,7 +722,8 @@ launch_pipeline(gpointer user_data)
 		    "amcviddec-omxqcomvideodecoderavc ! "
 		    // "videotestsrc !"
 		    // "glsinkbin name=glsink ! "
-		    "glcolorconvert ! gldownload !"
+//		    "glcolorconvert ! "
+            "gldownload !"
 		    "appsink name=testsink");
 
 		/*
@@ -745,7 +746,6 @@ launch_pipeline(gpointer user_data)
 			ALOGE("%s", error->message);
 			abort();
 		}
-		gst_object_ref_sink(vid->pipeline);
 
 		// get out app sink and set the caps
 		vid->appsink = gst_bin_get_by_name(GST_BIN(vid->pipeline), "testsink");
