@@ -710,6 +710,9 @@ android_main(struct android_app *app)
 	//setenv("GST_DEBUG", "*ssl*:9,*tls*:9,*webrtc*:9", 1);
 	//setenv("GST_DEBUG", "GST_CAPS:5", 1);
 
+	// do not do ansi color codes
+	setenv("GST_DEBUG_NO_COLOR", "1", 1);
+
 	state.app = app;
 	state.java_vm = app->activity->vm;
 
