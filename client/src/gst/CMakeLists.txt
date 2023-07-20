@@ -1,10 +1,10 @@
-add_library(pluto_vf STATIC gst_driver.c gst_handshake.c)
+add_library(pluto_vf SHARED gst_driver.c gst_handshake.c)
 target_link_libraries(
 	pluto_vf
 	PRIVATE
 		${GST_LIBRARIES}
 		# -Wl,--whole-archive
-		# ${GST_ARCH_DIR}/lib/libgstreamer-1.0.a
+		${GST_ARCH_DIR}/lib/libgstreamer-1.0.a
 		# -Wl,--no-whole-archive
 		#${gstreamer_android_SOURCE_DIR}/arm64/lib/libgstreamer-1.0.so
 		#${ART_LIBRARIES}
@@ -18,6 +18,7 @@ target_link_libraries(
 		# ${LIBSOUP_LIBRARIES}
 		${JSONGLIB_LIBRARIES}
 		# ${GIO_LIBRARIES}
+		EGL::EGL
 	PUBLIC
 		OpenXR::openxr_loader
 		xrt-interfaces
@@ -25,7 +26,7 @@ target_link_libraries(
 		aux_util
 		pluto_proto
 	)
-	target_compile_definitions(pluto_vf PUBLIC XR_USE_PLATFORM_ANDROID XR_USE_GRAPHICS_API_OPENGL_ES)
+target_compile_definitions(pluto_vf PUBLIC XR_USE_PLATFORM_ANDROID XR_USE_GRAPHICS_API_OPENGL_ES)
 target_include_directories(
 	pluto_vf
 	PRIVATE
@@ -38,3 +39,10 @@ target_include_directories(
 		${GIO_INCLUDE_DIRS}
 	PUBLIC ${PROJECT_SOURCE_DIR}/gstreamer-util
 	)
+set_property(
+		TARGET pluto_vf
+		APPEND_STRING
+		PROPERTY
+			LINK_FLAGS
+			"-u gst_android_get_application_class_loader"
+		)

@@ -11,6 +11,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 find_package(Vulkan REQUIRED)
 find_package(OpenXR REQUIRED)
+find_package(EGL REQUIRED)
 
 # Default to PIC code
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -584,5 +585,8 @@ set(GIO_INCLUDE_DIRS ${GST_ARCH_DIR}/include/glib-2.0/ ${GST_ARCH_DIR}/lib/gio-u
 # message(GST_LIBRARIES)
 
 # message(ART_LIBRARIES)
+
+# list()
+# string(REPLACE ".a" ".so" GST_LIBRARIES ${GST_LIBRARIES})
 
 add_subdirectory(src)
