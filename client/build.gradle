@@ -32,8 +32,9 @@ ext {
     // If you are building on Windows, you will need to explicitly set eigenIncludeDir in your
     // local.properties file since the default value provided below only makes sense on *nix
     eigenIncludeDir = project.findProperty('eigenIncludeDir') ?: '/usr/include/eigen3'
-    // You will need to set "ovrOpenXRMobileSDK=/PATH" in your local.properties file.
-    ovrOpenXRMobileSDK = project.findProperty('ovrOpenXRMobileSDK') ?: '.'
-    androidNDK = project.findProperty('androidNDK') ?: '.'
-    ndkVersion = '25.2.9519653'
+
+    gstreamerBaseDir = project.findProperty('gstreamerBaseDir') ?: "${projectDir}/deps/gstreamer_android"
+    gstreamerArchDir = project.findProperty('gstreamerArchDir') ?: ''
+
+    ndkVersion = '22.1.7171670' // '25.2.9519653'
 }
