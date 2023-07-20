@@ -14,7 +14,7 @@ android {
 //            }
 //        }
         applicationId "com.plutovr.plutosphere.webrtc_client"
-        minSdkVersion 24
+        minSdkVersion 26
         // Version 30 breaks loader
         targetSdkVersion 29
         versionCode 1
@@ -22,10 +22,9 @@ android {
 
         externalNativeBuild {
             cmake {
-                arguments '-DANDROID_STL=c++_shared', "-DEIGEN3_INCLUDE_DIR=${project.eigenIncludeDir}", "-DOCULUS_OPENXR_MOBILE_SDK=${project.ovrOpenXRMobileSDK}", "-DANDROID_NDK=${project.androidNDK}"
+                arguments '-DANDROID_STL=c++_shared', "-DEIGEN3_INCLUDE_DIR=${project.eigenIncludeDir}" //, "-DGST_BASE_DIR=${project.gstreamerBaseDir}", "-DGST_ARCH_DIR=${project.gstreamerArchDir}"
+
             }
-        }
-        externalNativeBuild {
             ndk {
                 abiFilters 'arm64-v8a'
             }
@@ -51,13 +50,23 @@ android {
         checkReleaseBuilds false
     }
     namespace 'com.plutovr.plutosphere.webrtc_client'
-    ndkVersion '22.1.7171670'
+    ndkVersion project.ndkVersion
 }
 
 dependencies {
-    implementation 'org.khronos.openxr:openxr_loader_for_android:1.0.20'
+    implementation 'org.khronos.openxr:openxr_loader_for_android:1.0.27'
+    implementation "androidx.annotation:annotation:1.6.0"
 }
 
+def gstBase = project.findProperty('gstreamerBaseDir')
+def gstArch = project.findProperty('gstreamerArchDir')
+if (gstArch) {
+    android.defaultConfig.externalNativeBuild.cmake.arguments += "-DGST_ARCH_DIR=${gstArch}"
+    android.sourceSets.main.java.srcDirs += "${gstArch}/share/gst-android/ndk-build/androidmedia"
+} else if (gstBase) {
+    android.defaultConfig.externalNativeBuild.cmake.arguments += "-DGST_BASE_DIR=${gstBase}"
+    android.sourceSets.main.java.srcDirs += "${gstBase}/arm64/share/gst-android/ndk-build/androidmedia"
+}
 //
 //ext {
 //    // If you are building on Windows, you will need to explicitly set eigenIncludeDir in your
