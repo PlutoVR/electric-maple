@@ -42,6 +42,7 @@
 
 #include <json-glib/json-glib.h>
 #include "stdio.h"
+#include "gstjniutils.h"
 
 
 
