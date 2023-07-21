@@ -10,7 +10,9 @@ import android.util.Log
 class StreamingActivity : NativeActivity() {
     override fun onCreate(savedInstanceState: Bundle?, persistentState: PersistableBundle?) {
         Log.i("ElectricMaple", "StreamingActivity: In onCreate")
+        Log.i("ElectricMaple", "StreamingActivity: Calling GStreamer.init")
         GStreamer.init(this)
+        Log.i("ElectricMaple", "StreamingActivity: Done with GStreamer.init")
         super.onCreate(savedInstanceState, persistentState)
     }
 
@@ -19,8 +21,9 @@ class StreamingActivity : NativeActivity() {
             Log.i("ElectricMaple", "StreamingActivity: In StreamingActivity static init")
 
             System.loadLibrary("pluto_vf")
+            Log.i("ElectricMaple", "StreamingActivity: loaded pluto_vf")
             System.loadLibrary("plutovr_webrtc_client")
-            Log.i("ElectricMaple", "StreamingActivity: Done with static init and System.loadLibrary")
+            Log.i("ElectricMaple", "StreamingActivity: loaded")
 
         }
     }
