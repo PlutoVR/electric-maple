@@ -3,28 +3,18 @@ plugins {
     id 'org.jetbrains.kotlin.android'
 }
 
-def gstBase = project.findProperty('gstreamerBaseDir')
-def gstArch = project.findProperty('gstreamerArchDir')
-if (gstArch) {
-    project.ext.gstJavaDir = "${gstArch}/share/gst-android/ndk-build"
-    android.defaultConfig.externalNativeBuild.cmake.arguments += "-DGST_ARCH_DIR=${gstArch}"
-
-} else if (gstBase) {
-    project.ext.gstJavaDir = "${gstBase}/arm64/share/gst-android/ndk-build"
-    android.defaultConfig.externalNativeBuild.cmake.arguments += "-DGST_BASE_DIR=${gstBase}"
-}
 
 // project.ext.gstreamerJavaDest = layout.buildDirectory.dir("generated/gstreamer_java")
 // project.mkdir(project.gstreamerJavaDest.dir("org/freedesktop/gstreamer/androidmedia"))
 
-tasks.register('copyGStreamerJava', Copy) {
-    from(project.gstJavaDir) {
-        include "**/*.java"
-    }
-    // into layout.buildDirectory.dir("generated/gstreamer_java/org/freedesktop/gstreamer")
-    into layout.buildDirectory.dir("gstreamer_java/org/freedesktop/gstreamer")
-    includeEmptyDirs = false
-}
+// tasks.register('copyGStreamerJava', Copy) {
+//     from(project.gstJavaDir) {
+//         include "**/*.java"
+//     }
+//     // into layout.buildDirectory.dir("generated/gstreamer_java/org/freedesktop/gstreamer")
+//     into layout.buildDirectory.dir("gstreamer_java/org/freedesktop/gstreamer")
+//     includeEmptyDirs = false
+// }
 // tasks.register('copyGStreamerAndroidmediaJava', Copy) {
 //     from "${project.gstJavaDir}/androidmedia/GstAmcOnFrameAvailableListener.java",
 //             "${project.gstJavaDir}/androidmedia/GstAhcCallback.java",
@@ -35,6 +25,8 @@ tasks.register('copyGStreamerJava', Copy) {
 android {
     compileSdk 33
 
+    namespace 'com.plutovr.plutosphere.webrtc_client'
+    ndkVersion project.ndkVersion
 
     defaultConfig {
 //        todo
@@ -51,13 +43,13 @@ android {
         versionName "1.0"
 
 
-        preBuild.dependsOn(copyGStreamerJava)
+        // preBuild.dependsOn(copyGStreamerJava)
         // preBuild.dependsOn(copyGStreamerAndroidmediaJava)
-        sourceSets.main.java.srcDirs(copyGStreamerJava.destinationDir)
+        // sourceSets.main.java.srcDirs(copyGStreamerJava.destinationDir)
 
         externalNativeBuild {
             cmake {
-                arguments '-DANDROID_STL=c++_shared', "-DEIGEN3_INCLUDE_DIR=${project.eigenIncludeDir}"
+                arguments '-DANDROID_STL=c++_shared', "-DEIGEN3_INCLUDE_DIR=${project.eigenIncludeDir}", project.gstreamerCMakeArg
                 //, "-DGST_BASE_DIR=${project.gstreamerBaseDir}", "-DGST_ARCH_DIR=${project.gstreamerArchDir}"
 
             }
@@ -85,14 +77,13 @@ android {
         abortOnError false
         checkReleaseBuilds false
     }
-    namespace 'com.plutovr.plutosphere.webrtc_client'
-    ndkVersion project.ndkVersion
 }
 
 dependencies {
     implementation 'org.khronos.openxr:openxr_loader_for_android:1.0.27'
     // implementation "androidx.annotation:annotation:1.6.0"
     implementation 'androidx.core:core-ktx:1.10.1'
+    implementation project(path: ':gstreamer_java')
 }
 
 
