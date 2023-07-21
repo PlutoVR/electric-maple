@@ -1,2 +1,3 @@
+include ':gstreamer_java'
 include ':app'
 rootProject.name = "linux-streaming-client"
