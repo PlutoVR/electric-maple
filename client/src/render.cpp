@@ -96,7 +96,7 @@ initializeEGL(struct state_t &state)
 }
 
 // Vertex shader source code
-const GLchar* vertexShaderSource = R"(
+const GLchar *vertexShaderSource = R"(
     #version 300 es
     in vec3 position;
     in vec2 uv;
@@ -109,7 +109,7 @@ const GLchar* vertexShaderSource = R"(
 )";
 
 // Fragment shader source code
-const GLchar* fragmentShaderSource = R"(
+const GLchar *fragmentShaderSource = R"(
     #version 300 es
     precision lowp float;
 
@@ -126,137 +126,129 @@ GLuint shaderProgram;
 GLuint quadVAO, quadVBO;
 
 // Function to check shader compilation errors
-void checkShaderCompilation(GLuint shader) {
-    GLint success;
-    GLchar infoLog[512];
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
-    if (!success) {
-        glGetShaderInfoLog(shader, 512, NULL, infoLog);
-        printf("Shader compilation failed: %s\n", infoLog);
-    }
+void
+checkShaderCompilation(GLuint shader)
+{
+	GLint success;
+	GLchar infoLog[512];
+	glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+	if (!success) {
+		glGetShaderInfoLog(shader, 512, NULL, infoLog);
+		printf("Shader compilation failed: %s\n", infoLog);
+	}
 }
 
 // Function to check shader program linking errors
-void checkProgramLinking(GLuint program) {
-    GLint success;
-    GLchar infoLog[512];
-    glGetProgramiv(program, GL_LINK_STATUS, &success);
-    if (!success) {
-        glGetProgramInfoLog(program, 512, NULL, infoLog);
-        printf("Shader program linking failed: %s\n", infoLog);
-    }
+void
+checkProgramLinking(GLuint program)
+{
+	GLint success;
+	GLchar infoLog[512];
+	glGetProgramiv(program, GL_LINK_STATUS, &success);
+	if (!success) {
+		glGetProgramInfoLog(program, 512, NULL, infoLog);
+		printf("Shader program linking failed: %s\n", infoLog);
+	}
 }
 
-void setupShaders() {
-    // Compile the vertex shader
-    GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
-    glCompileShader(vertexShader);
-    checkShaderCompilation(vertexShader);
+void
+setupShaders()
+{
+	// Compile the vertex shader
+	GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
+	glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
+	glCompileShader(vertexShader);
+	checkShaderCompilation(vertexShader);
 
-    // Compile the fragment shader
-    GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
-    glCompileShader(fragmentShader);
-    checkShaderCompilation(fragmentShader);
+	// Compile the fragment shader
+	GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+	glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
+	glCompileShader(fragmentShader);
+	checkShaderCompilation(fragmentShader);
 
-    // Create and link the shader program
-    shaderProgram = glCreateProgram();
-    glAttachShader(shaderProgram, vertexShader);
-    glAttachShader(shaderProgram, fragmentShader);
-    glLinkProgram(shaderProgram);
-    checkProgramLinking(shaderProgram);
+	// Create and link the shader program
+	shaderProgram = glCreateProgram();
+	glAttachShader(shaderProgram, vertexShader);
+	glAttachShader(shaderProgram, fragmentShader);
+	glLinkProgram(shaderProgram);
+	checkProgramLinking(shaderProgram);
 
-    // Clean up the shaders as they're no longer needed
-    glDeleteShader(vertexShader);
-    glDeleteShader(fragmentShader);
+	// Clean up the shaders as they're no longer needed
+	glDeleteShader(vertexShader);
+	glDeleteShader(fragmentShader);
 }
 
-void setupQuadVertexData() {
-    // Set up the quad vertex data
+void
+setupQuadVertexData()
+{
+	// Set up the quad vertex data
 #if 1
-// old, chatgpt
-    GLfloat quadVertices[] = {
-            // Positions    // UVs
-            -1.0f,  1.0f, 0.0f, 0.0f, 1.0f,
-            -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
-            1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
-            1.0f,  1.0f, 0.0f, 1.0f, 1.0f
-    };
+	// old, chatgpt
+	GLfloat quadVertices[] = {// Positions    // UVs
+	                          -1.0f, 1.0f,  0.0f, 0.0f, 1.0f, -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
+	                          1.0f,  -1.0f, 0.0f, 1.0f, 0.0f, 1.0f,  1.0f,  0.0f, 1.0f, 1.0f};
 #else
 	// also chatgpt
-	GLfloat quadVertices[] = {
-			// Positions    // Texture Coords
-			-1.0f, -1.0f,    0.0f, 0.0f,
-			1.0f, -1.0f,    1.0f, 0.0f,
-			1.0f,  1.0f,    1.0f, 1.0f,
-			-1.0f,  1.0f,    0.0f, 1.0f
-	};
+	GLfloat quadVertices[] = {// Positions    // Texture Coords
+	                          -1.0f, -1.0f, 0.0f, 0.0f, 1.0f,  -1.0f, 1.0f, 0.0f,
+	                          1.0f,  1.0f,  1.0f, 1.0f, -1.0f, 1.0f,  0.0f, 1.0f};
 #endif
 
-    glGenVertexArrays(1, &quadVAO);
-    glGenBuffers(1, &quadVBO);
+	glGenVertexArrays(1, &quadVAO);
+	glGenBuffers(1, &quadVBO);
 
-    glBindVertexArray(quadVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
+	glBindVertexArray(quadVAO);
+	glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
 
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), (GLvoid*)0);
-    glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), (GLvoid *)0);
+	glEnableVertexAttribArray(0);
 
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), (GLvoid*)(3 * sizeof(GLfloat)));
-    glEnableVertexAttribArray(1);
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), (GLvoid *)(3 * sizeof(GLfloat)));
+	glEnableVertexAttribArray(1);
 
-    glBindVertexArray(0);
+	glBindVertexArray(0);
 }
 
-void setupRender() {
-    setupShaders();
-    setupQuadVertexData();
+void
+setupRender()
+{
+	setupShaders();
+	setupQuadVertexData();
 }
 
-void draw(GLuint framebuffer, GLuint texture) {
-//    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+void
+draw(GLuint framebuffer, GLuint texture)
+{
+	//    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
 
-    // Use the shader program
-    glUseProgram(shaderProgram);
+	// Use the shader program
+	glUseProgram(shaderProgram);
 
-    // Bind the texture
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, texture);
-    glUniform1i(glGetUniformLocation(shaderProgram, "textureSampler"), 0);
+	// Bind the texture
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, texture);
+	glUniform1i(glGetUniformLocation(shaderProgram, "textureSampler"), 0);
 
-    // Draw the quad
-    glBindVertexArray(quadVAO);
-    glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-    glBindVertexArray(0);
+	// Draw the quad
+	glBindVertexArray(quadVAO);
+	glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+	glBindVertexArray(0);
 
-    GLenum err;
-    while ((err = glGetError()) != GL_NO_ERROR) {
-        const char *errorStr;
-        switch (err) {
-            case GL_INVALID_ENUM:
-                errorStr = "GL_INVALID_ENUM";
-                break;
-            case GL_INVALID_VALUE:
-                errorStr = "GL_INVALID_VALUE";
-                break;
-            case GL_INVALID_OPERATION:
-                errorStr = "GL_INVALID_OPERATION";
-                break;
-            case GL_INVALID_FRAMEBUFFER_OPERATION:
-                errorStr = "GL_INVALID_FRAMEBUFFER_OPERATION";
-                break;
-            case GL_OUT_OF_MEMORY:
-                errorStr = "GL_OUT_OF_MEMORY";
-                break;
-            default:
-                errorStr = "Unknown error";
-                break;
-        }
-        printf("error! %s", errorStr);
-    }
+	GLenum err;
+	while ((err = glGetError()) != GL_NO_ERROR) {
+		const char *errorStr;
+		switch (err) {
+		case GL_INVALID_ENUM: errorStr = "GL_INVALID_ENUM"; break;
+		case GL_INVALID_VALUE: errorStr = "GL_INVALID_VALUE"; break;
+		case GL_INVALID_OPERATION: errorStr = "GL_INVALID_OPERATION"; break;
+		case GL_INVALID_FRAMEBUFFER_OPERATION: errorStr = "GL_INVALID_FRAMEBUFFER_OPERATION"; break;
+		case GL_OUT_OF_MEMORY: errorStr = "GL_OUT_OF_MEMORY"; break;
+		default: errorStr = "Unknown error"; break;
+		}
+		printf("error! %s", errorStr);
+	}
 
-    // Unbind the framebuffer
-//    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	// Unbind the framebuffer
+	//    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }

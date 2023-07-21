@@ -503,12 +503,12 @@ mainloop_one(struct state_t &state)
 
 	// FOR RYAN: we're not asking xrfs for a frame, we're checking ourselves what appsink
 	// may have for us. That's why the state.xf logic's been disabled (not needed anymore)
-	//if (state.xf) {
-    U_LOG_E("FRED: mainloop_one: Trying to get the EGL lock");
-    os_mutex_lock(&state.egl_lock);
-    if (eglMakeCurrent(state.display, state.surface, state.surface, state.context) == EGL_FALSE) {
-        U_LOG_E("FRED: mainloop_one: Failed make egl context current");
-    }
+	// if (state.xf) {
+	U_LOG_E("FRED: mainloop_one: Trying to get the EGL lock");
+	os_mutex_lock(&state.egl_lock);
+	if (eglMakeCurrent(state.display, state.surface, state.surface, state.context) == EGL_FALSE) {
+		U_LOG_E("FRED: mainloop_one: Failed make egl context current");
+	}
 
 	// FOR RYAN : As mentioned, the glsinkbin -> appsink part of the gstreamer pipeline in gst_driver.c
 	// will output "samples" that might be signalled for using "new_sample_cb" in gst_driver (useful for
@@ -516,104 +516,105 @@ mainloop_one(struct state_t &state)
 	// to see and that's what we do here. Note that the non-try version of the call "gst_app_sink_pull_sample"
 	// WILL BLOCK until there's a sample.
 
-    // Get Newest sample from GST appsink. Waiting 1ms here before giving up (might want to adjust that time)
-    U_LOG_E("DEBUG: Trying to get new gstgl sample, waiting max 1ms\n");
-    g_autoptr(GstSample) sample = gst_app_sink_try_pull_sample(GST_APP_SINK(state.vid->appsink), (GstClockTime)(1000 * GST_USECOND));
-    if (sample != NULL) {
+	// Get Newest sample from GST appsink. Waiting 1ms here before giving up (might want to adjust that time)
+	U_LOG_E("DEBUG: Trying to get new gstgl sample, waiting max 1ms\n");
+	g_autoptr(GstSample) sample =
+	    gst_app_sink_try_pull_sample(GST_APP_SINK(state.vid->appsink), (GstClockTime)(1000 * GST_USECOND));
+	if (sample != NULL) {
 
-        U_LOG_E("FRED: GOT A SAMPLE !!!");
-        GstBuffer *buffer = gst_sample_get_buffer(sample);
-        GstCaps *caps = gst_sample_get_caps(sample);
+		U_LOG_E("FRED: GOT A SAMPLE !!!");
+		GstBuffer *buffer = gst_sample_get_buffer(sample);
+		GstCaps *caps = gst_sample_get_caps(sample);
 
-        GstVideoInfo info;
-        gst_video_info_from_caps(&info, caps);
-        /*gint width = GST_VIDEO_INFO_WIDTH (&info);
-        gint height = GST_VIDEO_INFO_HEIGHT (&info);*/
+		GstVideoInfo info;
+		gst_video_info_from_caps(&info, caps);
+		/*gint width = GST_VIDEO_INFO_WIDTH (&info);
+		gint height = GST_VIDEO_INFO_HEIGHT (&info);*/
 
 		// FOR RYAN: Handle resize according to how it's done in PlutosphereOXR
-        /*if (width != state.vid->width || height != state.vid->height) {
-            vid->width = width;
-            vid->height = height;
-        }*/
+		/*if (width != state.vid->width || height != state.vid->height) {
+		    vid->width = width;
+		    vid->height = height;
+		}*/
 
-        GstVideoFrame frame;
-        GstMapFlags flags = static_cast<GstMapFlags>(GST_MAP_READ | GST_MAP_GL);
-        gst_video_frame_map(&frame, &info, buffer, flags);
-        state.frame_texture_id = *(GLuint *) frame.data[0];
+		GstVideoFrame frame;
+		GstMapFlags flags = static_cast<GstMapFlags>(GST_MAP_READ | GST_MAP_GL);
+		gst_video_frame_map(&frame, &info, buffer, flags);
+		state.frame_texture_id = *(GLuint *)frame.data[0];
 
-        if (state.vid->context == NULL) {
-            /* Get GStreamer's gl context. */
-            gst_gl_query_local_gl_context(state.vid->appsink, GST_PAD_SINK, &state.vid->context);
+		if (state.vid->context == NULL) {
+			/* Get GStreamer's gl context. */
+			gst_gl_query_local_gl_context(state.vid->appsink, GST_PAD_SINK, &state.vid->context);
 
-            /* Check if we have 2D or OES textures */
-            GstStructure *s = gst_caps_get_structure(caps, 0);
-            const gchar *texture_target_str = gst_structure_get_string(s, "texture-target");
-            if (g_str_equal(texture_target_str, GST_GL_TEXTURE_TARGET_EXTERNAL_OES_STR)) {
-                state.frame_texture_target = GL_TEXTURE_EXTERNAL_OES;
-            } else if (g_str_equal(texture_target_str, GST_GL_TEXTURE_TARGET_2D_STR)) {
-                state.frame_texture_target = GL_TEXTURE_2D;
-            } else {
-                g_assert_not_reached();
-            }
-        }
+			/* Check if we have 2D or OES textures */
+			GstStructure *s = gst_caps_get_structure(caps, 0);
+			const gchar *texture_target_str = gst_structure_get_string(s, "texture-target");
+			if (g_str_equal(texture_target_str, GST_GL_TEXTURE_TARGET_EXTERNAL_OES_STR)) {
+				state.frame_texture_target = GL_TEXTURE_EXTERNAL_OES;
+			} else if (g_str_equal(texture_target_str, GST_GL_TEXTURE_TARGET_2D_STR)) {
+				state.frame_texture_target = GL_TEXTURE_2D;
+			} else {
+				g_assert_not_reached();
+			}
+		}
 
-        GstGLSyncMeta *sync_meta = gst_buffer_get_gl_sync_meta(buffer);
-        if (sync_meta) {
-            /* MOSHI: the set_sync() seems to be needed for resizing */
-            gst_gl_sync_meta_set_sync_point(sync_meta, state.vid->context);
-            gst_gl_sync_meta_wait(sync_meta, state.vid->context);
-        }
+		GstGLSyncMeta *sync_meta = gst_buffer_get_gl_sync_meta(buffer);
+		if (sync_meta) {
+			/* MOSHI: the set_sync() seems to be needed for resizing */
+			gst_gl_sync_meta_set_sync_point(sync_meta, state.vid->context);
+			gst_gl_sync_meta_wait(sync_meta, state.vid->context);
+		}
 
-        // FIXME: Might not be necessary, since we're polling.
-        // This will make our main renderer pick up and render the gl texture.
-        state.vid->state->frame_available = true;
+		// FIXME: Might not be necessary, since we're polling.
+		// This will make our main renderer pick up and render the gl texture.
+		state.vid->state->frame_available = true;
 
-        gst_video_frame_unmap(&frame);
+		gst_video_frame_unmap(&frame);
 
-        // FIXME: This will go away now that we have a GL_TEXTURE_EXTERNAL texture
-        U_LOG_E("DEBUG: Binding textures!");
-        glBindTexture(GL_TEXTURE_2D, state.frame_texture_id);
-        glPixelStorei(GL_UNPACK_ROW_LENGTH, 1440);
-        //            glPixelStorei(GL_UNPACK_ALIGNMENT, 2); // Set to 1 for tightly packed data
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 1440, 1584, GL_RGBA, GL_UNSIGNED_BYTE, state.xf->data);
+		// FIXME: This will go away now that we have a GL_TEXTURE_EXTERNAL texture
+		U_LOG_E("DEBUG: Binding textures!");
+		glBindTexture(GL_TEXTURE_2D, state.frame_texture_id);
+		glPixelStorei(GL_UNPACK_ROW_LENGTH, 1440);
+		//            glPixelStorei(GL_UNPACK_ALIGNMENT, 2); // Set to 1 for tightly packed data
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 1440, 1584, GL_RGBA, GL_UNSIGNED_BYTE, state.xf->data);
 
-        //		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, state.xf->width, state.xf->height, 0, GL_RGBA,
-        // GL_UNSIGNED_BYTE, 		             state.xf->data);
+		//		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, state.xf->width, state.xf->height, 0, GL_RGBA,
+		// GL_UNSIGNED_BYTE, 		             state.xf->data);
 
-        //        glPixelStorei(GL_UNPACK_ROW_LENGTH, state.xf->stride / 4);
-        //    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, state.xf->width, state.xf->height, 0, GL_RGBA,
-        //    GL_UNSIGNED_BYTE, state.xf->data);
-        glBindTexture(GL_TEXTURE_2D, 0);
-
-
-        // can be factored into the above, it's just useful to be able to disable seperately
-        /*if (state.xf) {
-            xrt_frame_reference(&state.xf, NULL);
-        }*/
-
-        U_LOG_E("DEBUG: Binding framebuffer\n");
-        glBindFramebuffer(GL_FRAMEBUFFER, state.framebuffers[imageIndex]);
-
-        glViewport(0, 0, state.width * 2, state.height);
+		//        glPixelStorei(GL_UNPACK_ROW_LENGTH, state.xf->stride / 4);
+		//    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, state.xf->width, state.xf->height, 0, GL_RGBA,
+		//    GL_UNSIGNED_BYTE, state.xf->data);
+		glBindTexture(GL_TEXTURE_2D, 0);
 
 
-        glClearColor(0.0f, 1.0f, 0.0f, 1.0f);
-        //    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		// can be factored into the above, it's just useful to be able to disable seperately
+		/*if (state.xf) {
+		    xrt_frame_reference(&state.xf, NULL);
+		}*/
 
-        // Just display purple nothingness
-        U_LOG_E("DEBUG: DRAWING!\n");
-        for (uint32_t eye = 0; eye < 2; eye++) {
-            glViewport(eye * state.width, 0, state.width, state.height);
-            draw(state.framebuffers[imageIndex], state.frame_texture_id);
-        }
+		U_LOG_E("DEBUG: Binding framebuffer\n");
+		glBindFramebuffer(GL_FRAMEBUFFER, state.framebuffers[imageIndex]);
 
-        // Release
+		glViewport(0, 0, state.width * 2, state.height);
 
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-    } else {
-        U_LOG_E("FRED: NO gst appsink sample...");
-    }
+		glClearColor(0.0f, 1.0f, 0.0f, 1.0f);
+		//    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+		// Just display purple nothingness
+		U_LOG_E("DEBUG: DRAWING!\n");
+		for (uint32_t eye = 0; eye < 2; eye++) {
+			glViewport(eye * state.width, 0, state.width, state.height);
+			draw(state.framebuffers[imageIndex], state.frame_texture_id);
+		}
+
+		// Release
+
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	} else {
+		U_LOG_E("FRED: NO gst appsink sample...");
+	}
 
 	xrReleaseSwapchainImage(state.swapchain, NULL);
 
@@ -629,9 +630,9 @@ mainloop_one(struct state_t &state)
 
 	xrEndFrame(state.session, &endInfo);
 
-    eglMakeCurrent(state.display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
-    U_LOG_E("FRED: mainloop_one: releasing the EGL lock");
-    os_mutex_unlock(&state.egl_lock);
+	eglMakeCurrent(state.display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+	U_LOG_E("FRED: mainloop_one: releasing the EGL lock");
+	os_mutex_unlock(&state.egl_lock);
 }
 
 #if 0
@@ -661,25 +662,28 @@ getFilePath(JNIEnv *env, jobject activity)
 	return result;
 }
 #else
-extern "C" const char* getFilePath(JNIEnv* env, jobject activity) {
-    jclass contextClass = env->GetObjectClass(activity);
-    jmethodID getExternalFilesDirMethod = env->GetMethodID(contextClass, "getExternalFilesDir", "(Ljava/lang/String;)Ljava/io/File;");
-    jstring directoryName = env->NewStringUTF("debug");
-    jobject directory = env->CallObjectMethod(activity, getExternalFilesDirMethod, directoryName);
-    env->DeleteLocalRef(directoryName);
-    env->DeleteLocalRef(contextClass);
-    if (directory == nullptr) {
-        return strdup("Failed to obtain external files directory");
-    }
-    jmethodID getPathMethod = env->GetMethodID(env->FindClass("java/io/File"), "getPath", "()Ljava/lang/String;");
-    jstring path = static_cast<jstring>(env->CallObjectMethod(directory, getPathMethod));
-    env->DeleteLocalRef(directory);
-    if (path == nullptr) {
-        return strdup("Failed to obtain path to external files directory");
-    }
-    const char* filePath = env->GetStringUTFChars(path, nullptr);
-    env->DeleteLocalRef(path);
-    return filePath;
+extern "C" const char *
+getFilePath(JNIEnv *env, jobject activity)
+{
+	jclass contextClass = env->GetObjectClass(activity);
+	jmethodID getExternalFilesDirMethod =
+	    env->GetMethodID(contextClass, "getExternalFilesDir", "(Ljava/lang/String;)Ljava/io/File;");
+	jstring directoryName = env->NewStringUTF("debug");
+	jobject directory = env->CallObjectMethod(activity, getExternalFilesDirMethod, directoryName);
+	env->DeleteLocalRef(directoryName);
+	env->DeleteLocalRef(contextClass);
+	if (directory == nullptr) {
+		return strdup("Failed to obtain external files directory");
+	}
+	jmethodID getPathMethod = env->GetMethodID(env->FindClass("java/io/File"), "getPath", "()Ljava/lang/String;");
+	jstring path = static_cast<jstring>(env->CallObjectMethod(directory, getPathMethod));
+	env->DeleteLocalRef(directory);
+	if (path == nullptr) {
+		return strdup("Failed to obtain path to external files directory");
+	}
+	const char *filePath = env->GetStringUTFChars(path, nullptr);
+	env->DeleteLocalRef(path);
+	return filePath;
 }
 #endif
 
@@ -721,8 +725,8 @@ android_main(struct android_app *app)
 	app->onAppCmd = onAppCmd;
 
 	os_mutex_init(&state.egl_lock);
-    U_LOG_E("FRED: main: Trying to get the EGL lock");
-    os_mutex_lock(&state.egl_lock);
+	U_LOG_E("FRED: main: Trying to get the EGL lock");
+	os_mutex_lock(&state.egl_lock);
 	initializeEGL(state);
 
 	// FOR RYAN : This is a monado's frameserver remnant.
@@ -811,8 +815,8 @@ android_main(struct android_app *app)
 
 	state.frame_texture_id = generateRandomTexture(state.width, state.height, 2);
 
-    // FOR RYAN: This call below is a remnant of xrt_fs usage. That CB is not even called.
-    //        in time, completely get rid of monado for that.
+	// FOR RYAN: This call below is a remnant of xrt_fs usage. That CB is not even called.
+	//        in time, completely get rid of monado for that.
 	state.frame_sink.push_frame = sink_push_frame;
 	struct xrt_frame_context xfctx = {};
 
@@ -821,12 +825,12 @@ android_main(struct android_app *app)
 	struct xrt_fs *blah = vf_fs_gst_pipeline(&xfctx, &state);
 	U_LOG_E("FRED: Done Creating gst pipeline");
 
-    U_LOG_E("FRED: Starting xrt_fs source. Not used, please remove eventually.\n");
+	U_LOG_E("FRED: Starting xrt_fs source. Not used, please remove eventually.\n");
 	// FIXME: Eventually completely remove XRT_FS dependency here for driving the gst pipeline look
 	xrt_fs_stream_start(blah, &state.frame_sink, XRT_FS_CAPTURE_TYPE_TRACKING, 0);
 
 	// OpenXR session
-    U_LOG_E("FRED: Creating OpenXR session...");
+	U_LOG_E("FRED: Creating OpenXR session...");
 	PFN_xrGetOpenGLESGraphicsRequirementsKHR xrGetOpenGLESGraphicsRequirementsKHR = NULL;
 	XR_LOAD(xrGetOpenGLESGraphicsRequirementsKHR);
 	XrGraphicsRequirementsOpenGLESKHR graphicsRequirements = {.type = XR_TYPE_GRAPHICS_REQUIREMENTS_OPENGL_ES_KHR};
@@ -846,7 +850,7 @@ android_main(struct android_app *app)
 		U_LOG_E("ERROR: Failed to create OpenXR session (%d)\n", result);
 	}
 
-    U_LOG_E("FRED: Creating OpenXR Swapchain...");
+	U_LOG_E("FRED: Creating OpenXR Swapchain...");
 	// OpenXR swapchain
 	XrSwapchainCreateInfo swapchainInfo = {};
 	swapchainInfo.type = XR_TYPE_SWAPCHAIN_CREATE_INFO;
@@ -877,10 +881,10 @@ android_main(struct android_app *app)
 
 	// FOR RYAN: The below framebuffer creation and redering-related calls will have to get
 	// adapted to PlutosphereOXR's reality.
-    U_LOG_E("FRED: Gen and bind gl texture and framebuffers.");
+	U_LOG_E("FRED: Gen and bind gl texture and framebuffers.");
 	glGenFramebuffers(state.imageCount, state.framebuffers);
 
-    // FIXME: This if below is suspicious.. we're not using xf anymore....
+	// FIXME: This if below is suspicious.. we're not using xf anymore....
 	if (state.xf) {
 		glBindTexture(GL_TEXTURE_2D, state.frame_texture_id);
 		glPixelStorei(GL_UNPACK_ROW_LENGTH, state.xf->stride / 4);
@@ -889,7 +893,7 @@ android_main(struct android_app *app)
 		glBindTexture(GL_TEXTURE_2D, 0);
 	}
 
-    // This is important here. Make sure we're properly creating framebuffer.
+	// This is important here. Make sure we're properly creating framebuffer.
 	for (uint32_t i = 0; i < state.imageCount; i++) {
 		glBindFramebuffer(GL_FRAMEBUFFER, state.framebuffers[i]);
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, state.images[i].image, 0);
@@ -905,9 +909,9 @@ android_main(struct android_app *app)
 	U_LOG_E("FRED: Setup Render\n");
 	setupRender();
 
-    eglMakeCurrent(state.display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
-    U_LOG_E("FRED: main: releasing the EGL lock");
-    os_mutex_unlock(&state.egl_lock);
+	eglMakeCurrent(state.display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+	U_LOG_E("FRED: main: releasing the EGL lock");
+	os_mutex_unlock(&state.egl_lock);
 
 	U_LOG_E("FRED: Really make socket\n");
 	really_make_socket(state);
@@ -919,6 +923,6 @@ android_main(struct android_app *app)
 		mainloop_one(state);
 	}
 
-    os_mutex_destroy(&state.egl_lock);
+	os_mutex_destroy(&state.egl_lock);
 	(*app->activity->vm).DetachCurrentThread();
 }
