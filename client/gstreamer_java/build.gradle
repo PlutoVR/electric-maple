@@ -17,7 +17,7 @@ tasks.register('copyGStreamerJava', Copy) {
 android {
     compileSdk 33
 
-    namespace 'com.plutovr.plutosphere.webrtc_client'
+    namespace 'org.freedesktop.gstreamer'
 
     defaultConfig {
         minSdkVersion 26
