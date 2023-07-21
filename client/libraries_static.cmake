@@ -1,6 +1,5 @@
-
 set(GST_LIBRARIES
-    ${GST_ARCH_DIR}/lib/libgstreamer-1.0.a
+    # ${GST_ARCH_DIR}/lib/libgstreamer-1.0.a
     ${GST_ARCH_DIR}/lib/libgstrtsp-1.0.a
     ${GST_ARCH_DIR}/lib/libgstphotography-1.0.a
     ${GST_ARCH_DIR}/lib/liboggkate.a
@@ -310,5 +309,8 @@ set(GST_LIBRARIES
     ${GST_ARCH_DIR}/lib/libgstcontroller-1.0.a
     ${GST_ARCH_DIR}/lib/libturbojpeg.a
 	)
-
+set(LIBSOUP_LIBRARIES ${GST_ARCH_DIR}/lib/libsoup-2.4.a)
 set(JSONGLIB_LIBRARIES ${GST_ARCH_DIR}/lib/libjson-glib-1.0.a)
+set(GLIB_LIBRARIES ${GST_ARCH_DIR}/lib/libglib-2.0.a)
+
+set(GIO_LIBRARIES ${GST_ARCH_DIR}/lib/gio/modules/libgioopenssl.a ${GST_ARCH_DIR}/lib/libgio-2.0.a)

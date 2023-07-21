@@ -26,6 +26,7 @@ target_link_libraries(
 	plutovr_webrtc_client
 	PRIVATE
 		# VERY important here to have --whole-archive for libgstreamer-1.0 because gstandroid's gst_android_get_application_class_loader will be dlloaded by the amc plugin and if not, clang does not add those symbols.
+		gstreamer_android
 		android
 		OpenXR::openxr_loader
 		Vulkan::Vulkan

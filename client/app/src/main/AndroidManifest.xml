@@ -8,6 +8,7 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <application
+        android:name=".StreamingApplication"
         android:allowBackup="false"
         android:fullBackupContent="false"
         android:icon="@mipmap/ic_launcher"
@@ -15,7 +16,7 @@
         android:roundIcon="@mipmap/ic_launcher_round">
 
         <activity
-            android:name="com.plutovr.plutosphere.webrtc_client.StreamingActivity"
+            android:name=".StreamingActivity"
             android:configChanges="screenSize|screenLayout|orientation|keyboardHidden|keyboard|navigation|uiMode"
             android:excludeFromRecents="false"
             android:exported="true"

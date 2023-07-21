@@ -737,23 +737,23 @@ new_sample_cb(GstElement *appsink, gpointer data)
 // and I haven't had the time to check which were indeed requested
 // for the gstreamer pipeline we're creating below.
 
-GST_PLUGIN_STATIC_DECLARE(app); // Definitely needed
-GST_PLUGIN_STATIC_DECLARE(autodetect); // Definitely needed
-GST_PLUGIN_STATIC_DECLARE(coreelements);
-GST_PLUGIN_STATIC_DECLARE(nice);
-GST_PLUGIN_STATIC_DECLARE(rtp);
-GST_PLUGIN_STATIC_DECLARE(rtpmanager);
-GST_PLUGIN_STATIC_DECLARE(sctp);
-GST_PLUGIN_STATIC_DECLARE(srtp);
-GST_PLUGIN_STATIC_DECLARE(dtls);
-GST_PLUGIN_STATIC_DECLARE(videoparsersbad);
-GST_PLUGIN_STATIC_DECLARE(webrtc);
-GST_PLUGIN_STATIC_DECLARE(androidmedia);
-GST_PLUGIN_STATIC_DECLARE(opengl);
-GST_PLUGIN_STATIC_DECLARE(videotestsrc); // Definitely needed
-GST_PLUGIN_STATIC_DECLARE(videoconvertscale);
-GST_PLUGIN_STATIC_DECLARE(overlaycomposition);
-GST_PLUGIN_STATIC_DECLARE(playback); // "FFMPEG "
+// GST_PLUGIN_STATIC_DECLARE(app); // Definitely needed
+// GST_PLUGIN_STATIC_DECLARE(autodetect); // Definitely needed
+// GST_PLUGIN_STATIC_DECLARE(coreelements);
+// GST_PLUGIN_STATIC_DECLARE(nice);
+// GST_PLUGIN_STATIC_DECLARE(rtp);
+// GST_PLUGIN_STATIC_DECLARE(rtpmanager);
+// GST_PLUGIN_STATIC_DECLARE(sctp);
+// GST_PLUGIN_STATIC_DECLARE(srtp);
+// GST_PLUGIN_STATIC_DECLARE(dtls);
+// GST_PLUGIN_STATIC_DECLARE(videoparsersbad);
+// GST_PLUGIN_STATIC_DECLARE(webrtc);
+// GST_PLUGIN_STATIC_DECLARE(androidmedia);
+// GST_PLUGIN_STATIC_DECLARE(opengl);
+// GST_PLUGIN_STATIC_DECLARE(videotestsrc); // Definitely needed
+// GST_PLUGIN_STATIC_DECLARE(videoconvertscale);
+// GST_PLUGIN_STATIC_DECLARE(overlaycomposition);
+// GST_PLUGIN_STATIC_DECLARE(playback); // "FFMPEG "
 // GST_PLUGIN_STATIC_DECLARE(webrtcnice);
 
 // FOR RYAN:
@@ -789,23 +789,23 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 	2023-06-23 16:59:35.624  6433-6465  meow meow  com...ovr.plutosphere.webrtc_client  D  ** (<unknown>:6433): CRITICAL **: 13:59:35.624: gst_amc_jni_object_local_unref: assertion 'object != NULL' failed
 	2023-06-23 16:59:35.625  6433-6465  meow meow  com...ovr.plutosphere.webrtc_client  D  0:00:02.415697812 [32m 6433[00m   0x7ba2308460 [31;01mERROR  [00m [00;04m             default gstamcsurfacetexture-jni.c:345:gst_amc_surface_texture_jni_set_on_frame_available_callback:[00m Could not create listener: Could not retrieve application class loader
 	2023-06-23 16:59:35.625  6433-6465  meow meow  com...ovr.plutosphere.webrtc_client  D  0:00:02.415738281 [32m 6433[00m   0x7ba2308460 [33;01mWARN   [00m [00m         amcvideodec gstamcvideodec.c:2010:gst_amc_video_dec_set_format:<amcvideodec-omxqcomvideodecoderavc0>[00m error: Could not retrieve application class loader*/
-GST_PLUGIN_STATIC_REGISTER(app); // Definitely needed
-GST_PLUGIN_STATIC_REGISTER(autodetect); // Definitely needed
-GST_PLUGIN_STATIC_REGISTER(coreelements);
-GST_PLUGIN_STATIC_REGISTER(nice);
-GST_PLUGIN_STATIC_REGISTER(rtp);
-GST_PLUGIN_STATIC_REGISTER(rtpmanager);
-GST_PLUGIN_STATIC_REGISTER(sctp);
-GST_PLUGIN_STATIC_REGISTER(srtp);
-GST_PLUGIN_STATIC_REGISTER(dtls);
-GST_PLUGIN_STATIC_REGISTER(videoparsersbad);
-GST_PLUGIN_STATIC_REGISTER(webrtc);
-GST_PLUGIN_STATIC_REGISTER(androidmedia);
-GST_PLUGIN_STATIC_REGISTER(opengl);
-GST_PLUGIN_STATIC_REGISTER(videotestsrc); // Definitely needed
-GST_PLUGIN_STATIC_REGISTER(videoconvertscale);
-GST_PLUGIN_STATIC_REGISTER(overlaycomposition);
-GST_PLUGIN_STATIC_REGISTER(playback); // "FFMPEG "
+// GST_PLUGIN_STATIC_REGISTER(app); // Definitely needed
+// GST_PLUGIN_STATIC_REGISTER(autodetect); // Definitely needed
+// GST_PLUGIN_STATIC_REGISTER(coreelements);
+// GST_PLUGIN_STATIC_REGISTER(nice);
+// GST_PLUGIN_STATIC_REGISTER(rtp);
+// GST_PLUGIN_STATIC_REGISTER(rtpmanager);
+// GST_PLUGIN_STATIC_REGISTER(sctp);
+// GST_PLUGIN_STATIC_REGISTER(srtp);
+// GST_PLUGIN_STATIC_REGISTER(dtls);
+// GST_PLUGIN_STATIC_REGISTER(videoparsersbad);
+// GST_PLUGIN_STATIC_REGISTER(webrtc);
+// GST_PLUGIN_STATIC_REGISTER(androidmedia);
+// GST_PLUGIN_STATIC_REGISTER(opengl);
+// GST_PLUGIN_STATIC_REGISTER(videotestsrc); // Definitely needed
+// GST_PLUGIN_STATIC_REGISTER(videoconvertscale);
+// GST_PLUGIN_STATIC_REGISTER(overlaycomposition);
+// GST_PLUGIN_STATIC_REGISTER(playback); // "FFMPEG "
 // GST_PLUGIN_STATIC_REGISTER(webrtcnice);
 
 	GError *error = NULL;
@@ -1160,7 +1160,7 @@ vf_fs_gst_pipeline(struct xrt_frame_context *xfctx, struct state_t *state)
 	// https://github.com/GStreamer/gst-plugins-bad/blob/master/sys/androidmedia/gstamc.c
 	// and here is what it's doing with the provided JAVA VM :
 	// https://github.com/GStreamer/gst-plugins-bad/blob/master/sys/androidmedia/gstjniutils.c#L783
-    gst_amc_jni_set_java_vm(state->java_vm);
+    // gst_amc_jni_set_java_vm(state->java_vm);
 
     g_print("meow");
 
