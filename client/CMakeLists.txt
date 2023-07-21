@@ -119,6 +119,17 @@ else()
 	include(libraries_static.cmake)
 endif()
 
+# find_package(PkgConfig)
+# include(gstreamer.cmake)
+
+# add_gstreamer_android_target(
+# 	gstreamer_android
+# 	${GSTREAMER_PLUGINS_CORE}
+# 	${GSTREAMER_PLUGINS_CODECS}
+# 	${GSTREAMER_PLUGINS_NET}
+# 	${GSTREAMER_PLUGINS_SYS}
+# 	)
+
 set(GST_INCLUDE_DIRS ${GST_ARCH_DIR}/include/gstreamer-1.0/
 		     ${GST_ARCH_DIR}/lib/gstreamer-1.0/include/
 	)
@@ -127,4 +138,5 @@ set(LIBSOUP_INCLUDE_DIRS ${GST_ARCH_DIR}/include/libsoup-2.4/)
 set(JSONGLIB_INCLUDE_DIRS ${GST_ARCH_DIR}/include/json-glib-1.0)
 set(GIO_INCLUDE_DIRS ${GST_ARCH_DIR}/include/glib-2.0/ ${GST_ARCH_DIR}/lib/gio-unix-2.0/)
 
+add_subdirectory(gstreamer_android)
 add_subdirectory(src)

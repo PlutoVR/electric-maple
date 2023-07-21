@@ -737,42 +737,23 @@ new_sample_cb(GstElement *appsink, gpointer data)
 // and I haven't had the time to check which were indeed requested
 // for the gstreamer pipeline we're creating below.
 
-
-// THE BELOW IS NICE FOR TESTING WITH THE ALTERNATIVE PIPELINE
-// THE ONE WITH WEBRTCBIN ! APPSINK. TO MAKE SURE OUR WEBRTCBIN COMPONENT RECEIVES.. ANYTHING.
-static GstFlowReturn
-new_sample_cb(GstElement *appsink, gpointer data)
-{
-	g_autoptr(GstSample) sample = gst_app_sink_pull_sample(GST_APP_SINK(appsink));
-	U_LOG_E("YO: New sample %" GST_PTR_FORMAT "\n", sample);
-	return GST_FLOW_OK;
-}
-
-
-// FOR RYLIE : This is needed for all the GST_PLUGIN_STATIC_REGISTER
-// counterparts below to work. Macro gstreamer code to easily declare
-// and register all of the static plugins below. NOTE: ALL those
-// might NOT be required, but that's what Moshi initially registered
-// and I haven't had the time to check which were indeed requested
-// for the gstreamer pipeline we're creating below.
-
-GST_PLUGIN_STATIC_DECLARE(app);        // Definitely needed
-GST_PLUGIN_STATIC_DECLARE(autodetect); // Definitely needed
-GST_PLUGIN_STATIC_DECLARE(coreelements);
-GST_PLUGIN_STATIC_DECLARE(nice);
-GST_PLUGIN_STATIC_DECLARE(rtp);
-GST_PLUGIN_STATIC_DECLARE(rtpmanager);
-GST_PLUGIN_STATIC_DECLARE(sctp);
-GST_PLUGIN_STATIC_DECLARE(srtp);
-GST_PLUGIN_STATIC_DECLARE(dtls);
-GST_PLUGIN_STATIC_DECLARE(videoparsersbad);
-GST_PLUGIN_STATIC_DECLARE(webrtc);
-GST_PLUGIN_STATIC_DECLARE(androidmedia);
-GST_PLUGIN_STATIC_DECLARE(opengl);
-GST_PLUGIN_STATIC_DECLARE(videotestsrc); // Definitely needed
-GST_PLUGIN_STATIC_DECLARE(videoconvertscale);
-GST_PLUGIN_STATIC_DECLARE(overlaycomposition);
-GST_PLUGIN_STATIC_DECLARE(playback); // "FFMPEG "
+// GST_PLUGIN_STATIC_DECLARE(app); // Definitely needed
+// GST_PLUGIN_STATIC_DECLARE(autodetect); // Definitely needed
+// GST_PLUGIN_STATIC_DECLARE(coreelements);
+// GST_PLUGIN_STATIC_DECLARE(nice);
+// GST_PLUGIN_STATIC_DECLARE(rtp);
+// GST_PLUGIN_STATIC_DECLARE(rtpmanager);
+// GST_PLUGIN_STATIC_DECLARE(sctp);
+// GST_PLUGIN_STATIC_DECLARE(srtp);
+// GST_PLUGIN_STATIC_DECLARE(dtls);
+// GST_PLUGIN_STATIC_DECLARE(videoparsersbad);
+// GST_PLUGIN_STATIC_DECLARE(webrtc);
+// GST_PLUGIN_STATIC_DECLARE(androidmedia);
+// GST_PLUGIN_STATIC_DECLARE(opengl);
+// GST_PLUGIN_STATIC_DECLARE(videotestsrc); // Definitely needed
+// GST_PLUGIN_STATIC_DECLARE(videoconvertscale);
+// GST_PLUGIN_STATIC_DECLARE(overlaycomposition);
+// GST_PLUGIN_STATIC_DECLARE(playback); // "FFMPEG "
 // GST_PLUGIN_STATIC_DECLARE(webrtcnice);
 
 // FOR RYLIE:
@@ -817,24 +798,24 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 	[00m         amcvideodec
 	gstamcvideodec.c:2010:gst_amc_video_dec_set_format:<amcvideodec-omxqcomvideodecoderavc0>[00m error: Could not
 	retrieve application class loader*/
-	GST_PLUGIN_STATIC_REGISTER(app);        // Definitely needed
-	GST_PLUGIN_STATIC_REGISTER(autodetect); // Definitely needed
-	GST_PLUGIN_STATIC_REGISTER(coreelements);
-	GST_PLUGIN_STATIC_REGISTER(nice);
-	GST_PLUGIN_STATIC_REGISTER(rtp);
-	GST_PLUGIN_STATIC_REGISTER(rtpmanager);
-	GST_PLUGIN_STATIC_REGISTER(sctp);
-	GST_PLUGIN_STATIC_REGISTER(srtp);
-	GST_PLUGIN_STATIC_REGISTER(dtls);
-	GST_PLUGIN_STATIC_REGISTER(videoparsersbad);
-	GST_PLUGIN_STATIC_REGISTER(webrtc);
-	GST_PLUGIN_STATIC_REGISTER(androidmedia);
-	GST_PLUGIN_STATIC_REGISTER(opengl);
-	GST_PLUGIN_STATIC_REGISTER(videotestsrc); // Definitely needed
-	GST_PLUGIN_STATIC_REGISTER(videoconvertscale);
-	GST_PLUGIN_STATIC_REGISTER(overlaycomposition);
-	GST_PLUGIN_STATIC_REGISTER(playback); // "FFMPEG "
-	                                      // GST_PLUGIN_STATIC_REGISTER(webrtcnice);
+	// GST_PLUGIN_STATIC_REGISTER(app); // Definitely needed
+	// GST_PLUGIN_STATIC_REGISTER(autodetect); // Definitely needed
+	// GST_PLUGIN_STATIC_REGISTER(coreelements);
+	// GST_PLUGIN_STATIC_REGISTER(nice);
+	// GST_PLUGIN_STATIC_REGISTER(rtp);
+	// GST_PLUGIN_STATIC_REGISTER(rtpmanager);
+	// GST_PLUGIN_STATIC_REGISTER(sctp);
+	// GST_PLUGIN_STATIC_REGISTER(srtp);
+	// GST_PLUGIN_STATIC_REGISTER(dtls);
+	// GST_PLUGIN_STATIC_REGISTER(videoparsersbad);
+	// GST_PLUGIN_STATIC_REGISTER(webrtc);
+	// GST_PLUGIN_STATIC_REGISTER(androidmedia);
+	// GST_PLUGIN_STATIC_REGISTER(opengl);
+	// GST_PLUGIN_STATIC_REGISTER(videotestsrc); // Definitely needed
+	// GST_PLUGIN_STATIC_REGISTER(videoconvertscale);
+	// GST_PLUGIN_STATIC_REGISTER(overlaycomposition);
+	// GST_PLUGIN_STATIC_REGISTER(playback); // "FFMPEG "
+	// GST_PLUGIN_STATIC_REGISTER(webrtcnice);
 
 	GError *error = NULL;
 
@@ -1194,7 +1175,7 @@ vf_fs_gst_pipeline(struct xrt_frame_context *xfctx, struct state_t *state)
 	// https://github.com/GStreamer/gst-plugins-bad/blob/master/sys/androidmedia/gstamc.c
 	// and here is what it's doing with the provided JAVA VM :
 	// https://github.com/GStreamer/gst-plugins-bad/blob/master/sys/androidmedia/gstjniutils.c#L783
-	gst_amc_jni_set_java_vm(state->java_vm);
+	// gst_amc_jni_set_java_vm(state->java_vm);
 
 	g_print("meow");
 
