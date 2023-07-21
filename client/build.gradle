@@ -1,11 +1,15 @@
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 buildscript {
+    ext {
+        kotlin_version = '1.9.0'
+    }
     repositories {
         google()
         mavenCentral()
     }
     dependencies {
         classpath 'com.android.tools.build:gradle:7.4.2'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
 
         // NOTE: Do not place your application dependencies here; they belong
         // in the individual module build.gradle files
@@ -37,4 +41,18 @@ ext {
     gstreamerArchDir = project.findProperty('gstreamerArchDir') ?: ''
 
     ndkVersion = '22.1.7171670' // '25.2.9519653'
+}
+
+
+// def gstBase = project.findProperty('gstreamerBaseDir')
+// def gstArch = project.findProperty('gstreamerArchDir')
+if (project.gstreamerArchDir) {
+    project.ext.gstJavaDir = "${project.gstreamerArchDir}/share/gst-android/ndk-build"
+    // android.defaultConfig.externalNativeBuild.cmake.arguments += "-DGST_ARCH_DIR=${gstArch}"
+    project.ext.gstreamerCMakeArg = "-DGST_ARCH_DIR=${project.gstreamerArchDir}"
+
+} else if (project.gstreamerBaseDir) {
+    project.ext.gstJavaDir = "${project.gstreamerBaseDir}/arm64/share/gst-android/ndk-build"
+    // android.defaultConfig.externalNativeBuild.cmake.arguments += "-DGST_BASE_DIR=${gstBase}"
+    project.ext.gstreamerCMakeArg = "-DGST_BASE_DIR=${project.gstreamerBaseDir}"
 }
