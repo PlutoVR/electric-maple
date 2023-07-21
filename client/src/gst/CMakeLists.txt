@@ -1,4 +1,4 @@
-add_library(pluto_vf STATIC gst_driver.c)
+add_library(pluto_vf SHARED gst_driver.c)
 target_link_libraries(
 	pluto_vf
 	PRIVATE
