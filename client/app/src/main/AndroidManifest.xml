@@ -14,7 +14,7 @@
         android:roundIcon="@mipmap/ic_launcher_round">
 
         <activity
-            android:name="android.app.NativeActivity"
+            android:name="com.plutovr.plutosphere.webrtc_client.StreamingActivity"
             android:configChanges="screenSize|screenLayout|orientation|keyboardHidden|keyboard|navigation|uiMode"
             android:excludeFromRecents="false"
             android:exported="true"

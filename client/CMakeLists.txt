@@ -14,7 +14,7 @@ find_package(OpenXR REQUIRED)
 find_package(EGL REQUIRED)
 
 # Default to PIC code
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE OFF)
 
 ### Set configuration options for Monado
 

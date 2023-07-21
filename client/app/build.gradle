@@ -4,24 +4,14 @@ plugins {
 }
 
 
-// project.ext.gstreamerJavaDest = layout.buildDirectory.dir("generated/gstreamer_java")
-// project.mkdir(project.gstreamerJavaDest.dir("org/freedesktop/gstreamer/androidmedia"))
-
 // tasks.register('copyGStreamerJava', Copy) {
 //     from(project.gstJavaDir) {
 //         include "**/*.java"
 //     }
-//     // into layout.buildDirectory.dir("generated/gstreamer_java/org/freedesktop/gstreamer")
-//     into layout.buildDirectory.dir("gstreamer_java/org/freedesktop/gstreamer")
+//     // into layout.buildDirectory.dir("gstreamer_java/org/freedesktop/gstreamer")
+//     into layout.buildDirectory.dir("gstreamer_java/source/gstreamer/main/org/freedesktop/gstreamer")
 //     includeEmptyDirs = false
 // }
-// tasks.register('copyGStreamerAndroidmediaJava', Copy) {
-//     from "${project.gstJavaDir}/androidmedia/GstAmcOnFrameAvailableListener.java",
-//             "${project.gstJavaDir}/androidmedia/GstAhcCallback.java",
-//             "${project.gstJavaDir}/androidmedia/GstAhsCallback.java"
-//     into project.gstreamerJavaDest.dir("org/freedesktop/gstreamer/androidmedia")
-// }
-
 android {
     compileSdk 33
 
@@ -44,13 +34,10 @@ android {
 
 
         // preBuild.dependsOn(copyGStreamerJava)
-        // preBuild.dependsOn(copyGStreamerAndroidmediaJava)
-        // sourceSets.main.java.srcDirs(copyGStreamerJava.destinationDir)
-
+        // sourceSets.main.java.srcDirs(layout.buildDirectory.dir("gstreamer_java/source/gstreamer/main"))
         externalNativeBuild {
             cmake {
                 arguments '-DANDROID_STL=c++_shared', "-DEIGEN3_INCLUDE_DIR=${project.eigenIncludeDir}", project.gstreamerCMakeArg
-                //, "-DGST_BASE_DIR=${project.gstreamerBaseDir}", "-DGST_ARCH_DIR=${project.gstreamerArchDir}"
 
             }
             ndk {
@@ -86,13 +73,3 @@ dependencies {
     implementation project(path: ':gstreamer_java')
 }
 
-
-
-// Add directory containing Java files
-// android.sourceSets.main.java.srcDirs += project.gstreamerJavaDest //"${gstArch}/share/gst-android/ndk-build"
-//
-//ext {
-//    // If you are building on Windows, you will need to explicitly set eigenIncludeDir in your
-//    // local.properties file since the default value provided below only makes sense on *nix
-//    eigenIncludeDir = project.findProperty('eigenIncludeDir') ?: '/usr/include/eigen3'
-//}
