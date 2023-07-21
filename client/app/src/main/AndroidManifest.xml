@@ -6,6 +6,7 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <application
         android:allowBackup="false"
         android:fullBackupContent="false"
@@ -25,6 +26,12 @@
             <meta-data
                 android:name="android.app.lib_name"
                 android:value="plutovr_webrtc_client" />
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
