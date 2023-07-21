@@ -62,9 +62,13 @@ def gstBase = project.findProperty('gstreamerBaseDir')
 def gstArch = project.findProperty('gstreamerArchDir')
 if (gstArch) {
     android.defaultConfig.externalNativeBuild.cmake.arguments += "-DGST_ARCH_DIR=${gstArch}"
-    android.sourceSets.main.java.srcDirs += "${gstArch}/share/gst-android/ndk-build/androidmedia"
+
+    // Add directory containing Java files
+    android.sourceSets.main.java.srcDirs += "${gstArch}/share/gst-android/ndk-build"
 } else if (gstBase) {
     android.defaultConfig.externalNativeBuild.cmake.arguments += "-DGST_BASE_DIR=${gstBase}"
+
+    // Add directory containing Java files
     android.sourceSets.main.java.srcDirs += "${gstBase}/arm64/share/gst-android/ndk-build/androidmedia"
 }
 //
