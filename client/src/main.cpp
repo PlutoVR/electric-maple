@@ -710,9 +710,10 @@ android_main(struct android_app *app)
 	// Logcat buffer to be able to capture everything gstreamer'S going to spit at you !
 	// in Tools -> logcat -> Cycle Buffer Size (I set it to 102400 KB).
 
-	setenv("GST_DEBUG", "*:3", 1);
+	// setenv("GST_DEBUG", "*:3", 1);
 	// setenv("GST_DEBUG", "*ssl*:9,*tls*:9,*webrtc*:9", 1);
 	// setenv("GST_DEBUG", "GST_CAPS:5", 1);
+	setenv("GST_DEBUG", "*:2,*CAPS*:6,amcvideodec:7", 1);
 
 	// do not do ansi color codes
 	setenv("GST_DEBUG_NO_COLOR", "1", 1);
