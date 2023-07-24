@@ -20,6 +20,7 @@
 #include <android/asset_manager_jni.h>
 #include <android/log.h>
 #include <android/native_activity.h>
+#include <GLES2/gl2ext.h>
 
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
