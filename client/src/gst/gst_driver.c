@@ -17,16 +17,14 @@
 #include "os/os_threading.h"
 
 #include "util/u_trace_marker.h"
-#include "util/u_var.h"
 #include "util/u_misc.h"
 #include "util/u_debug.h"
 #include "util/u_format.h"
 #include "util/u_frame.h"
-#include "util/u_logging.h"
-#include "util/u_trace_marker.h"
 
 #include "gst_common.h"
 
+#include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>
 
@@ -91,13 +89,60 @@ DEBUG_GET_ONCE_LOG_OPTION(vf_log, "VF_LOG", U_LOGGING_TRACE)
  * @implements xrt_frame_node
  * @implements xrt_fs
  */
+struct em_fs
+{
+	struct xrt_fs base;
+
+	struct os_thread_helper play_thread;
+
+	GMainLoop *loop;
+	GstElement *pipeline;
+	GstGLDisplay *gst_gl_display;
+	GstGLContext *gst_gl_context;
+	GstGLContext *gst_gl_other_context;
+
+	GstGLDisplay *display;
+	/// Wrapped version of the android_main/render context
+	GstGLContext *android_main_context;
+	GstGLContext *context;
+	GstElement *appsink;
+	// GLenum texture_target; // WE SHOULD USE RENDER'S texture target
+	// GLuint texture_id; // WE SHOULD USE RENDER'S texture id
+
+	int width;
+	int height;
+	enum xrt_format format;
+	enum xrt_stereo_format stereo_format;
+
+	struct xrt_frame_node node;
+
+	struct
+	{
+		bool extended_format;
+		bool timeperframe;
+	} has;
+
+	enum xrt_fs_capture_type capture_type;
+	struct xrt_frame_sink *sink;
+
+	uint32_t selected;
+
+	struct xrt_fs_capture_parameters capture_params;
+
+	bool is_configured;
+	bool is_running;
+	enum u_logging_level log_level;
+
+	struct state_t *state;
+	JavaVM *java_vm;
+};
 
 /*!
  * Frame wrapping a GstSample/GstBuffer.
  *
  * @implements xrt_frame
  */
-struct vf_frame
+struct em_frame
 {
 	struct xrt_frame base;
 
@@ -107,22 +152,12 @@ struct vf_frame
 };
 
 
-
 static gchar *websocket_uri = NULL;
 
 #define WEBSOCKET_URI_DEFAULT "ws://127.0.0.1:8080/ws"
 
 //!@todo Don't use global state
-static SoupWebsocketConnection *ws = NULL;
-static GstElement *webrtcbin =
-    NULL; // We need webrtcbin for the offer/promise management... no obvious way to pass 'vid' all the way through
 static GstWebRTCDataChannel *datachannel = NULL;
-
-//!@todo SORRY
-// FIXME : Check if this was added for vid lifetime reasons.
-static struct vf_fs *the_vf_fs = NULL;
-
-
 
 void
 em_gst_message_debug(const char *function, GstMessage *msg)
@@ -155,7 +190,8 @@ em_gst_message_debug(const char *function, GstMessage *msg)
 static GstBusSyncReply
 bus_sync_handler_cb(GstBus *bus, GstMessage *msg, gpointer user_data)
 {
-	struct vf_fs *vid = user_data;
+	struct em_fs *vid = user_data;
+	LOG_MSG(msg);
 
 	/* Do not let GstGL retrieve the display handle on its own
 	 * because then it believes it owns it and calls eglTerminate()
@@ -164,13 +200,15 @@ bus_sync_handler_cb(GstBus *bus, GstMessage *msg, gpointer user_data)
 		const gchar *type;
 		gst_message_parse_context_type(msg, &type);
 		if (g_str_equal(type, GST_GL_DISPLAY_CONTEXT_TYPE)) {
+			ALOGI("Got message: Need display context");
 			g_autoptr(GstContext) context = gst_context_new(GST_GL_DISPLAY_CONTEXT_TYPE, TRUE);
 			gst_context_set_gl_display(context, vid->display);
 			gst_element_set_context(GST_ELEMENT(msg->src), context);
 		} else if (g_str_equal(type, "gst.gl.app_context")) {
+			ALOGI("Got message: Need app context");
 			g_autoptr(GstContext) app_context = gst_context_new("gst.gl.app_context", TRUE);
 			GstStructure *s = gst_context_writable_structure(app_context);
-			gst_structure_set(s, "context", GST_TYPE_GL_CONTEXT, vid->other_context, NULL);
+			gst_structure_set(s, "context", GST_TYPE_GL_CONTEXT, vid->android_main_context, NULL);
 			gst_element_set_context(GST_ELEMENT(msg->src), app_context);
 		}
 	}
@@ -179,7 +217,7 @@ bus_sync_handler_cb(GstBus *bus, GstMessage *msg, gpointer user_data)
 }
 
 static void
-render_gl_texture(struct vf_fs *vid)
+render_gl_texture(struct em_fs *vid)
 {
 	// FIXME: Render GL texture using vid->texture_target and vid->texture_id
 #if 0
@@ -214,7 +252,7 @@ render_gl_texture(struct vf_fs *vid)
 }
 
 static gboolean
-render_frame(struct vf_fs *vid)
+render_frame(struct em_fs *vid)
 {
 	g_autoptr(GstSample) sample = gst_app_sink_pull_sample(GST_APP_SINK(vid->appsink));
 	if (sample == NULL) {
@@ -271,15 +309,15 @@ render_frame(struct vf_fs *vid)
 }
 
 static void *
-vf_fs_mainloop(void *ptr)
+em_fs_mainloop(void *ptr)
 {
 	SINK_TRACE_MARKER();
 
-	struct vf_fs *vid = (struct vf_fs *)ptr;
+	struct em_fs *vid = (struct em_fs *)ptr;
 
-	ALOGD("Let's run!");
+	ALOGD("em_fs_mainloop: running GMainLoop!");
 	g_main_loop_run(vid->loop);
-	ALOGD("Going out!");
+	ALOGD("em_fs_mainloop: g_main_loop_run returned, will unref");
 
 	// gst_object_unref(vid->testsink);
 	// gst_element_set_state(vid->source, GST_STATE_NULL);
@@ -292,9 +330,9 @@ vf_fs_mainloop(void *ptr)
 }
 
 /*static void *
-vf_fs_mainloop(void *ptr)
+em_fs_mainloop(void *ptr)
 {
-  struct vf_fs *vid = ptr;
+  struct em_fs *vid = ptr;
 
   SINK_TRACE_MARKER();
 
@@ -321,15 +359,17 @@ vf_fs_mainloop(void *ptr)
   return NULL;
 }*/
 
+/// Sets pipeline state to null, and stops+destroys the frame server thread
+/// before cleaning up gstreamer objects
 static void
-stop_pipeline(struct vf_fs *vid)
+stop_pipeline(struct em_fs *vid)
 {
 	vid->is_running = false;
 	gst_element_set_state(vid->pipeline, GST_STATE_NULL);
 	os_thread_helper_destroy(&vid->play_thread);
 	gst_clear_object(&vid->pipeline);
 	gst_clear_object(&vid->display);
-	gst_clear_object(&vid->other_context);
+	gst_clear_object(&vid->android_main_context);
 	gst_clear_object(&vid->context);
 }
 
@@ -342,19 +382,19 @@ stop_pipeline(struct vf_fs *vid)
 /*!
  * Cast to derived type.
  */
-static inline struct vf_fs *
-vf_fs(struct xrt_fs *xfs)
+static inline struct em_fs *
+em_fs(struct xrt_fs *xfs)
 {
-	return (struct vf_fs *)xfs;
+	return (struct em_fs *)xfs;
 }
 
 /*!
  * Cast to derived type.
  */
-static inline struct vf_frame *
-vf_frame(struct xrt_frame *xf)
+static inline struct em_frame *
+em_frame(struct xrt_frame *xf)
 {
-	return (struct vf_frame *)xf;
+	return (struct em_frame *)xf;
 }
 
 
@@ -365,11 +405,11 @@ vf_frame(struct xrt_frame *xf)
  */
 
 static void
-vf_frame_destroy(struct xrt_frame *xf)
+em_frame_destroy(struct xrt_frame *xf)
 {
 	SINK_TRACE_MARKER();
 
-	struct vf_frame *vff = vf_frame(xf);
+	struct em_frame *vff = em_frame(xf);
 
 	gst_video_frame_unmap(&vff->frame);
 
@@ -390,7 +430,7 @@ vf_frame_destroy(struct xrt_frame *xf)
 
 
 static void
-vf_fs_frame(struct vf_fs *vid, GstSample *sample)
+em_fs_frame(struct em_fs *vid, GstSample *sample)
 {
 	SINK_TRACE_MARKER();
 
@@ -409,7 +449,7 @@ vf_fs_frame(struct vf_fs *vid, GstSample *sample)
 	gst_video_info_from_caps(&info, caps);
 
 	static int seq = 0;
-	struct vf_frame *vff = U_TYPED_CALLOC(struct vf_frame);
+	struct em_frame *vff = U_TYPED_CALLOC(struct em_frame);
 
 	if (!gst_video_frame_map(&vff->frame, &info, buffer, GST_MAP_READ)) {
 		ALOGE("Failed to map frame %d", seq);
@@ -427,7 +467,7 @@ vf_fs_frame(struct vf_fs *vid, GstSample *sample)
 
 	struct xrt_frame *xf = &vff->base;
 	xf->reference.count = 1;
-	xf->destroy = vf_frame_destroy;
+	xf->destroy = em_frame_destroy;
 	xf->width = vid->width;
 	xf->height = vid->height;
 	xf->format = vid->format;
@@ -463,7 +503,7 @@ print_gst_error(GstMessage *message)
 }
 
 static gboolean
-on_source_message(GstBus *bus, GstMessage *message, struct vf_fs *vid)
+on_source_message(GstBus *bus, GstMessage *message, struct em_fs *vid)
 {
 	LOG_MSG(message);
 	/* nil */
@@ -485,7 +525,7 @@ on_source_message(GstBus *bus, GstMessage *message, struct vf_fs *vid)
 static gboolean
 sigint_handler(gpointer user_data)
 {
-	struct vf_fs *vid = user_data;
+	struct em_fs *vid = user_data;
 	ALOGE("sigint_handler called!");
 	stop_pipeline(vid);
 	return G_SOURCE_REMOVE;
@@ -779,25 +819,6 @@ new_sample_cb(GstElement *appsink, gpointer data)
 // and I haven't had the time to check which were indeed requested
 // for the gstreamer pipeline we're creating below.
 
-// GST_PLUGIN_STATIC_DECLARE(app); // Definitely needed
-// GST_PLUGIN_STATIC_DECLARE(autodetect); // Definitely needed
-// GST_PLUGIN_STATIC_DECLARE(coreelements);
-// GST_PLUGIN_STATIC_DECLARE(nice);
-// GST_PLUGIN_STATIC_DECLARE(rtp);
-// GST_PLUGIN_STATIC_DECLARE(rtpmanager);
-// GST_PLUGIN_STATIC_DECLARE(sctp);
-// GST_PLUGIN_STATIC_DECLARE(srtp);
-// GST_PLUGIN_STATIC_DECLARE(dtls);
-// GST_PLUGIN_STATIC_DECLARE(videoparsersbad);
-// GST_PLUGIN_STATIC_DECLARE(webrtc);
-// GST_PLUGIN_STATIC_DECLARE(androidmedia);
-// GST_PLUGIN_STATIC_DECLARE(opengl);
-// GST_PLUGIN_STATIC_DECLARE(videotestsrc); // Definitely needed
-// GST_PLUGIN_STATIC_DECLARE(videoconvertscale);
-// GST_PLUGIN_STATIC_DECLARE(overlaycomposition);
-// GST_PLUGIN_STATIC_DECLARE(playback); // "FFMPEG "
-// GST_PLUGIN_STATIC_DECLARE(webrtcnice);
-
 // FOR RYAN:
 // So we've successfully established a connection with the Server. (By the way,
 // This has all been tested working on the Quest2). Of course, test this with your
@@ -810,59 +831,9 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 {
 	ALOGE("Fred : websocket_connected_cb called!\n");
 
-	// FOR RYAN : This is where our gstreamer plugins (especially the very important
-	// "androidmedia" one - which is our hardware decoder on Quest2) get actually
-	// registered and INITITIALIZED. all of them, except androidmedia, are self-
-	// contained, but androidmedia will use JNI to call java classes, notably the
-	// ones you'll find in the deps/gstreamer_android folder :
-	//
-	// deps/gstreamer_android/armv7/share/gst-android/ndk-build/androidmedia/GstAhcCallback.java
-	// deps/gstreamer_android/armv7/share/gst-android/ndk-build/androidmedia/GstAhsCallback.java
-	// deps/gstreamer_android/armv7/share/gst-android/ndk-build/androidmedia/GstAmcOnFrameAvailableListener.java
-	//
-	// so when integrating to PlutosphereOXR, please add those 3 java code to the project and
-	// build as packaged UNDER the gstreamer.java package (explained in main.cpp) as :
-	//
-	// package: org.freedesktop.gstreamer.androidmedia
-	// if properly built and integrated to your project, the below error message should NOT
-	// be seen when gstreamer pipeline get STARTED and webrtc ICE is established :
-	/* ERROR  [00m [00;04m             default gstjniutils.c:840:gst_amc_jni_get_application_class:[00m FRED:
-	attempting to retrieve class org/freedesktop/gstreamer/androidmedia/GstAmcOnFrameAvailableListener 2023-06-23
-	16:59:35.624  6433-6465  meow meow  com...ovr.plutosphere.webrtc_client  D  ** (<unknown>:6433): CRITICAL **:
-	13:59:35.624: gst_amc_jni_object_local_unref: assertion 'object != NULL' failed 2023-06-23 16:59:35.624
-	6433-6465  meow meow  com...ovr.plutosphere.webrtc_client  D  ** (<unknown>:6433): CRITICAL **: 13:59:35.624:
-	gst_amc_jni_object_local_unref: assertion 'object != NULL' failed 2023-06-23 16:59:35.625  6433-6465  meow meow
-	com...ovr.plutosphere.webrtc_client  D  0:00:02.415697812 [32m 6433[00m   0x7ba2308460 [31;01mERROR  [00m
-	[00;04m             default
-	gstamcsurfacetexture-jni.c:345:gst_amc_surface_texture_jni_set_on_frame_available_callback:[00m Could not
-	create listener: Could not retrieve application class loader 2023-06-23 16:59:35.625  6433-6465  meow meow
-	com...ovr.plutosphere.webrtc_client  D  0:00:02.415738281 [32m 6433[00m   0x7ba2308460 [33;01mWARN   [00m
-	[00m         amcvideodec
-	gstamcvideodec.c:2010:gst_amc_video_dec_set_format:<amcvideodec-omxqcomvideodecoderavc0>[00m error: Could not
-	retrieve application class loader*/
-	// GST_PLUGIN_STATIC_REGISTER(app); // Definitely needed
-	// GST_PLUGIN_STATIC_REGISTER(autodetect); // Definitely needed
-	// GST_PLUGIN_STATIC_REGISTER(coreelements);
-	// GST_PLUGIN_STATIC_REGISTER(nice);
-	// GST_PLUGIN_STATIC_REGISTER(rtp);
-	// GST_PLUGIN_STATIC_REGISTER(rtpmanager);
-	// GST_PLUGIN_STATIC_REGISTER(sctp);
-	// GST_PLUGIN_STATIC_REGISTER(srtp);
-	// GST_PLUGIN_STATIC_REGISTER(dtls);
-	// GST_PLUGIN_STATIC_REGISTER(videoparsersbad);
-	// GST_PLUGIN_STATIC_REGISTER(webrtc);
-	// GST_PLUGIN_STATIC_REGISTER(androidmedia);
-	// GST_PLUGIN_STATIC_REGISTER(opengl);
-	// GST_PLUGIN_STATIC_REGISTER(videotestsrc); // Definitely needed
-	// GST_PLUGIN_STATIC_REGISTER(videoconvertscale);
-	// GST_PLUGIN_STATIC_REGISTER(overlaycomposition);
-	// GST_PLUGIN_STATIC_REGISTER(playback); // "FFMPEG "
-	// GST_PLUGIN_STATIC_REGISTER(webrtcnice);
-
 	GError *error = NULL;
 
-	g_assert(!ws);
-	struct vf_fs *vid = (struct vf_fs *)user_data;
+	struct em_fs *vid = (struct em_fs *)user_data;
 
 	ws = soup_session_websocket_connect_finish(SOUP_SESSION(session), res, &error);
 	if (error) {
@@ -928,7 +899,7 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 		guintptr gl_handle = gst_gl_context_get_current_gl_context(gl_platform);
 		GstGLAPI gl_api = gst_gl_context_get_current_gl_api(gl_platform, NULL, NULL);
 		vid->gst_gl_display = g_object_ref_sink(gst_gl_display_new());
-		vid->other_context =
+		vid->android_main_context =
 		    g_object_ref_sink(gst_gl_context_new_wrapped(vid->gst_gl_display, gl_handle, gl_platform, gl_api));
 
 		// We convert the string SINK_CAPS above into a GstCaps that elements below can understand.
@@ -984,9 +955,9 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
  */
 
 static bool
-vf_fs_enumerate_modes(struct xrt_fs *xfs, struct xrt_fs_mode **out_modes, uint32_t *out_count)
+em_fs_enumerate_modes(struct xrt_fs *xfs, struct xrt_fs_mode **out_modes, uint32_t *out_count)
 {
-	struct vf_fs *vid = vf_fs(xfs);
+	struct em_fs *vid = em_fs(xfs);
 
 	struct xrt_fs_mode *modes = U_TYPED_ARRAY_CALLOC(struct xrt_fs_mode, 1);
 	if (modes == NULL) {
@@ -1005,20 +976,20 @@ vf_fs_enumerate_modes(struct xrt_fs *xfs, struct xrt_fs_mode **out_modes, uint32
 }
 
 static bool
-vf_fs_configure_capture(struct xrt_fs *xfs, struct xrt_fs_capture_parameters *cp)
+em_fs_configure_capture(struct xrt_fs *xfs, struct xrt_fs_capture_parameters *cp)
 {
-	// struct vf_fs *vid = vf_fs(xfs);
+	// struct em_fs *vid = em_fs(xfs);
 	//! @todo
 	return false;
 }
 
 static bool
-vf_fs_stream_start(struct xrt_fs *xfs,
+em_fs_stream_start(struct xrt_fs *xfs,
                    struct xrt_frame_sink *xs,
                    enum xrt_fs_capture_type capture_type,
                    uint32_t descriptor_index)
 {
-	struct vf_fs *vid = vf_fs(xfs);
+	struct em_fs *vid = em_fs(xfs);
 
 	vid->sink = xs;
 	vid->is_running = true;
@@ -1034,22 +1005,22 @@ vf_fs_stream_start(struct xrt_fs *xfs,
 }
 
 static bool
-vf_fs_stream_stop(struct xrt_fs *xfs)
+em_fs_stream_stop(struct xrt_fs *xfs)
 {
-	struct vf_fs *vid = vf_fs(xfs);
+	struct em_fs *vid = em_fs(xfs);
 	stop_pipeline(vid);
 	return true;
 }
 
 static bool
-vf_fs_is_running(struct xrt_fs *xfs)
+em_fs_is_running(struct xrt_fs *xfs)
 {
-	struct vf_fs *vid = vf_fs(xfs);
+	struct em_fs *vid = em_fs(xfs);
 	return vid->is_running;
 }
 
 static void
-vf_fs_destroy(struct vf_fs *vid)
+em_fs_destroy(struct em_fs *vid)
 {
 	stop_pipeline(vid);
 	free(vid);
@@ -1062,17 +1033,17 @@ vf_fs_destroy(struct vf_fs *vid)
  */
 
 static void
-vf_fs_node_break_apart(struct xrt_frame_node *node)
+em_fs_node_break_apart(struct xrt_frame_node *node)
 {
-	struct vf_fs *vid = container_of(node, struct vf_fs, node);
-	vf_fs_stream_stop(&vid->base);
+	struct em_fs *vid = container_of(node, struct em_fs, node);
+	em_fs_stream_stop(&vid->base);
 }
 
 static void
-vf_fs_node_destroy(struct xrt_frame_node *node)
+em_fs_node_destroy(struct xrt_frame_node *node)
 {
-	struct vf_fs *vid = container_of(node, struct vf_fs, node);
-	vf_fs_destroy(vid);
+	struct em_fs *vid = container_of(node, struct em_fs, node);
+	em_fs_destroy(vid);
 }
 
 /*
@@ -1087,8 +1058,8 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
                       enum xrt_format format,               //
                       enum xrt_stereo_format stereo_format) //
 {
-	struct vf_fs *vid = U_TYPED_CALLOC(struct vf_fs);
-	the_vf_fs = vid;
+	struct em_fs *vid = U_TYPED_CALLOC(struct em_fs);
+	the_em_fs = vid;
 	state->vid = vid;
 	vid->format = format;
 	vid->stereo_format = stereo_format;
@@ -1109,7 +1080,6 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 
 	vid->loop = g_main_loop_new(NULL, FALSE);
 
-	GOptionContext *option_context;
 	SoupSession *soup_session;
 	GError *error = NULL;
 
@@ -1134,7 +1104,7 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 #endif
 
 	ALOGE("FRED: Starting Play_thread");
-	ret = os_thread_helper_start(&vid->play_thread, vf_fs_mainloop, vid);
+	ret = os_thread_helper_start(&vid->play_thread, em_fs_mainloop, vid);
 	if (ret != 0) {
 		ALOGE("Failed to start thread '%i'", ret);
 		g_main_loop_unref(vid->loop);
@@ -1142,25 +1112,18 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 		return NULL;
 	}
 
-	// Again, this is all vf_fs (frameserver) stuff and might get ditched at some point.
-	vid->base.enumerate_modes = vf_fs_enumerate_modes;
-	vid->base.configure_capture = vf_fs_configure_capture;
-	vid->base.stream_start = vf_fs_stream_start;
-	vid->base.stream_stop = vf_fs_stream_stop;
-	vid->base.is_running = vf_fs_is_running;
-	vid->node.break_apart = vf_fs_node_break_apart;
-	vid->node.destroy = vf_fs_node_destroy;
+	// Again, this is all em_fs (frameserver) stuff and might get ditched at some point.
+	vid->base.enumerate_modes = em_fs_enumerate_modes;
+	vid->base.configure_capture = em_fs_configure_capture;
+	vid->base.stream_start = em_fs_stream_start;
+	vid->base.stream_stop = em_fs_stream_stop;
+	vid->base.is_running = em_fs_is_running;
+	vid->node.break_apart = em_fs_node_break_apart;
+	vid->node.destroy = em_fs_node_destroy;
 	vid->log_level = debug_get_log_option_vf_log();
 
 	// It's now safe to add it to the context.
 	xrt_frame_context_add(xfctx, &vid->node);
-
-	// Start the variable tracking after we know what device we have.
-	// clang-format off
-	u_var_add_root(vid, "Video File Frameserver", true);
-	u_var_add_ro_text(vid, vid->base.name, "Card");
-	u_var_add_log_level(vid, &vid->log_level, "Log Level");
-	// clang-format on
 
 	return &(vid->base);
 }
@@ -1169,7 +1132,7 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 // we're entering C land. (take a look at gst_common.h's Extern "C" guarding
 // declaration of this function when included from main.cpp.
 struct xrt_fs *
-vf_fs_gst_pipeline(struct xrt_frame_context *xfctx, struct state_t *state)
+em_fs_gst_pipeline(struct xrt_frame_context *xfctx, struct state_t *state)
 {
 	// FOR RYAN: The below JNI_OnLoad call MUST NOT be called !! It's just
 	// a hint to tell you how gstreamer will get inited from an Java/Native android app
@@ -1201,20 +1164,9 @@ vf_fs_gst_pipeline(struct xrt_frame_context *xfctx, struct state_t *state)
 	// gst init. Make sure this gets calls AFTER Java-side System.LoadLibrary(gstreamer-1.0)
 	gst_init(0, NULL);
 
-	// This "might" be optional in Plutosphere Integration, but I would probably
-	// start by KEEPING it, it's a convenient call that GIVES the current Java VM to the
-	// Androidmedia plugin (amc = androidmediacodec) so it DOES NOT have to deal with the
-	// InvocationAPI internally when initializing and can just safely rely on the JavaVM
-	// we've given it.
-	// for more context, see amc gstreamer code :
-	// https://github.com/GStreamer/gst-plugins-bad/blob/master/sys/androidmedia/gstamc.c
-	// and here is what it's doing with the provided JAVA VM :
-	// https://github.com/GStreamer/gst-plugins-bad/blob/master/sys/androidmedia/gstjniutils.c#L783
-	// gst_amc_jni_set_java_vm(state->java_vm);
-
 	g_print("meow");
 
-	// The below calls are probably useless.. remnant of rhte xrt deps.
+	// The below calls are probably useless.. remnant of the xrt deps.
 	enum xrt_format format = XRT_FORMAT_R8G8B8A8;
 	enum xrt_stereo_format stereo_format = XRT_STEREO_FORMAT_NONE;
 

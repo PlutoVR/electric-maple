@@ -832,7 +832,7 @@ android_main(struct android_app *app)
 
 	// FOR RYAN: This is where everything gstreamer starts.
 	ALOGE("FRED: Creating gst pipeline");
-	struct xrt_fs *blah = vf_fs_gst_pipeline(&xfctx, &state);
+	struct xrt_fs *blah = em_fs_gst_pipeline(&xfctx, &state);
 	ALOGE("FRED: Done Creating gst pipeline");
 
 	ALOGE("FRED: Starting xrt_fs source. Not used, please remove eventually.\n");
