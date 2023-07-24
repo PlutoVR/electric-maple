@@ -1,15 +1,20 @@
-// Copyright 2020-2021, Collabora, Ltd.
+// Copyright 2020-2023, Collabora, Ltd.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
- * @brief  Video file frameserver implementation
+ * @brief  ElectricMaple XR streaming frameserver, based on video file frameserver implementation
+ * @author Ryan Pavlik <rpavlik@collabora.com>
+ * @author Moshi Turner <moses@collabora.com>
+ * @author Jakob Bornecrantz <jakob@collabora.com>
  * @author Christoph Haag <christoph.haag@collabora.com>
  * @author Pete Black <pblack@collabora.com>
- * @author Jakob Bornecrantz <jakob@collabora.com>
- * @ingroup drv_vf
+ * @ingroup xrt_fs_em
  */
+#include "gst_common.h"
 #include "app_log.h"
 
+#include "os/os_time.h"
+#include "os/os_threading.h"
 
 #include "util/u_trace_marker.h"
 #include "util/u_var.h"
@@ -26,6 +31,16 @@
 #include <assert.h>
 
 #include <glib.h>
+#include <gst/app/gstappsink.h>
+#include <gst/gl/gl.h>
+#include <gst/gst.h>
+#include <gst/gstelement.h>
+#include <gst/gstinfo.h>
+#include <gst/gstmessage.h>
+#include <gst/gstutils.h>
+#include <gst/video/video-frame.h>
+
+#include "gstjniutils.h"
 
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
@@ -42,9 +57,6 @@
 #include <libsoup/soup-session.h>
 
 #include <json-glib/json-glib.h>
-#include "stdio.h"
-#include "gstjniutils.h"
-
 
 
 /*
@@ -62,20 +74,19 @@
 
 DEBUG_GET_ONCE_LOG_OPTION(vf_log, "VF_LOG", U_LOGGING_TRACE)
 
-#define SINK_CAPS                                                                                                      \
-	"video/x-raw(" GST_CAPS_FEATURE_MEMORY_GL_MEMORY                                                               \
-	"), "                                                                                                          \
-	"format = (string) RGBA, "                                                                                     \
-	"width = " GST_VIDEO_SIZE_RANGE                                                                                \
-	", "                                                                                                           \
-	"height = " GST_VIDEO_SIZE_RANGE                                                                               \
-	", "                                                                                                           \
-	"framerate = " GST_VIDEO_FPS_RANGE                                                                             \
-	", "                                                                                                           \
-	"texture-target = (string) { 2D, external-oes } "
+// clang-format off
+#define SINK_CAPS \
+    "video/x-raw(" GST_CAPS_FEATURE_MEMORY_GL_MEMORY "), "              \
+    "format = (string) RGBA, "                                          \
+    "width = " GST_VIDEO_SIZE_RANGE ", "                                \
+    "height = " GST_VIDEO_SIZE_RANGE ", "                               \
+    "framerate = " GST_VIDEO_FPS_RANGE ", "                             \
+    "texture-target = (string) { 2D, external-oes } "
+
+// clang-format on
 
 /*!
- * A frame server operating on a video file.
+ * A frame server for "Electric Maple" XR streaming
  *
  * @implements xrt_frame_node
  * @implements xrt_fs
@@ -99,10 +110,6 @@ struct vf_frame
 
 static gchar *websocket_uri = NULL;
 
-static GOptionEntry options[] = {
-    {"websocket-uri", 'u', 0, G_OPTION_ARG_STRING, &websocket_uri, "Websocket URI of webrtc signaling connection"},
-    {NULL}};
-
 #define WEBSOCKET_URI_DEFAULT "ws://127.0.0.1:8080/ws"
 
 //!@todo Don't use global state
@@ -114,6 +121,36 @@ static GstWebRTCDataChannel *datachannel = NULL;
 //!@todo SORRY
 // FIXME : Check if this was added for vid lifetime reasons.
 static struct vf_fs *the_vf_fs = NULL;
+
+
+
+void
+em_gst_message_debug(const char *function, GstMessage *msg)
+{
+	const char *src_name = GST_MESSAGE_SRC_NAME(msg);
+	const char *type_name = GST_MESSAGE_TYPE_NAME(msg);
+	GstState old_state;
+	GstState new_state;
+	GstStreamStatusType stream_status;
+	GstElement *owner = NULL;
+	switch (GST_MESSAGE_TYPE(msg)) {
+	case GST_MESSAGE_STATE_CHANGED:
+		gst_message_parse_state_changed(msg, &old_state, &new_state, NULL);
+		ALOGI("%s: %s: %s: %s to %s", function, src_name, type_name, gst_element_state_get_name(old_state),
+		      gst_element_state_get_name(new_state));
+		break;
+	case GST_MESSAGE_STREAM_STATUS:
+		gst_message_parse_stream_status(msg, &stream_status, &owner);
+		ALOGI("%s: %s: %s: %d", function, src_name, type_name, stream_status);
+		break;
+	default: ALOGI("%s: %s: %s", function, src_name, type_name);
+	}
+}
+#define LOG_MSG(MSG)                                                                                                   \
+	do {                                                                                                           \
+		em_gst_message_debug(__FUNCTION__, MSG);                                                               \
+	} while (0)
+
 
 static GstBusSyncReply
 bus_sync_handler_cb(GstBus *bus, GstMessage *msg, gpointer user_data)
@@ -428,6 +465,7 @@ print_gst_error(GstMessage *message)
 static gboolean
 on_source_message(GstBus *bus, GstMessage *message, struct vf_fs *vid)
 {
+	LOG_MSG(message);
 	/* nil */
 	switch (GST_MESSAGE_TYPE(message)) {
 	case GST_MESSAGE_EOS:
@@ -456,30 +494,36 @@ sigint_handler(gpointer user_data)
 static gboolean
 gst_bus_cb(GstBus *bus, GstMessage *message, gpointer data)
 {
-	ALOGE("gst_bus_cb called!");
+	LOG_MSG(message);
+
 	GstBin *pipeline = GST_BIN(data);
 
 	switch (GST_MESSAGE_TYPE(message)) {
 	case GST_MESSAGE_ERROR: {
-		GError *gerr;
-		gchar *debug_msg;
+		GError *gerr = NULL;
+		gchar *debug_msg = NULL;
 		gst_message_parse_error(message, &gerr, &debug_msg);
-		GST_DEBUG_BIN_TO_DOT_FILE(pipeline, GST_DEBUG_GRAPH_SHOW_ALL, "mss-pipeline-ERROR");
-		g_error("Error: %s (%s)", gerr->message, debug_msg);
+		GST_DEBUG_BIN_TO_DOT_FILE(pipeline, GST_DEBUG_GRAPH_SHOW_ALL, "pipeline-error");
+		gchar *dotdata = gst_debug_bin_to_dot_data(pipeline, GST_DEBUG_GRAPH_SHOW_ALL);
+		ALOGE("gst_bus_cb: DOT data: %s", dotdata);
+
+		ALOGE("gst_bus_cb: Error: %s (%s)", gerr->message, debug_msg);
+		g_error("gst_bus_cb: Error: %s (%s)", gerr->message, debug_msg);
 		g_error_free(gerr);
 		g_free(debug_msg);
 	} break;
 	case GST_MESSAGE_WARNING: {
-		GError *gerr;
-		gchar *debug_msg;
+		GError *gerr = NULL;
+		gchar *debug_msg = NULL;
 		gst_message_parse_warning(message, &gerr, &debug_msg);
-		GST_DEBUG_BIN_TO_DOT_FILE(pipeline, GST_DEBUG_GRAPH_SHOW_ALL, "mss-pipeline-WARNING");
-		g_warning("Warning: %s (%s)", gerr->message, debug_msg);
+		GST_DEBUG_BIN_TO_DOT_FILE(pipeline, GST_DEBUG_GRAPH_SHOW_ALL, "pipeline-warning");
+		ALOGW("gst_bus_cb: Warning: %s (%s)", gerr->message, debug_msg);
+		g_warning("gst_bus_cb: Warning: %s (%s)", gerr->message, debug_msg);
 		g_error_free(gerr);
 		g_free(debug_msg);
 	} break;
 	case GST_MESSAGE_EOS: {
-		g_error("Got EOS!!");
+		g_error("gst_bus_cb: Got EOS!!");
 	} break;
 	default: break;
 	}
@@ -836,9 +880,12 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 
 
 		gchar *pipeline_string = g_strdup_printf(
-		    "webrtcbin name=webrtc bundle-policy=max-bundle ! rtph264depay ! h264parse ! "
+		    "webrtcbin name=webrtc bundle-policy=max-bundle ! "
+		    "rtph264depay ! "
+		    "h264parse ! "
 		    "video/x-h264,stream-format=(string)byte-stream, alignment=(string)au,parsed=(boolean)true !"
-		    "amcviddec-omxqcomvideodecoderavc ! glsinkbin name=glsink");
+		    "amcviddec-omxqcomvideodecoderavc ! "
+		    "glsinkbin name=glsink");
 
 		// THIS IS THE TEST PIPELINE FOR TESTING WITH APPSINK AT VARIOUS PHASES OF THE PIPELINE AND
 		// SEE IF YOU GET SAMPLES WITH THE BELOW g_signal_connect(..., new_sample_cb) signal.
@@ -846,18 +893,16 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 		//                "webrtcbin name=webrtc bundle-policy=max-bundle ! rtph264depay ! h264parse ! appsink
 		//                name=appsink");
 
+		ALOGI("launching pipeline\n");
 		if (NULL == vid) {
 			ALOGE("FRED: OH ! NULL VID - this shouldn't happen !");
 		}
-
-		ALOGI("launching pipeline\n");
-		vid->pipeline = gst_parse_launch(pipeline_string, &error);
+		vid->pipeline = gst_object_ref_sink(gst_parse_launch(pipeline_string, &error));
 		if (vid->pipeline == NULL) {
 			ALOGE("FRED: Failed creating pipeline : Bad source");
 			ALOGE("%s", error->message);
 			abort();
 		}
-		gst_object_ref_sink(vid->pipeline);
 
 		ALOGI("getting webrtcbin\n");
 		webrtcbin = gst_bin_get_by_name(GST_BIN(vid->pipeline), "webrtc");
@@ -1067,14 +1112,6 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 	GOptionContext *option_context;
 	SoupSession *soup_session;
 	GError *error = NULL;
-
-	option_context = g_option_context_new(NULL);
-	g_option_context_add_main_entries(option_context, options, NULL);
-
-	if (!g_option_context_parse(option_context, NULL, NULL, &error)) {
-		ALOGE("ERROR: option parsing failed: %s\n", error->message);
-		exit(1);
-	}
 
 	if (!websocket_uri) {
 		websocket_uri = g_strdup(WEBSOCKET_URI_DEFAULT);
