@@ -850,7 +850,7 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 			ALOGE("FRED: OH ! NULL VID - this shouldn't happen !");
 		}
 
-		printf("launching pipeline\n");
+		ALOGI("launching pipeline\n");
 		vid->pipeline = gst_parse_launch(pipeline_string, &error);
 		if (vid->pipeline == NULL) {
 			ALOGE("FRED: Failed creating pipeline : Bad source");
@@ -859,7 +859,7 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 		}
 		gst_object_ref_sink(vid->pipeline);
 
-		printf("getting webrtcbin\n");
+		ALOGI("getting webrtcbin\n");
 		webrtcbin = gst_bin_get_by_name(GST_BIN(vid->pipeline), "webrtc");
 		g_signal_connect(webrtcbin, "on-ice-candidate", G_CALLBACK(webrtc_on_ice_candidate_cb), NULL);
 
