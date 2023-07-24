@@ -3,15 +3,6 @@ plugins {
     id 'org.jetbrains.kotlin.android'
 }
 
-
-// tasks.register('copyGStreamerJava', Copy) {
-//     from(project.gstJavaDir) {
-//         include "**/*.java"
-//     }
-//     // into layout.buildDirectory.dir("gstreamer_java/org/freedesktop/gstreamer")
-//     into layout.buildDirectory.dir("gstreamer_java/source/gstreamer/main/org/freedesktop/gstreamer")
-//     includeEmptyDirs = false
-// }
 android {
     compileSdk 33
 
@@ -32,9 +23,6 @@ android {
         versionCode 1
         versionName "1.0"
 
-
-        // preBuild.dependsOn(copyGStreamerJava)
-        // sourceSets.main.java.srcDirs(layout.buildDirectory.dir("gstreamer_java/source/gstreamer/main"))
         externalNativeBuild {
             cmake {
                 arguments '-DANDROID_STL=c++_shared', "-DEIGEN3_INCLUDE_DIR=${project.eigenIncludeDir}", project.gstreamerCMakeArg
@@ -68,7 +56,6 @@ android {
 
 dependencies {
     implementation 'org.khronos.openxr:openxr_loader_for_android:1.0.27'
-    // implementation "androidx.annotation:annotation:1.6.0"
     implementation 'androidx.core:core-ktx:1.10.1'
     implementation project(path: ':gstreamer_java')
 }
