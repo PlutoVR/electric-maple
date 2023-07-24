@@ -53,95 +53,95 @@
 
 struct state_t
 {
-    struct android_app *app;
-    JNIEnv *jni;
-    JavaVM *java_vm;
-    bool hasPermissions;
+	struct android_app *app;
+	JNIEnv *jni;
+	JavaVM *java_vm;
+	bool hasPermissions;
 
-    struct vf_fs *vid;
+	struct vf_fs *vid;
 
-    // This mutex protects the EGL context below across main and gstgl threads
-    struct os_mutex egl_lock;
+	// This mutex protects the EGL context below across main and gstgl threads
+	struct os_mutex egl_lock;
 
-    EGLDisplay display;
-    EGLContext context;
-    EGLConfig config;
-    EGLSurface surface;
-    XrInstance instance;
-    XrSystemId system;
-    XrSession session;
-    XrSessionState sessionState;
-    XrSpace worldSpace;
-    XrSpace viewSpace;
-    XrSwapchain swapchain;
-    XrSwapchainImageOpenGLESKHR images[4];
-    GLuint framebuffers[4];
-    GLuint shader_program;
-    uint32_t imageCount;
-    uint32_t width;
-    uint32_t height;
+	EGLDisplay display;
+	EGLContext context;
+	EGLConfig config;
+	EGLSurface surface;
+	XrInstance instance;
+	XrSystemId system;
+	XrSession session;
+	XrSessionState sessionState;
+	XrSpace worldSpace;
+	XrSpace viewSpace;
+	XrSwapchain swapchain;
+	XrSwapchainImageOpenGLESKHR images[4];
+	GLuint framebuffers[4];
+	GLuint shader_program;
+	uint32_t imageCount;
+	uint32_t width;
+	uint32_t height;
 
-    int socket_fd;
-    struct sockaddr_in socket_addr;
+	int socket_fd;
+	struct sockaddr_in socket_addr;
 
-    // this is bad, we want an xrt_frame_node etc.
+	// this is bad, we want an xrt_frame_node etc.
 
-    int way;
+	int way;
 
-    struct xrt_frame_sink frame_sink;
-    struct xrt_frame *xf;
-    // this is the GL texture id used by the main renderer. This is what gst/ code should also be using.
-    GLuint frame_texture_id;
-    GLenum frame_texture_target;
-    GLboolean frame_available;
+	struct xrt_frame_sink frame_sink;
+	struct xrt_frame *xf;
+	// this is the GL texture id used by the main renderer. This is what gst/ code should also be using.
+	GLuint frame_texture_id;
+	GLenum frame_texture_target;
+	GLboolean frame_available;
 };
 
 // FIXME : MERGE VID AND STATE !!!! THIS IS SO UGLY !!
 struct vf_fs
 {
-    struct xrt_fs base;
+	struct xrt_fs base;
 
-    struct os_thread_helper play_thread;
+	struct os_thread_helper play_thread;
 
-    GMainLoop *loop;
-    GstElement *pipeline;
-    GstGLDisplay *gst_gl_display;
-    GstGLContext *gst_gl_context;
-    GstGLContext *gst_gl_other_context;
+	GMainLoop *loop;
+	GstElement *pipeline;
+	GstGLDisplay *gst_gl_display;
+	GstGLContext *gst_gl_context;
+	GstGLContext *gst_gl_other_context;
 
-    GstGLDisplay *display;
-    GstGLContext *other_context;
-    GstGLContext *context;
-    GstElement *appsink;
-    //GLenum texture_target; // WE SHOULD USE RENDER'S texture target
-    //GLuint texture_id; // WE SHOULD USE RENDER'S texture id
+	GstGLDisplay *display;
+	GstGLContext *other_context;
+	GstGLContext *context;
+	GstElement *appsink;
+	// GLenum texture_target; // WE SHOULD USE RENDER'S texture target
+	// GLuint texture_id; // WE SHOULD USE RENDER'S texture id
 
-    int width;
-    int height;
-    enum xrt_format format;
-    enum xrt_stereo_format stereo_format;
+	int width;
+	int height;
+	enum xrt_format format;
+	enum xrt_stereo_format stereo_format;
 
-    struct xrt_frame_node node;
+	struct xrt_frame_node node;
 
-    struct
-    {
-        bool extended_format;
-        bool timeperframe;
-    } has;
+	struct
+	{
+		bool extended_format;
+		bool timeperframe;
+	} has;
 
-    enum xrt_fs_capture_type capture_type;
-    struct xrt_frame_sink *sink;
+	enum xrt_fs_capture_type capture_type;
+	struct xrt_frame_sink *sink;
 
-    uint32_t selected;
+	uint32_t selected;
 
-    struct xrt_fs_capture_parameters capture_params;
+	struct xrt_fs_capture_parameters capture_params;
 
-    bool is_configured;
-    bool is_running;
-    enum u_logging_level log_level;
+	bool is_configured;
+	bool is_running;
+	enum u_logging_level log_level;
 
-    struct state_t *state;
-    JavaVM *java_vm;
+	struct state_t *state;
+	JavaVM *java_vm;
 };
 
 
