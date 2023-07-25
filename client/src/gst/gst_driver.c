@@ -992,6 +992,16 @@ em_fs_create_streaming_client(struct xrt_frame_context *xfctx,
 bool
 em_fs_try_pull_sample(struct xrt_fs *fs, struct em_sample *out_sample)
 {
+
+	// FOR RYAN : As mentioned, the glsinkbin -> appsink part of the gstreamer pipeline in gst_driver.c
+	// will output "samples" that might be signalled for using "new_sample_cb" in gst_driver (useful for
+	// testing if the gstreamer sink elements are giving us "anything"), but also on which we can "poll"
+	// to see and that's what we do here. Note that the non-try version of the call "gst_app_sink_pull_sample"
+	// WILL BLOCK until there's a sample.
+
+	// Get Newest sample from GST appsink. Waiting 1ms here before giving up (might want to adjust that time)
+	ALOGE("DEBUG: Trying to get new gstgl sample, waiting max 1ms\n");
+
 	struct em_fs *vid = em_fs(fs);
 	GstSample *sample =
 	    gst_app_sink_try_pull_sample(GST_APP_SINK(vid->appsink), (GstClockTime)(1000 * GST_USECOND));

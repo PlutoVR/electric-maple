@@ -70,6 +70,7 @@ struct em_state
 	uint32_t width;
 	uint32_t height;
 
+	// TODO This socket is for sending the HMD pose upstream "out of band" - replace with data channel.
 	int socket_fd;
 	struct sockaddr_in socket_addr;
 
