@@ -14,6 +14,7 @@
 #include "pb_encode.h"
 
 #include "os/os_time.h"
+#include "os/os_threading.h"
 #include "util/u_time.h"
 
 #include <EGL/egl.h>
@@ -42,52 +43,8 @@
 #include <cstdlib>
 #include <ctime>
 
-// FOR RYAN: The below is one of those deps to monado that
-// still exist in current code. Eventually, would be nice
-// to remove the monado dep completely on client side.
-#include "os/os_threading.h"
 
 #define XR_LOAD(fn) xrGetInstanceProcAddr(state.instance, #fn, (PFN_xrVoidFunction *)&fn);
-
-static int pfd[2];
-static pthread_t thr;
-static const char *tag = "ElectricMaple";
-
-static void *
-thread_func(void *)
-{
-	ssize_t rdsz;
-	char buf[2048];
-	while ((rdsz = read(pfd[0], buf, sizeof buf - 1)) > 0) {
-		if (buf[rdsz - 1] == '\n')
-			--rdsz;
-		buf[rdsz] = 0; /* add null-terminator */
-		__android_log_write(ANDROID_LOG_DEBUG, tag, buf);
-	}
-	return 0;
-}
-
-// FOR RYAN: For seeing our U_LOG_E appear in LOGCAT :)
-int
-start_logger(const char *app_name)
-{
-	tag = app_name;
-
-	/* make stdout line-buffered and stderr unbuffered */
-	setvbuf(stdout, 0, _IOLBF, 0);
-	setvbuf(stderr, 0, _IOLBF, 0);
-
-	/* create the pipe and redirect stdout and stderr */
-	pipe(pfd);
-	dup2(pfd[1], 1);
-	dup2(pfd[1], 2);
-
-	/* spawn the logging thread */
-	if (pthread_create(&thr, 0, thread_func, 0) == -1)
-		return -1;
-	pthread_detach(thr);
-	return 0;
-}
 
 // FOR RYAN: This is a general state var shared across both c++ and C sides
 // Take a look at gst_common.h...There's also 'vid' that's shared. eventually
@@ -110,11 +67,12 @@ onAppCmd(struct android_app *app, int32_t cmd)
 	}
 }
 
-// FOR RYAN: The below is a remnant of xrt_fs usage (monado-provide "frame-server)
+// FOR RYAN: The below is a remnant of xrt_fs usage (monado-provided "frame-server")
 //           in time, completely get rid of monado since the below's not used.
 //           what is now pushing the frame is gstsl in the glsinkbin gstreamer
 //           element, and it's making the frames available as gl textures directly.
 //           No need to deal with GstBuffer as it's done in the monado frameserver part.
+// TODO but we still have to keep a reference to frames currently being used!
 void
 sink_push_frame(struct xrt_frame_sink *xfs, struct xrt_frame *xf)
 {
@@ -255,6 +213,7 @@ die_errno()
 // connection/stream between server and client. (This has all been tested working on the
 // quest2 with the webrtc pipeline and ICE callback (mostly implemented in gst_driver.c)
 
+// TODO This socket is for sending the HMD pose upstream "out of band" - replace with data channel.
 void
 really_make_socket(struct em_state &st)
 {
@@ -521,7 +480,7 @@ mainloop_one(struct xrt_fs *client, struct em_state &state)
 		ALOGE("Failed to wait for swapchain image (%d)", result);
 	}
 
-	// FOR RYAN: we're not asking xrfs for a frame, we're checking ourselves what appsink
+	// FOR RYAN: we're not asking xrt_fs for a frame, we're checking ourselves what appsink
 	// may have for us. That's why the state.xf logic's been disabled (not needed anymore)
 	// if (state.xf) {
 	ALOGE("FRED: mainloop_one: Trying to get the EGL lock");
@@ -530,44 +489,12 @@ mainloop_one(struct xrt_fs *client, struct em_state &state)
 		ALOGE("FRED: mainloop_one: Failed make egl context current");
 	}
 
-	// FOR RYAN : As mentioned, the glsinkbin -> appsink part of the gstreamer pipeline in gst_driver.c
-	// will output "samples" that might be signalled for using "new_sample_cb" in gst_driver (useful for
-	// testing if the gstreamer sink elements are giving us "anything"), but also on which we can "poll"
-	// to see and that's what we do here. Note that the non-try version of the call "gst_app_sink_pull_sample"
-	// WILL BLOCK until there's a sample.
-
-	// Get Newest sample from GST appsink. Waiting 1ms here before giving up (might want to adjust that time)
-	ALOGE("DEBUG: Trying to get new gstgl sample, waiting max 1ms\n");
 	struct em_sample sample = {};
-
-
 
 	if (em_fs_try_pull_sample(client, &sample)) {
 
-		ALOGE("FRED: GOT A SAMPLE !!!");
 		state.frame_texture_id = sample.frame_texture_id;
 
-		// FIXME: This will go away now that we have a GL_TEXTURE_EXTERNAL texture
-		ALOGE("DEBUG: Binding textures!");
-		// if (sample.frame_texture_target == GL_TEXTURE_EXTERNAL_OES)
-		// glBindTexture(GL_TEXTURE_EXTERNAL_OES, state.frame_texture_id);
-		// glPixelStorei(GL_UNPACK_ROW_LENGTH, 1440);
-		//            glPixelStorei(GL_UNPACK_ALIGNMENT, 2); // Set to 1 for tightly packed data
-		// glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 1440, 1584, GL_RGBA, GL_UNSIGNED_BYTE, state.xf->data);
-
-		//		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, state.xf->width, state.xf->height, 0, GL_RGBA,
-		// GL_UNSIGNED_BYTE, 		             state.xf->data);
-
-		//        glPixelStorei(GL_UNPACK_ROW_LENGTH, state.xf->stride / 4);
-		//    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, state.xf->width, state.xf->height, 0, GL_RGBA,
-		//    GL_UNSIGNED_BYTE, state.xf->data);
-		// glBindTexture(GL_TEXTURE_2D, 0);
-
-
-		// can be factored into the above, it's just useful to be able to disable seperately
-		/*if (state.xf) {
-		    xrt_frame_reference(&state.xf, NULL);
-		}*/
 
 		ALOGE("DEBUG: Binding framebuffer\n");
 		glBindFramebuffer(GL_FRAMEBUFFER, state.framebuffers[imageIndex]);
@@ -686,7 +613,6 @@ getFilePath(JNIEnv *env, jobject activity)
 void
 android_main(struct android_app *app)
 {
-	start_logger("ElectricMaple");
 
 	// FOR RYAN : VERY VERY useful for debugging gstreamer.
 	// GST_DEBUG = *:3 will give you ONLY ERROR-level messages.
