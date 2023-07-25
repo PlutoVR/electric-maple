@@ -86,7 +86,7 @@ start_logger(const char *app_name)
 	return 0;
 }
 
-// FOR RYLIE: This is a general state var shared accross both c++ and C sides
+// FOR RYLIE: This is a general state var shared across both c++ and C sides
 // Take a look at gst_common.h...There's also 'vid' that's shared. eventually
 // merge state and vid into one single struct.
 static em_state state = {};
