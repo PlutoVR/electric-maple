@@ -685,6 +685,15 @@ launch_pipeline(gpointer user_data)
 		uint32_t width = 480;
 		uint32_t height = 270;
 
+		// We'll need and active egl context below before setting up gstgl (as explained previously)
+		ALOGE("FRED: websocket_connected_cb: Trying to get the EGL lock");
+		os_mutex_lock(&vid->state->egl_lock);
+		ALOGE("FRED : make current display=%p, surface=%p, context=%p", vid->state->display,
+		      vid->state->surface, vid->state->context);
+		if (eglMakeCurrent(vid->state->display, vid->state->surface, vid->state->surface,
+		                   vid->state->context) == EGL_FALSE) {
+			ALOGE("FRED: websocket_connected_cb: Failed make egl context current");
+		}
 
 		gchar *pipeline_string = g_strdup_printf(
 		    "webrtcbin name=webrtc bundle-policy=max-bundle ! "
@@ -710,6 +719,11 @@ launch_pipeline(gpointer user_data)
 			ALOGE("%s", error->message);
 			abort();
 		}
+
+		// And we unCurrent the egl context.
+		eglMakeCurrent(vid->state->display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+		ALOGE("FRED: websocket_connected: releasing the EGL lock");
+		os_mutex_unlock(&vid->state->egl_lock);
 
 		// We convert the string SINK_CAPS above into a GstCaps that elements below can understand.
 		// the "video/x-raw(" GST_CAPS_FEATURE_MEMORY_GL_MEMORY ")," part of the caps is read :
