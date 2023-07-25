@@ -433,7 +433,7 @@ static void
 em_fs_frame(struct em_fs *vid, GstSample *sample)
 {
 	SINK_TRACE_MARKER();
-
+	ALOGI("RYLIE: %s", __FUNCTION__);
 	// Noop.
 	if (!vid->sink) {
 		return;
