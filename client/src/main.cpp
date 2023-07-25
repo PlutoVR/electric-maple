@@ -22,6 +22,7 @@
 #include <android/asset_manager_jni.h>
 #include <android/log.h>
 #include <android/native_activity.h>
+#include <android_native_app_glue.h>
 
 #include <gst/gstsample.h>
 #include <gst/gl/gstglbasememory.h>
@@ -45,6 +46,8 @@
 // still exist in current code. Eventually, would be nice
 // to remove the monado dep completely on client side.
 #include "os/os_threading.h"
+
+#define XR_LOAD(fn) xrGetInstanceProcAddr(state.instance, #fn, (PFN_xrVoidFunction *)&fn);
 
 static int pfd[2];
 static pthread_t thr;

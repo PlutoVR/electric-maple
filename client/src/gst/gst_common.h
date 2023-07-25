@@ -18,11 +18,9 @@
 #include "xrt/xrt_frame.h"
 #include "os/os_threading.h"
 
-#include <android_native_app_glue.h>
 #include <GLES3/gl3.h>
 #include <GLES3/gl3ext.h>
 #include <EGL/egl.h>
-#include <android/log.h>
 #include <jni.h>
 
 #include <openxr/openxr.h>
@@ -34,8 +32,6 @@
 
 #include <string.h>
 #include <stdbool.h>
-
-#define XR_LOAD(fn) xrGetInstanceProcAddr(state.instance, #fn, (PFN_xrVoidFunction *)&fn);
 
 #include "xrt/xrt_frameserver.h"
 
@@ -111,9 +107,13 @@ em_fs_create_streaming_client(struct xrt_frame_context *xfctx,
                               EGLDisplay display,
                               EGLContext context);
 
-
+/*!
+ * Attempt to retrieve a sample.
+ *
+ * @return true if a new frame is received.
+ */
 bool
-em_fs_try_pull_sample(struct xrt_fs *fs, struct em_sample* out_sample);
+em_fs_try_pull_sample(struct xrt_fs *fs, struct em_sample *out_sample);
 
 
 #ifdef __cplusplus
