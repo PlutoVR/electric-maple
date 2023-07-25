@@ -17,22 +17,28 @@
 #include "util/u_time.h"
 
 #include <EGL/egl.h>
+#include <GLES2/gl2ext.h>
+
 #include <android/asset_manager_jni.h>
 #include <android/log.h>
 #include <android/native_activity.h>
-#include <GLES2/gl2ext.h>
+
+#include <gst/gstsample.h>
+#include <gst/gl/gstglbasememory.h>
 
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
+
+#include <pthread.h>
+#include <jni.h>
+#include <errno.h>
+#include <unistd.h>
 
 #include <array>
 #include <assert.h>
 #include <cmath>
 #include <cstdlib>
 #include <ctime>
-#include <errno.h>
-#include <jni.h>
-#include <unistd.h>
 
 // FOR RYAN: The below is one of those deps to monado that
 // still exist in current code. Eventually, would be nice
