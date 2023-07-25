@@ -17,22 +17,29 @@
 #include "util/u_time.h"
 
 #include <EGL/egl.h>
+#include <GLES2/gl2ext.h>
+
 #include <android/asset_manager_jni.h>
 #include <android/log.h>
 #include <android/native_activity.h>
-#include <GLES2/gl2ext.h>
+
+#include <gst/gstsample.h>
+#include <gst/gl/gstglbasememory.h>
+#include <gst/gl/gstglsyncmeta.h>
 
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
+
+#include <pthread.h>
+#include <jni.h>
+#include <errno.h>
+#include <unistd.h>
 
 #include <array>
 #include <assert.h>
 #include <cmath>
 #include <cstdlib>
 #include <ctime>
-#include <errno.h>
-#include <jni.h>
-#include <unistd.h>
 
 // FOR RYLIE: The below is one of those deps to monado that
 // still exist in current code. Eventually, would be nice
@@ -82,7 +89,7 @@ start_logger(const char *app_name)
 // FOR RYLIE: This is a general state var shared accross both c++ and C sides
 // Take a look at gst_common.h...There's also 'vid' that's shared. eventually
 // merge state and vid into one single struct.
-static state_t state = {};
+static em_state state = {};
 
 // FOR RYLIE: THE APP_CMD_ START/RESUME will not fire if quest2 is NOT worn
 // unless the proper dev params on the headset have been set (haven't done that).
@@ -113,7 +120,7 @@ sink_push_frame(struct xrt_frame_sink *xfs, struct xrt_frame *xf)
 		ALOGE("what??");
 		return;
 	}
-	struct state_t *st = container_of(xfs, struct state_t, frame_sink);
+	struct em_state *st = container_of(xfs, struct em_state, frame_sink);
 
 	// This can cause a segfault if we hold onto one frame for too long so OH.
 	if (!st->xf) {
@@ -246,7 +253,7 @@ die_errno()
 // quest2 with the webrtc pipeline and ICE callback (mostly implemented in gst_driver.c)
 
 void
-really_make_socket(struct state_t &st)
+really_make_socket(struct em_state &st)
 {
 #if 1
 	// We shouldn't be using SOCK_STREAM! We're relying on blind luck to get synced packets
@@ -278,7 +285,7 @@ really_make_socket(struct state_t &st)
 
 
 static void
-hmd_pose(struct state_t &st)
+hmd_pose(struct em_state &st)
 {
 	return;
 	XrResult result = XR_SUCCESS;
@@ -325,7 +332,7 @@ hmd_pose(struct state_t &st)
 }
 
 void
-create_spaces(struct state_t &st)
+create_spaces(struct em_state &st)
 {
 
 	XrResult result = XR_SUCCESS;
@@ -360,7 +367,7 @@ create_spaces(struct state_t &st)
 // it'll create a SHARED egl context with whatever's current and so pay carefull attention
 // to the eglMakeCurrent here and there.
 void
-mainloop_one(struct state_t &state)
+mainloop_one(struct xrt_fs *client, struct em_state &state)
 {
 
 	// Poll Android events
@@ -528,65 +535,22 @@ mainloop_one(struct state_t &state)
 
 	// Get Newest sample from GST appsink. Waiting 1ms here before giving up (might want to adjust that time)
 	ALOGE("DEBUG: Trying to get new gstgl sample, waiting max 1ms\n");
-	g_autoptr(GstSample) sample =
-	    gst_app_sink_try_pull_sample(GST_APP_SINK(state.vid->appsink), (GstClockTime)(1000 * GST_USECOND));
-	if (sample != NULL) {
+	struct em_sample sample = {};
+
+
+
+	if (em_fs_try_pull_sample(client, &sample)) {
 
 		ALOGE("FRED: GOT A SAMPLE !!!");
-		GstBuffer *buffer = gst_sample_get_buffer(sample);
-		GstCaps *caps = gst_sample_get_caps(sample);
-
-		GstVideoInfo info;
-		gst_video_info_from_caps(&info, caps);
-		/*gint width = GST_VIDEO_INFO_WIDTH (&info);
-		gint height = GST_VIDEO_INFO_HEIGHT (&info);*/
-
-		// FOR RYLIE: Handle resize according to how it's done in PlutosphereOXR
-		/*if (width != state.vid->width || height != state.vid->height) {
-		    vid->width = width;
-		    vid->height = height;
-		}*/
-
-		GstVideoFrame frame;
-		GstMapFlags flags = static_cast<GstMapFlags>(GST_MAP_READ | GST_MAP_GL);
-		gst_video_frame_map(&frame, &info, buffer, flags);
-		state.frame_texture_id = *(GLuint *)frame.data[0];
-
-		if (state.vid->context == NULL) {
-			/* Get GStreamer's gl context. */
-			gst_gl_query_local_gl_context(state.vid->appsink, GST_PAD_SINK, &state.vid->context);
-
-			/* Check if we have 2D or OES textures */
-			GstStructure *s = gst_caps_get_structure(caps, 0);
-			const gchar *texture_target_str = gst_structure_get_string(s, "texture-target");
-			if (g_str_equal(texture_target_str, GST_GL_TEXTURE_TARGET_EXTERNAL_OES_STR)) {
-				state.frame_texture_target = GL_TEXTURE_EXTERNAL_OES;
-			} else if (g_str_equal(texture_target_str, GST_GL_TEXTURE_TARGET_2D_STR)) {
-				state.frame_texture_target = GL_TEXTURE_2D;
-			} else {
-				g_assert_not_reached();
-			}
-		}
-
-		GstGLSyncMeta *sync_meta = gst_buffer_get_gl_sync_meta(buffer);
-		if (sync_meta) {
-			/* MOSHI: the set_sync() seems to be needed for resizing */
-			gst_gl_sync_meta_set_sync_point(sync_meta, state.vid->context);
-			gst_gl_sync_meta_wait(sync_meta, state.vid->context);
-		}
-
-		// FIXME: Might not be necessary, since we're polling.
-		// This will make our main renderer pick up and render the gl texture.
-		state.vid->state->frame_available = true;
-
-		gst_video_frame_unmap(&frame);
+		state.frame_texture_id = sample.frame_texture_id;
 
 		// FIXME: This will go away now that we have a GL_TEXTURE_EXTERNAL texture
 		ALOGE("DEBUG: Binding textures!");
-		glBindTexture(GL_TEXTURE_2D, state.frame_texture_id);
-		glPixelStorei(GL_UNPACK_ROW_LENGTH, 1440);
+		// if (sample.frame_texture_target == GL_TEXTURE_EXTERNAL_OES)
+		// glBindTexture(GL_TEXTURE_EXTERNAL_OES, state.frame_texture_id);
+		// glPixelStorei(GL_UNPACK_ROW_LENGTH, 1440);
 		//            glPixelStorei(GL_UNPACK_ALIGNMENT, 2); // Set to 1 for tightly packed data
-		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 1440, 1584, GL_RGBA, GL_UNSIGNED_BYTE, state.xf->data);
+		// glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 1440, 1584, GL_RGBA, GL_UNSIGNED_BYTE, state.xf->data);
 
 		//		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, state.xf->width, state.xf->height, 0, GL_RGBA,
 		// GL_UNSIGNED_BYTE, 		             state.xf->data);
@@ -594,7 +558,7 @@ mainloop_one(struct state_t &state)
 		//        glPixelStorei(GL_UNPACK_ROW_LENGTH, state.xf->stride / 4);
 		//    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, state.xf->width, state.xf->height, 0, GL_RGBA,
 		//    GL_UNSIGNED_BYTE, state.xf->data);
-		glBindTexture(GL_TEXTURE_2D, 0);
+		// glBindTexture(GL_TEXTURE_2D, 0);
 
 
 		// can be factored into the above, it's just useful to be able to disable seperately
@@ -615,7 +579,7 @@ mainloop_one(struct state_t &state)
 		ALOGE("DEBUG: DRAWING!\n");
 		for (uint32_t eye = 0; eye < 2; eye++) {
 			glViewport(eye * state.width, 0, state.width, state.height);
-			draw(state.framebuffers[imageIndex], state.frame_texture_id);
+			draw(state.framebuffers[imageIndex], sample.frame_texture_id, sample.frame_texture_target);
 		}
 
 		// Release
@@ -640,7 +604,14 @@ mainloop_one(struct state_t &state)
 
 	xrEndFrame(state.session, &endInfo);
 
-	eglMakeCurrent(state.display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+	EGLBoolean bret = eglMakeCurrent( //
+	    state.display,                //
+	    EGL_NO_SURFACE,               //
+	    EGL_NO_SURFACE,               //
+	    EGL_NO_CONTEXT);              //
+	if (bret != EGL_TRUE) {
+		ALOGE("eglMakeCurrent(Un-make): false, %u", eglGetError());
+	}
 	ALOGE("FRED: mainloop_one: releasing the EGL lock");
 	os_mutex_unlock(&state.egl_lock);
 }
@@ -712,7 +683,7 @@ getFilePath(JNIEnv *env, jobject activity)
 void
 android_main(struct android_app *app)
 {
-	start_logger("meow meow");
+	start_logger("ElectricMaple");
 
 	// FOR RYLIE : VERY VERY useful for debugging gstreamer.
 	// GST_DEBUG = *:3 will give you ONLY ERROR-level messages.
@@ -832,12 +803,12 @@ android_main(struct android_app *app)
 
 	// FOR RYLIE: This is where everything gstreamer starts.
 	ALOGE("FRED: Creating gst pipeline");
-	struct xrt_fs *blah = em_fs_gst_pipeline(&xfctx, &state);
+	struct xrt_fs *client = em_fs_create_streaming_client(&xfctx, &state, state.display, state.context);
 	ALOGE("FRED: Done Creating gst pipeline");
 
 	ALOGE("FRED: Starting xrt_fs source. Not used, please remove eventually.\n");
 	// FIXME: Eventually completely remove XRT_FS dependency here for driving the gst pipeline look
-	xrt_fs_stream_start(blah, &state.frame_sink, XRT_FS_CAPTURE_TYPE_TRACKING, 0);
+	xrt_fs_stream_start(client, &state.frame_sink, XRT_FS_CAPTURE_TYPE_TRACKING, 0);
 
 	// OpenXR session
 	ALOGE("FRED: Creating OpenXR session...");
@@ -883,6 +854,7 @@ android_main(struct android_app *app)
 		state.images[i].type = XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_ES_KHR;
 	}
 
+	// TODO if the swapchain has more than 4 images this will error and we aren't checking it
 	xrEnumerateSwapchainImages(state.swapchain, 4, &state.imageCount, (XrSwapchainImageBaseHeader *)state.images);
 
 	if (XR_FAILED(result)) {
@@ -896,6 +868,7 @@ android_main(struct android_app *app)
 
 	// FIXME: This if below is suspicious.. we're not using xf anymore....
 	if (state.xf) {
+		ALOGI("state.xf is non-null");
 		glBindTexture(GL_TEXTURE_2D, state.frame_texture_id);
 		glPixelStorei(GL_UNPACK_ROW_LENGTH, state.xf->stride / 4);
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, state.xf->width, state.xf->height, 0, GL_RGBA, GL_UNSIGNED_BYTE,
@@ -930,7 +903,7 @@ android_main(struct android_app *app)
 	// Main rendering loop.
 	ALOGE("DEBUG: Starting main loop.\n");
 	while (!app->destroyRequested) {
-		mainloop_one(state);
+		mainloop_one(client, state);
 	}
 
 	os_mutex_destroy(&state.egl_lock);

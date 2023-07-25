@@ -1,12 +1,8 @@
-add_library(pluto_vf SHARED gst_driver.c)
+add_library(pluto_vf SHARED gst_driver.c gst_handshake.c)
 target_link_libraries(
 	pluto_vf
 	PRIVATE
 		gstreamer_android
-		# ${GST_LIBRARIES}
-		# -Wl,--whole-archive
-		# ${GST_ARCH_DIR}/lib/libgstreamer-1.0.a
-		# -Wl,--no-whole-archive
 		${JSONGLIB_LIBRARIES}
 		${LIBSOUP_LIBRARIES}
 		${GIO_LIBRARIES}
@@ -24,7 +20,6 @@ target_include_directories(
 	pluto_vf
 	PRIVATE
 		${ANDROID_NDK}/sources/android/native_app_glue
-		${CMAKE_CURRENT_SOURCE_DIR}/../monado/src/xrt/auxiliary/gstreamer
 		${GST_INCLUDE_DIRS}
 		${GLIB_INCLUDE_DIRS}
 		${LIBSOUP_INCLUDE_DIRS}

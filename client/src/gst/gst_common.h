@@ -41,7 +41,7 @@
 
 struct em_fs;
 
-struct state_t
+struct em_state
 {
 	struct android_app *app;
 	JNIEnv *jni;
@@ -89,11 +89,16 @@ struct state_t
 	GLboolean frame_available;
 };
 
+struct em_sample
+{
+	GLuint frame_texture_id;
+	GLenum frame_texture_target;
+	bool frame_available;
+};
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-static const char *dotfilepath = "mrow";
 
 /*!
  * Create an ElectricMaple XR streaming frameserver with default parameters.
@@ -101,7 +106,14 @@ static const char *dotfilepath = "mrow";
  * Must call from a thread in which we can safely make @p context active.
  */
 struct xrt_fs *
-em_fs_gst_pipeline(struct xrt_frame_context *xfctx, struct state_t *state);
+em_fs_create_streaming_client(struct xrt_frame_context *xfctx,
+                              struct em_state *state,
+                              EGLDisplay display,
+                              EGLContext context);
+
+
+bool
+em_fs_try_pull_sample(struct xrt_fs *fs, struct em_sample *out_sample);
 
 
 #ifdef __cplusplus
