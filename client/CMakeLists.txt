@@ -12,6 +12,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 find_package(Vulkan REQUIRED)
 find_package(OpenXR REQUIRED)
 find_package(EGL REQUIRED)
+find_package(OpenGLES REQUIRED COMPONENTS V3)
 
 # Default to PIC code
 set(CMAKE_POSITION_INDEPENDENT_CODE OFF)

@@ -16,8 +16,7 @@ target_include_directories(
 	plutovr_webrtc_client
 	PRIVATE
 		${CMAKE_CURRENT_BINARY_DIR}/shaders/
-		"${PROJECT_SOURCE_DIR}/../monado/external/include"
-		${GLIB_INCLUDE_DIRS}
+		"${PROJECT_SOURCE_DIR}/../monado/external/include" ${GLIB_INCLUDE_DIRS}
 		${GST_INCLUDE_DIRS}
 	)
 
@@ -25,23 +24,17 @@ target_include_directories(
 target_link_libraries(
 	plutovr_webrtc_client
 	PRIVATE
-		# VERY important here to have --whole-archive for libgstreamer-1.0 because gstandroid's gst_android_get_application_class_loader will be dlloaded by the amc plugin and if not, clang does not add those symbols.
-		gstreamer_android
-		android
-		OpenXR::openxr_loader
-		Vulkan::Vulkan
-		native_app_glue
-		EGL
-		GLESv3
-		android
-		log # This is an android thing
 		pluto_proto
 		aux_util
 		pluto_vf
-		#-Wl,--whole-archive pluto_vf -Wl,--no-whole-archive
-		# drv_includes
-		# drv_vf
-		# delete-me-nanopb
+		gstreamer_android
+		native_app_glue
+		OpenXR::openxr_loader
+		Vulkan::Vulkan
+		EGL::EGL
+		OpenGLES::OpenGLESv3
+		${ANDROID_LIBRARY}
+		${ANDROID_LOG_LIBRARY}
 	)
 
 # Export ANativeActivity_onCreate()
@@ -50,11 +43,3 @@ set_property(
 	APPEND_STRING
 	PROPERTY LINK_FLAGS " -u ANativeActivity_onCreate"
 	)
-
-if(NOT USE_GST_SHARED)
-	set_property(
-		TARGET plutovr_webrtc_client
-		APPEND_STRING
-		PROPERTY LINK_FLAGS " -u gst_android_get_application_class_loader"
-		)
-endif()
