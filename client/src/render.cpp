@@ -112,11 +112,12 @@ const GLchar *vertexShaderSource = R"(
 // Fragment shader source code
 const GLchar *fragmentShaderSource = R"(
     #version 300 es
-    precision lowp float;
+	#extension GL_OES_EGL_image_external : require
+    precision mediump float;
 
     in vec2 frag_uv;
     out vec4 frag_color;
-    uniform sampler2D textureSampler;
+    uniform samplerExternalOES textureSampler;
 
     void main() {
         frag_color = texture(textureSampler, frag_uv);
