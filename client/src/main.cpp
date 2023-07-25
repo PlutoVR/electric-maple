@@ -86,7 +86,7 @@ start_logger(const char *app_name)
 	return 0;
 }
 
-// FOR RYAN: This is a general state var shared accross both c++ and C sides
+// FOR RYAN: This is a general state var shared across both c++ and C sides
 // Take a look at gst_common.h...There's also 'vid' that's shared. eventually
 // merge state and vid into one single struct.
 static em_state state = {};
@@ -685,7 +685,7 @@ android_main(struct android_app *app)
 {
 	start_logger("ElectricMaple");
 
-	// FOR RAYN : VERY VERY useful for debugging gstreamer.
+	// FOR RYAN : VERY VERY useful for debugging gstreamer.
 	// GST_DEBUG = *:3 will give you ONLY ERROR-level messages.
 	// GST_DEBUG = *:6 will give you ALL messages (make sure you BOOST your android-studio's
 	// Logcat buffer to be able to capture everything gstreamer'S going to spit at you !
