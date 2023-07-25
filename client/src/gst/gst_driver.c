@@ -11,6 +11,7 @@
  * @ingroup xrt_fs_em
  */
 #include "gst_common.h"
+#include "gst_internal.h"
 #include "app_log.h"
 
 #include "os/os_time.h"
@@ -36,7 +37,10 @@
 #include <gst/gstinfo.h>
 #include <gst/gstmessage.h>
 #include <gst/gstutils.h>
+#include <gst/gstbus.h>
+#include <gst/gstsample.h>
 #include <gst/video/video-frame.h>
+#include <gst/gl/gstglsyncmeta.h>
 
 #include "gstjniutils.h"
 
@@ -44,8 +48,6 @@
 #include <EGL/eglext.h>
 #include <GLES2/gl2.h>
 #include <GLES2/gl2ext.h>
-
-#define PL_LIBSOUP2
 
 
 #define GST_USE_UNSTABLE_API
@@ -95,6 +97,8 @@ struct em_fs
 
 	struct os_thread_helper play_thread;
 
+	struct em_handshake handshake;
+
 	GMainLoop *loop;
 	GstElement *pipeline;
 	GstGLDisplay *gst_gl_display;
@@ -133,7 +137,7 @@ struct em_fs
 	bool is_running;
 	enum u_logging_level log_level;
 
-	struct state_t *state;
+	struct em_state *state;
 	JavaVM *java_vm;
 };
 
@@ -181,11 +185,6 @@ em_gst_message_debug(const char *function, GstMessage *msg)
 	default: ALOGI("%s: %s: %s", function, src_name, type_name);
 	}
 }
-#define LOG_MSG(MSG)                                                                                                   \
-	do {                                                                                                           \
-		em_gst_message_debug(__FUNCTION__, MSG);                                                               \
-	} while (0)
-
 
 static GstBusSyncReply
 bus_sync_handler_cb(GstBus *bus, GstMessage *msg, gpointer user_data)
@@ -367,6 +366,7 @@ stop_pipeline(struct em_fs *vid)
 	vid->is_running = false;
 	gst_element_set_state(vid->pipeline, GST_STATE_NULL);
 	os_thread_helper_destroy(&vid->play_thread);
+	em_handshake_fini(&vid->handshake);
 	gst_clear_object(&vid->pipeline);
 	gst_clear_object(&vid->display);
 	gst_clear_object(&vid->android_main_context);
@@ -570,181 +570,6 @@ gst_bus_cb(GstBus *bus, GstMessage *message, gpointer data)
 	return TRUE;
 }
 
-void
-send_sdp_answer(const gchar *sdp)
-{
-	ALOGE("send_sdp_answer called!");
-	JsonBuilder *builder;
-	JsonNode *root;
-	gchar *msg_str;
-
-	ALOGE("Send answer: %s\n", sdp);
-
-	builder = json_builder_new();
-	json_builder_begin_object(builder);
-	json_builder_set_member_name(builder, "msg");
-	json_builder_add_string_value(builder, "answer");
-
-	json_builder_set_member_name(builder, "sdp");
-	json_builder_add_string_value(builder, sdp);
-	json_builder_end_object(builder);
-
-	root = json_builder_get_root(builder);
-
-	msg_str = json_to_string(root, TRUE);
-	soup_websocket_connection_send_text(ws, msg_str);
-	g_clear_pointer(&msg_str, g_free);
-
-	json_node_unref(root);
-	g_object_unref(builder);
-}
-
-static void
-webrtc_on_ice_candidate_cb(GstElement *webrtcbin, guint mlineindex, gchar *candidate)
-{
-	ALOGE("webrtc_on_ice_candidate_cb called!");
-	JsonBuilder *builder;
-	JsonNode *root;
-	gchar *msg_str;
-
-	ALOGE("Send candidate: %u %s\n", mlineindex, candidate);
-
-	builder = json_builder_new();
-	json_builder_begin_object(builder);
-	json_builder_set_member_name(builder, "msg");
-	json_builder_add_string_value(builder, "candidate");
-
-	json_builder_set_member_name(builder, "candidate");
-	json_builder_begin_object(builder);
-	json_builder_set_member_name(builder, "candidate");
-	json_builder_add_string_value(builder, candidate);
-	json_builder_set_member_name(builder, "sdpMLineIndex");
-	json_builder_add_int_value(builder, mlineindex);
-	json_builder_end_object(builder);
-	json_builder_end_object(builder);
-
-	root = json_builder_get_root(builder);
-
-	msg_str = json_to_string(root, TRUE);
-	soup_websocket_connection_send_text(ws, msg_str);
-	g_clear_pointer(&msg_str, g_free);
-
-	json_node_unref(root);
-	g_object_unref(builder);
-}
-
-static void
-on_answer_created(GstPromise *promise, gpointer user_data)
-{
-	ALOGE("on_answer_created called!");
-	GstWebRTCSessionDescription *answer = NULL;
-	gchar *sdp;
-
-	gst_structure_get(gst_promise_get_reply(promise), "answer", GST_TYPE_WEBRTC_SESSION_DESCRIPTION, &answer, NULL);
-	gst_promise_unref(promise);
-
-	if (NULL == answer) {
-		ALOGE("on_answer_created : ERROR !  get_promise answer = null !");
-	}
-
-	g_signal_emit_by_name(webrtcbin, "set-local-description", answer, NULL);
-
-	sdp = gst_sdp_message_as_text(answer->sdp);
-	if (NULL == sdp) {
-		ALOGE("on_answer_created : ERROR !  sdp = null !");
-	}
-	send_sdp_answer(sdp);
-	g_free(sdp);
-
-	gst_webrtc_session_description_free(answer);
-}
-
-static void
-process_sdp_offer(const gchar *sdp)
-{
-	ALOGE("process_sdp_offer called!");
-	GstSDPMessage *sdp_msg = NULL;
-	GstWebRTCSessionDescription *desc = NULL;
-
-
-	ALOGE("Received offer: %s\n\n", sdp);
-
-	if (gst_sdp_message_new_from_text(sdp, &sdp_msg) != GST_SDP_OK) {
-		g_debug("Error parsing SDP description");
-		goto out;
-	}
-
-	desc = gst_webrtc_session_description_new(GST_WEBRTC_SDP_TYPE_OFFER, sdp_msg);
-	if (desc) {
-		GstPromise *promise;
-
-		promise = gst_promise_new();
-
-		g_signal_emit_by_name(webrtcbin, "set-remote-description", desc, promise);
-
-		gst_promise_wait(promise);
-		gst_promise_unref(promise);
-
-		g_signal_emit_by_name(
-		    webrtcbin, "create-answer", NULL,
-		    gst_promise_new_with_change_func((GstPromiseChangeFunc)on_answer_created, NULL, NULL));
-	} else {
-		gst_sdp_message_free(sdp_msg);
-	}
-
-out:
-	g_clear_pointer(&desc, gst_webrtc_session_description_free);
-}
-
-static void
-process_candidate(guint mlineindex, const gchar *candidate)
-{
-	ALOGE("process_candidate called!");
-	ALOGE("Received candidate: %d %s\n", mlineindex, candidate);
-
-	g_signal_emit_by_name(webrtcbin, "add-ice-candidate", mlineindex, candidate);
-}
-
-static void
-message_cb(SoupWebsocketConnection *connection, gint type, GBytes *message, gpointer user_data)
-{
-	ALOGE("message_cb called!");
-	gsize length = 0;
-	const gchar *msg_data = g_bytes_get_data(message, &length);
-	JsonParser *parser = json_parser_new();
-	GError *error = NULL;
-
-	if (json_parser_load_from_data(parser, msg_data, length, &error)) {
-		JsonObject *msg = json_node_get_object(json_parser_get_root(parser));
-		const gchar *msg_type;
-
-		if (!json_object_has_member(msg, "msg")) {
-			// Invalid message
-			goto out;
-		}
-
-		msg_type = json_object_get_string_member(msg, "msg");
-		ALOGE("Websocket message received: %s\n", msg_type);
-
-		if (g_str_equal(msg_type, "offer")) {
-			const gchar *offer_sdp = json_object_get_string_member(msg, "sdp");
-			process_sdp_offer(offer_sdp);
-		} else if (g_str_equal(msg_type, "candidate")) {
-			JsonObject *candidate;
-
-			candidate = json_object_get_object_member(msg, "candidate");
-
-			process_candidate(json_object_get_int_member(candidate, "sdpMLineIndex"),
-			                  json_object_get_string_member(candidate, "candidate"));
-		}
-	} else {
-		g_debug("Error parsing message: %s", error->message);
-		g_clear_error(&error);
-	}
-
-out:
-	g_object_unref(parser);
-}
 
 // static void
 // data_channel_error_cb(GstWebRTCDataChannel *datachannel, void *data)
@@ -794,11 +619,37 @@ out:
 // 	g_signal_connect(datachannel, "on-message-string", G_CALLBACK(data_channel_message_string_cb), NULL);
 // }
 
+#define RYLIE "RYLIE: "
 
-// You can generally figure these out by going to
-// https://gstreamer.freedesktop.org/documentation/plugins_doc.html?gi-language=c, searching for the GstElement you
-// need, and finding the plugin name it corresponds to in the sidebar. Some of them (libav is an example) don't
-// correspond 1:1 in the names in the sidebar, so guessing as well as `find deps/gstreamer_android | grep <name>` helps.
+static void
+em_init_gst_and_capture_context(struct em_fs *vid, EGLDisplay display, EGLContext context)
+{
+
+	ALOGI(RYLIE "wrapping egl context");
+
+	EGLContext old_context = eglGetCurrentContext();
+	EGLSurface old_read_surface = eglGetCurrentSurface(EGL_READ);
+	EGLSurface old_draw_surface = eglGetCurrentSurface(EGL_DRAW);
+
+	ALOGV(RYLIE "eglMakeCurrent make-current");
+
+	// E_LOG_E("DEBUG: display=%p, surface=%p, ");
+	//  We'll need and active egl context below
+	if (eglMakeCurrent(display, EGL_NO_SURFACE /* vid->state->surface */, EGL_NO_SURFACE, context) == EGL_FALSE) {
+		ALOGV(RYLIE "em_init_gst_and_capture_context: Failed make egl context current");
+	}
+
+	const GstGLPlatform egl_platform = GST_GL_PLATFORM_EGL;
+	guintptr android_main_egl_context_handle = gst_gl_context_get_current_gl_context(egl_platform);
+	GstGLAPI gl_api = gst_gl_context_get_current_gl_api(egl_platform, NULL, NULL);
+	vid->gst_gl_display = g_object_ref_sink(gst_gl_display_new());
+	vid->android_main_context = g_object_ref_sink(
+	    gst_gl_context_new_wrapped(vid->gst_gl_display, android_main_egl_context_handle, egl_platform, gl_api));
+
+	ALOGV(RYLIE "eglMakeCurrent un-make-current");
+	eglMakeCurrent(display, old_draw_surface, old_read_surface, old_context);
+}
+
 
 
 // THE BELOW IS NICE FOR TESTING WITH THE ALTERNATIVE PIPELINE
@@ -811,14 +662,6 @@ new_sample_cb(GstElement *appsink, gpointer data)
 	return GST_FLOW_OK;
 }
 
-
-// FOR RYAN : This is needed for all the GST_PLUGIN_STATIC_REGISTER
-// counterparts below to work. Macro gstreamer code to easily declare
-// and register all of the static plugins below. NOTE: ALL those
-// might NOT be required, but that's what Moshi initially registered
-// and I haven't had the time to check which were indeed requested
-// for the gstreamer pipeline we're creating below.
-
 // FOR RYAN:
 // So we've successfully established a connection with the Server. (By the way,
 // This has all been tested working on the Quest2). Of course, test this with your
@@ -826,22 +669,15 @@ new_sample_cb(GstElement *appsink, gpointer data)
 // laptop ! :) . the signalling happens locally on 127.0.0.1 , but the ICE handshake
 // (offers and candidates) will suggest a webrtc connection surely living on some
 // 192.168.1.X IP adresses into your local WAN so yeah, be advised.
-static void
-websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
+
+static GstElement *
+launch_pipeline(gpointer user_data)
 {
-	ALOGE("Fred : websocket_connected_cb called!\n");
 
 	GError *error = NULL;
 
 	struct em_fs *vid = (struct em_fs *)user_data;
-
-	ws = soup_session_websocket_connect_finish(SOUP_SESSION(session), res, &error);
-	if (error) {
-		ALOGE("Error creating websocket: %s\n", error->message);
-		g_clear_error(&error);
-	} else {
-		ALOGE("YO !! : Websocket connected\n");
-		g_signal_connect(ws, "message", G_CALLBACK(message_cb), NULL);
+	{
 
 		// decodebin3 seems to .. hang?
 		// omxh264dec doesn't seem to exist
@@ -875,33 +711,6 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 			abort();
 		}
 
-		ALOGI("getting webrtcbin\n");
-		webrtcbin = gst_bin_get_by_name(GST_BIN(vid->pipeline), "webrtc");
-		g_signal_connect(webrtcbin, "on-ice-candidate", G_CALLBACK(webrtc_on_ice_candidate_cb), NULL);
-
-		// We'll need and active egl context below before setting up gstgl (as explained previously)
-		ALOGE("FRED: websocket_connected_cb: Trying to get the EGL lock");
-		os_mutex_lock(&vid->state->egl_lock);
-		ALOGE("FRED : make current display=%i, surface=%i, context=%i", (int)vid->state->display,
-		      (int)vid->state->surface, (int)vid->state->context);
-		if (eglMakeCurrent(vid->state->display, vid->state->surface, vid->state->surface,
-		                   vid->state->context) == EGL_FALSE) {
-			ALOGE("FRED: websocket_connected_cb: Failed make egl context current");
-		}
-
-		// Important gstgl (opengl gstreamer plugin) considerations for the glsinkbin sink.
-		// There is a very good example of a very similar project using gstreamer opengl
-		// for the MagicLeap backend. You may read and inspire yourself.:
-		//
-		// https://gitlab.freedesktop.org/xclaesse/gstreamer_demo/-/blob/master/VideoScene.cpp
-		//
-		GstGLPlatform gl_platform = GST_GL_PLATFORM_EGL;
-		guintptr gl_handle = gst_gl_context_get_current_gl_context(gl_platform);
-		GstGLAPI gl_api = gst_gl_context_get_current_gl_api(gl_platform, NULL, NULL);
-		vid->gst_gl_display = g_object_ref_sink(gst_gl_display_new());
-		vid->android_main_context =
-		    g_object_ref_sink(gst_gl_context_new_wrapped(vid->gst_gl_display, gl_handle, gl_platform, gl_api));
-
 		// We convert the string SINK_CAPS above into a GstCaps that elements below can understand.
 		// the "video/x-raw(" GST_CAPS_FEATURE_MEMORY_GL_MEMORY ")," part of the caps is read :
 		// video/x-raw(memory:GLMemory) and is really important for getting zero-copy gl textures.
@@ -912,20 +721,22 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 		g_autoptr(GstCaps) caps = gst_caps_from_string(SINK_CAPS);
 
 		// THIS SHOULD BE UNCOMMENTED ONLY WHEN TURNING THE TEST PIPELINE ON ABOVE
-		/*vid->appsink = gst_bin_get_by_name(GST_BIN(vid->pipeline), "appsink");
+#if 0
+		vid->appsink = gst_bin_get_by_name(GST_BIN(vid->pipeline), "appsink");
 		gst_app_sink_set_emit_signals(GST_APP_SINK(vid->appsink), TRUE);
-		g_signal_connect(vid->appsink, "new-sample", G_CALLBACK(new_sample_cb), NULL);*/
+		g_signal_connect(vid->appsink, "new-sample", G_CALLBACK(new_sample_cb), NULL);
+#else
 
 		// THIS SHOULD BE COMMENTED WHEN TURNING THE TEST PIPELINE
 		// FRED: We create the appsink 'manually' here because glsink's ALREADY a sink and so if we stick
-		// glsinkbin ! appsink
-		//       in our pipeline_string for automatic linking, gst_parse will NOT like this, as glsinkbin (a
-		//       sink) cannot link to anything upstream (appsink being 'another' sink). So we manually link them
-		//       below using glsinkbin's 'sink' pad -> appsink.
+		//       glsinkbin ! appsink in our pipeline_string for automatic linking, gst_parse will NOT like this,
+		//       as glsinkbin (a sink) cannot link to anything upstream (appsink being 'another' sink). So we
+		//       manually link them below using glsinkbin's 'sink' pad -> appsink.
 		vid->appsink = gst_element_factory_make("appsink", NULL);
 		g_object_set(vid->appsink, "caps", caps, NULL);
-		g_autoptr(GstElement) glsinkbin = gst_bin_get_by_name(vid->pipeline, "glsink");
+		g_autoptr(GstElement) glsinkbin = gst_bin_get_by_name(GST_BIN(vid->pipeline), "glsink");
 		g_object_set(glsinkbin, "sink", vid->appsink, NULL);
+#endif
 
 		g_autoptr(GstBus) bus = gst_element_get_bus(vid->pipeline);
 		gst_bus_set_sync_handler(bus, bus_sync_handler_cb, vid, NULL);
@@ -940,11 +751,7 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 		// g_signal_connect(webrtcbin, "on-data-channel", G_CALLBACK(webrtc_on_data_channel_cb), NULL);
 
 		vid->is_running = TRUE;
-
-		// And we unCurrent the egl context.
-		eglMakeCurrent(vid->state->display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
-		ALOGE("FRED: websocket_connected: releasing the EGL lock");
-		os_mutex_unlock(&vid->state->egl_lock);
+		return vid->pipeline;
 	}
 }
 
@@ -1053,14 +860,16 @@ em_fs_node_destroy(struct xrt_frame_node *node)
  */
 
 static struct xrt_fs *
-alloc_and_init_common(struct xrt_frame_context *xfctx,      //
-                      struct state_t *state,                //
-                      enum xrt_format format,               //
-                      enum xrt_stereo_format stereo_format) //
+alloc_and_init_common(struct xrt_frame_context *xfctx,
+                      struct em_state *state,
+                      enum xrt_format format,
+                      enum xrt_stereo_format stereo_format,
+                      EGLDisplay display,
+                      EGLContext context)
 {
 	struct em_fs *vid = U_TYPED_CALLOC(struct em_fs);
-	the_em_fs = vid;
-	state->vid = vid;
+	// the_em_fs = vid;
+	// state->vid = vid;
 	vid->format = format;
 	vid->stereo_format = stereo_format;
 	vid->state = state;
@@ -1069,7 +878,8 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 
 	ALOGE("FRED: alloc_and_init_common\n");
 
-	// FOR RYAN: We'll need this thread/mainloop for the websocket cb to fire below.
+	em_init_gst_and_capture_context(vid, display, context);
+
 	int ret = os_thread_helper_init(&vid->play_thread);
 	if (ret < 0) {
 		ALOGE("ERROR: Failed to init thread");
@@ -1080,28 +890,16 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 
 	vid->loop = g_main_loop_new(NULL, FALSE);
 
-	SoupSession *soup_session;
 	GError *error = NULL;
 
 	if (!websocket_uri) {
 		websocket_uri = g_strdup(WEBSOCKET_URI_DEFAULT);
 	}
 
-	soup_session = soup_session_new();
+	em_handshake_init(&vid->handshake, launch_pipeline, vid, websocket_uri);
 
-	// FOR RYAN : We're using libsoup here to create our websocket session. We're starting the thread herebelow
-	// on play_thread . You might wanna change how it's handled, but basically it's needed for
-	// websocket_connected_cb to fire when the connected's made. and that's where code flows continues...
-#ifdef PL_LIBSOUP2
-	ALOGE("FRED: calling soup_session_websocket_connect_async. websocket_uri = %s\n", websocket_uri);
-	soup_session_websocket_connect_async(soup_session,                                     // session
-	                                     soup_message_new(SOUP_METHOD_GET, websocket_uri), // message
-	                                     NULL,                                             // origin
-	                                     NULL,                                             // protocols
-	                                     NULL,                                             // cancellable
-	                                     websocket_connected_cb,                           // callback
-	                                     vid);                                             // user_data
-#endif
+	ALOGD("started async connect call, about to spawn em_fs_mainloop");
+
 
 	ALOGE("FRED: Starting Play_thread");
 	ret = os_thread_helper_start(&vid->play_thread, em_fs_mainloop, vid);
@@ -1132,7 +930,10 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,      //
 // we're entering C land. (take a look at gst_common.h's Extern "C" guarding
 // declaration of this function when included from main.cpp.
 struct xrt_fs *
-em_fs_gst_pipeline(struct xrt_frame_context *xfctx, struct state_t *state)
+em_fs_create_streaming_client(struct xrt_frame_context *xfctx,
+                              struct em_state *state,
+                              EGLDisplay display,
+                              EGLContext context)
 {
 	// FOR RYAN: The below JNI_OnLoad call MUST NOT be called !! It's just
 	// a hint to tell you how gstreamer will get inited from an Java/Native android app
@@ -1170,6 +971,68 @@ em_fs_gst_pipeline(struct xrt_frame_context *xfctx, struct state_t *state)
 	enum xrt_format format = XRT_FORMAT_R8G8B8A8;
 	enum xrt_stereo_format stereo_format = XRT_STEREO_FORMAT_NONE;
 
-	// Actually init gst plugins and create gstreamer pipeline !!
-	return alloc_and_init_common(xfctx, state, format, stereo_format);
+	return alloc_and_init_common(xfctx, state, format, stereo_format, display, context);
+}
+
+
+bool
+em_fs_try_pull_sample(struct xrt_fs *fs, struct em_sample *out_sample)
+{
+	struct em_fs *vid = em_fs(fs);
+	GstSample *sample =
+	    gst_app_sink_try_pull_sample(GST_APP_SINK(vid->appsink), (GstClockTime)(1000 * GST_USECOND));
+
+	struct em_sample ret = {};
+	if (sample != NULL) {
+
+		ALOGE("FRED: GOT A SAMPLE !!!");
+		GstBuffer *buffer = gst_sample_get_buffer(sample);
+		GstCaps *caps = gst_sample_get_caps(sample);
+
+		GstVideoInfo info;
+		gst_video_info_from_caps(&info, caps);
+		/*gint width = GST_VIDEO_INFO_WIDTH (&info);
+		gint height = GST_VIDEO_INFO_HEIGHT (&info);*/
+
+		// FOR RYAN: Handle resize according to how it's done in PlutosphereOXR
+		/*if (width != vid->width || height != vid->height) {
+		    vid->width = width;
+		    vid->height = height;
+		}*/
+
+		GstVideoFrame frame;
+		GstMapFlags flags = (GstMapFlags)(GST_MAP_READ | GST_MAP_GL);
+		gst_video_frame_map(&frame, &info, buffer, flags);
+		ret.frame_texture_id = *(GLuint *)frame.data[0];
+
+		if (vid->context == NULL) {
+			/* Get GStreamer's gl context. */
+			gst_gl_query_local_gl_context(vid->appsink, GST_PAD_SINK, &vid->context);
+
+			/* Check if we have 2D or OES textures */
+			GstStructure *s = gst_caps_get_structure(caps, 0);
+			const gchar *texture_target_str = gst_structure_get_string(s, "texture-target");
+			if (g_str_equal(texture_target_str, GST_GL_TEXTURE_TARGET_EXTERNAL_OES_STR)) {
+				ret.frame_texture_target = GL_TEXTURE_EXTERNAL_OES;
+			} else if (g_str_equal(texture_target_str, GST_GL_TEXTURE_TARGET_2D_STR)) {
+				ret.frame_texture_target = GL_TEXTURE_2D;
+			} else {
+				g_assert_not_reached();
+			}
+		}
+
+		GstGLSyncMeta *sync_meta = gst_buffer_get_gl_sync_meta(buffer);
+		if (sync_meta) {
+			/* MOSHI: the set_sync() seems to be needed for resizing */
+			gst_gl_sync_meta_set_sync_point(sync_meta, vid->context);
+			gst_gl_sync_meta_wait(sync_meta, vid->context);
+		}
+
+		ret.frame_available = true;
+
+		gst_video_frame_unmap(&frame);
+	}
+	gst_sample_unref(sample);
+	*out_sample = ret;
+	return ret.frame_available;
 }

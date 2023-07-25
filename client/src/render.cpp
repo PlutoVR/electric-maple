@@ -12,7 +12,7 @@
 
 // Initialize EGL context. We'll need this going forward.
 void
-initializeEGL(struct state_t &state)
+initializeEGL(struct em_state &state)
 {
 	state.display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
 
@@ -219,7 +219,7 @@ setupRender()
 }
 
 void
-draw(GLuint framebuffer, GLuint texture)
+draw(GLuint framebuffer, GLuint texture, GLenum texture_target)
 {
 	//    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
 
@@ -228,7 +228,8 @@ draw(GLuint framebuffer, GLuint texture)
 
 	// Bind the texture
 	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, texture);
+	// glBindTexture(GL_TEXTURE_2D, texture);
+	glBindTexture(texture_target, texture);
 	glUniform1i(glGetUniformLocation(shaderProgram, "textureSampler"), 0);
 
 	// Draw the quad
