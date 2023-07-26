@@ -12,6 +12,7 @@
  */
 #include "gst_common.h"
 #include "gst_internal.h"
+#include "em_connection.h"
 #include "app_log.h"
 
 #include "os/os_time.h"
@@ -97,7 +98,7 @@ struct em_fs
 
 	struct os_thread_helper play_thread;
 
-	struct em_handshake handshake;
+	struct em_connection connection;
 
 	GMainLoop *loop;
 	GstElement *pipeline;
@@ -366,7 +367,7 @@ stop_pipeline(struct em_fs *vid)
 	vid->is_running = false;
 	gst_element_set_state(vid->pipeline, GST_STATE_NULL);
 	os_thread_helper_destroy(&vid->play_thread);
-	em_handshake_fini(&vid->handshake);
+	em_connection_fini(&vid->connection);
 	gst_clear_object(&vid->pipeline);
 	gst_clear_object(&vid->display);
 	gst_clear_object(&vid->android_main_context);
@@ -910,8 +911,9 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,
 		websocket_uri = g_strdup(WEBSOCKET_URI_DEFAULT);
 	}
 
-	em_handshake_init(&vid->handshake, launch_pipeline, vid, websocket_uri);
+	em_connection_init(&vid->connection, launch_pipeline, vid, websocket_uri);
 
+	em_connection_connect(&vid->connection);
 	ALOGD("started async connect call, about to spawn em_fs_mainloop");
 
 
