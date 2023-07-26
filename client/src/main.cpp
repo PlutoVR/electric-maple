@@ -18,7 +18,8 @@
 #include "util/u_time.h"
 
 #include <EGL/egl.h>
-#include <GLES2/gl2ext.h>
+#include <GLES3/gl3.h>
+#include <GLES3/gl32.h>
 
 #include <android/asset_manager_jni.h>
 #include <android/log.h>
@@ -46,10 +47,81 @@
 
 #define XR_LOAD(fn) xrGetInstanceProcAddr(state.instance, #fn, (PFN_xrVoidFunction *)&fn);
 
+namespace {
 // FOR RYAN: This is a general state var shared across both c++ and C sides
 // Take a look at gst_common.h...There's also 'vid' that's shared. eventually
 // merge state and vid into one single struct.
 static em_state state = {};
+
+#define MAKE_CASE(ENUM)                                                                                                \
+	case (ENUM): return #ENUM
+const char *
+glDebugSourceToString(GLenum e)
+{
+	switch (e) {
+
+		MAKE_CASE(GL_DEBUG_SOURCE_API);
+		MAKE_CASE(GL_DEBUG_SOURCE_WINDOW_SYSTEM);
+		MAKE_CASE(GL_DEBUG_SOURCE_SHADER_COMPILER);
+		MAKE_CASE(GL_DEBUG_SOURCE_THIRD_PARTY);
+		MAKE_CASE(GL_DEBUG_SOURCE_APPLICATION);
+		MAKE_CASE(GL_DEBUG_SOURCE_OTHER);
+
+	default: return "unknown-source";
+	}
+}
+const char *
+glDebugTypeToString(GLenum e)
+{
+	switch (e) {
+
+		MAKE_CASE(GL_DEBUG_TYPE_ERROR);
+		MAKE_CASE(GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR);
+		MAKE_CASE(GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR);
+		MAKE_CASE(GL_DEBUG_TYPE_PORTABILITY);
+		MAKE_CASE(GL_DEBUG_TYPE_PERFORMANCE);
+		MAKE_CASE(GL_DEBUG_TYPE_OTHER);
+		MAKE_CASE(GL_DEBUG_TYPE_MARKER);
+		MAKE_CASE(GL_DEBUG_TYPE_PUSH_GROUP);
+		MAKE_CASE(GL_DEBUG_TYPE_POP_GROUP);
+
+	default: return "unknown-type";
+	}
+}
+#undef MAKE_CASE
+android_LogPriority
+glDebugSeverityToAndroidLogPriority(GLenum e)
+{
+
+	switch (e) {
+	case GL_DEBUG_SEVERITY_HIGH: return ANDROID_LOG_ERROR;
+	case GL_DEBUG_SEVERITY_MEDIUM: return ANDROID_LOG_WARN;
+	case GL_DEBUG_SEVERITY_LOW: return ANDROID_LOG_INFO;
+	case GL_DEBUG_SEVERITY_NOTIFICATION: return ANDROID_LOG_DEBUG;
+	default: return ANDROID_LOG_VERBOSE;
+	}
+}
+
+void KHRONOS_APIENTRY
+gl_debug_callback(GLenum source,
+                  GLenum type,
+                  GLuint id,
+                  GLenum severity,
+                  GLsizei /* length */,
+                  const GLchar *message,
+                  const void *userParam)
+{
+	__android_log_print(glDebugSeverityToAndroidLogPriority(severity), LOG_TAG, "GL: %s: %s (id %d): %s",
+	                    glDebugSourceToString(source), glDebugTypeToString(type), id, message);
+}
+
+void
+registerGlDebugCallback()
+{
+	glDebugMessageCallback(&gl_debug_callback, nullptr);
+	glEnable(GL_DEBUG_OUTPUT);
+}
+} // namespace
 
 // FOR RYAN: THE APP_CMD_ START/RESUME will not fire if quest2 is NOT worn
 // unless the proper dev params on the headset have been set (haven't done that).
@@ -638,6 +710,8 @@ android_main(struct android_app *app)
 	ALOGE("FRED: main: Trying to get the EGL lock");
 	os_mutex_lock(&state.egl_lock);
 	initializeEGL(state);
+
+	registerGlDebugCallback();
 
 	// FOR RYAN : This is a monado's frameserver remnant.
 	state.xf = nullptr;
