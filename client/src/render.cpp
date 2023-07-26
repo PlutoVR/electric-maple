@@ -112,7 +112,8 @@ const GLchar *vertexShaderSource = R"(
 // Fragment shader source code
 const GLchar *fragmentShaderSource = R"(
     #version 300 es
-	#extension GL_OES_EGL_image_external : require
+    #extension GL_OES_EGL_image_external : require
+    #extension GL_OES_EGL_image_external_essl3 : require
     precision mediump float;
 
     in vec2 frag_uv;
