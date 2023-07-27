@@ -1042,6 +1042,7 @@ em_fs_try_pull_sample(struct xrt_fs *fs, struct em_sample *out_sample)
 				ret.frame_texture_target = GL_TEXTURE_EXTERNAL_OES;
 			} else if (g_str_equal(texture_target_str, GST_GL_TEXTURE_TARGET_2D_STR)) {
 				ret.frame_texture_target = GL_TEXTURE_2D;
+				ALOGE("RYLIE: Got GL_TEXTURE_2D instead of expected GL_TEXTURE_EXTERNAL_OES");
 			} else {
 				g_assert_not_reached();
 			}
