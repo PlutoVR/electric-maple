@@ -69,7 +69,7 @@ struct em_state
 	uint32_t imageCount;
 	uint32_t width;
 	uint32_t height;
-	
+
 	// TODO This socket is for sending the HMD pose upstream "out of band" - replace with data channel.
 	int socket_fd;
 	struct sockaddr_in socket_addr;
@@ -110,6 +110,8 @@ em_fs_create_streaming_client(struct xrt_frame_context *xfctx,
 
 /*!
  * Attempt to retrieve a sample.
+ *
+ * @pre The Android main EGL context must be active with the lock held when calling.
  *
  * @return true if a new frame is received.
  */
