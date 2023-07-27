@@ -111,6 +111,8 @@ em_fs_create_streaming_client(struct xrt_frame_context *xfctx,
 /*!
  * Attempt to retrieve a sample.
  *
+ * @pre The Android main EGL context must be active with the lock held when calling.
+ *
  * @return true if a new frame is received.
  */
 bool
