@@ -328,6 +328,7 @@ hmd_pose(struct em_state &st)
 	XrSpaceLocation hmdLocalLocation = {};
 	hmdLocalLocation.type = XR_TYPE_SPACE_LOCATION;
 	hmdLocalLocation.next = NULL;
+	// TODO os_monotonic_get_ns is wrong here
 	result = xrLocateSpace(st.viewSpace, st.worldSpace, os_monotonic_get_ns(), &hmdLocalLocation);
 	if (result != XR_SUCCESS) {
 		ALOGE("Bad!");
@@ -357,6 +358,7 @@ hmd_pose(struct em_state &st)
 
 	pb_encode(&os, pluto_TrackingMessage_fields, &message);
 
+	// TODO use webrtc data channel instead of this extra socket
 	int iResult = send(st.socket_fd, buffer, pluto_TrackingMessage_size, 0);
 
 	if (iResult <= 0) {
