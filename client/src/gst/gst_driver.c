@@ -1057,8 +1057,8 @@ em_fs_try_pull_sample(struct xrt_fs *fs, struct em_sample *out_sample)
 		ret.frame_available = true;
 
 		gst_video_frame_unmap(&frame);
+		gst_sample_unref(sample);
 	}
-	gst_sample_unref(sample);
 	*out_sample = ret;
 	return ret.frame_available;
 }
