@@ -26,6 +26,7 @@
 
 #include "gst_common.h"
 
+#include <GLES3/gl3.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>
@@ -129,6 +130,8 @@ struct em_fs
 
 	enum xrt_fs_capture_type capture_type;
 	struct xrt_frame_sink *sink;
+
+	GLenum frame_texture_target;
 
 	uint32_t selected;
 
@@ -990,9 +993,23 @@ em_fs_create_streaming_client(struct xrt_frame_context *xfctx,
 	return alloc_and_init_common(xfctx, state, format, stereo_format, display, context);
 }
 
+struct em_sample_impl
+{
+	struct em_sample base;
+	GstSample *sample;
+};
 
-bool
-em_fs_try_pull_sample(struct xrt_fs *fs, struct em_sample *out_sample)
+void
+em_fs_release_sample(struct xrt_fs *fs, struct em_sample *ems)
+{
+	struct em_sample_impl *impl = (struct em_sample_impl *)ems;
+	ALOGW("RYLIE: Releasing sample with texture ID %d", ems->frame_texture_id);
+	gst_sample_unref(impl->sample);
+	free(impl);
+}
+
+struct em_sample *
+em_fs_try_pull_sample(struct xrt_fs *fs)
 {
 
 	// FOR RYAN : As mentioned, the glsinkbin -> appsink part of the gstreamer pipeline in gst_driver.c
@@ -1008,58 +1025,60 @@ em_fs_try_pull_sample(struct xrt_fs *fs, struct em_sample *out_sample)
 	GstSample *sample =
 	    gst_app_sink_try_pull_sample(GST_APP_SINK(vid->appsink), (GstClockTime)(1000 * GST_USECOND));
 
-	struct em_sample ret = {};
-	if (sample != NULL) {
-
-		ALOGE("FRED: GOT A SAMPLE !!!");
-		GstBuffer *buffer = gst_sample_get_buffer(sample);
-		GstCaps *caps = gst_sample_get_caps(sample);
-
-		GstVideoInfo info;
-		gst_video_info_from_caps(&info, caps);
-		/*gint width = GST_VIDEO_INFO_WIDTH (&info);
-		gint height = GST_VIDEO_INFO_HEIGHT (&info);*/
-
-		// FOR RYLIE: Handle resize according to how it's done in PlutosphereOXR
-		/*if (width != vid->width || height != vid->height) {
-		    vid->width = width;
-		    vid->height = height;
-		}*/
-
-		GstVideoFrame frame;
-		GstMapFlags flags = (GstMapFlags)(GST_MAP_READ | GST_MAP_GL);
-		gst_video_frame_map(&frame, &info, buffer, flags);
-		ret.frame_texture_id = *(GLuint *)frame.data[0];
-
-		if (vid->context == NULL) {
-			/* Get GStreamer's gl context. */
-			gst_gl_query_local_gl_context(vid->appsink, GST_PAD_SINK, &vid->context);
-
-			/* Check if we have 2D or OES textures */
-			GstStructure *s = gst_caps_get_structure(caps, 0);
-			const gchar *texture_target_str = gst_structure_get_string(s, "texture-target");
-			if (g_str_equal(texture_target_str, GST_GL_TEXTURE_TARGET_EXTERNAL_OES_STR)) {
-				ret.frame_texture_target = GL_TEXTURE_EXTERNAL_OES;
-			} else if (g_str_equal(texture_target_str, GST_GL_TEXTURE_TARGET_2D_STR)) {
-				ret.frame_texture_target = GL_TEXTURE_2D;
-				ALOGE("RYLIE: Got GL_TEXTURE_2D instead of expected GL_TEXTURE_EXTERNAL_OES");
-			} else {
-				g_assert_not_reached();
-			}
-		}
-
-		GstGLSyncMeta *sync_meta = gst_buffer_get_gl_sync_meta(buffer);
-		if (sync_meta) {
-			/* MOSHI: the set_sync() seems to be needed for resizing */
-			gst_gl_sync_meta_set_sync_point(sync_meta, vid->context);
-			gst_gl_sync_meta_wait(sync_meta, vid->context);
-		}
-
-		ret.frame_available = true;
-
-		gst_video_frame_unmap(&frame);
-		gst_sample_unref(sample);
+	if (sample == NULL) {
+		return NULL;
 	}
-	*out_sample = ret;
-	return ret.frame_available;
+
+	ALOGE("FRED: GOT A SAMPLE !!!");
+	GstBuffer *buffer = gst_sample_get_buffer(sample);
+	GstCaps *caps = gst_sample_get_caps(sample);
+
+	GstVideoInfo info;
+	gst_video_info_from_caps(&info, caps);
+	/*gint width = GST_VIDEO_INFO_WIDTH (&info);
+	gint height = GST_VIDEO_INFO_HEIGHT (&info);*/
+
+	// FOR RYLIE: Handle resize according to how it's done in PlutosphereOXR
+	/*if (width != vid->width || height != vid->height) {
+	    vid->width = width;
+	    vid->height = height;
+	}*/
+
+	struct em_sample_impl *ret = calloc(1, sizeof(struct em_sample_impl));
+
+	GstVideoFrame frame;
+	GstMapFlags flags = (GstMapFlags)(GST_MAP_READ | GST_MAP_GL);
+	gst_video_frame_map(&frame, &info, buffer, flags);
+	ret->base.frame_texture_id = *(GLuint *)frame.data[0];
+
+	if (vid->context == NULL) {
+		/* Get GStreamer's gl context. */
+		gst_gl_query_local_gl_context(vid->appsink, GST_PAD_SINK, &vid->context);
+
+		/* Check if we have 2D or OES textures */
+		GstStructure *s = gst_caps_get_structure(caps, 0);
+		const gchar *texture_target_str = gst_structure_get_string(s, "texture-target");
+		if (g_str_equal(texture_target_str, GST_GL_TEXTURE_TARGET_EXTERNAL_OES_STR)) {
+			vid->frame_texture_target = GL_TEXTURE_EXTERNAL_OES;
+		} else if (g_str_equal(texture_target_str, GST_GL_TEXTURE_TARGET_2D_STR)) {
+			vid->frame_texture_target = GL_TEXTURE_2D;
+			ALOGE("RYLIE: Got GL_TEXTURE_2D instead of expected GL_TEXTURE_EXTERNAL_OES");
+		} else {
+			g_assert_not_reached();
+		}
+	}
+	ret->base.frame_texture_target = vid->frame_texture_target;
+
+	GstGLSyncMeta *sync_meta = gst_buffer_get_gl_sync_meta(buffer);
+	if (sync_meta) {
+		/* MOSHI: the set_sync() seems to be needed for resizing */
+		gst_gl_sync_meta_set_sync_point(sync_meta, vid->context);
+		gst_gl_sync_meta_wait(sync_meta, vid->context);
+	}
+
+	gst_video_frame_unmap(&frame);
+	// gst_sample_unref(sample);
+	// move sample ownership into the return value
+	ret->sample = sample;
+	return &(ret->base);
 }
