@@ -5,7 +5,7 @@
  * @file
  * @brief  A GStreamer pipeline for WebRTC streaming
  * @author Moshi Turner <moses@collabora.com>
- * @author Jakub Adam <jakub.adam@collabora.com
+ * @author Jakub Adam <jakub.adam@collabora.com>
  * @author Nicolas Dufresne <nicolas.dufresne@collabora.com>
  * @author Olivier Crête <olivier.crete@collabora.com>
  * @ingroup aux_util
