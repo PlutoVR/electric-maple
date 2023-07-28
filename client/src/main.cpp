@@ -283,45 +283,14 @@ die_errno()
 // 127.0.0.1:8080 to do the "ICE transaction", which basically send an "offer" of possible
 // network interfaces for server and client and finds a matching pair for the webrtc
 // connection/stream between server and client. (This has all been tested working on the
-// quest2 with the webrtc pipeline and ICE callback (mostly implemented in gst_driver.c)
-
-// TODO This socket is for sending the HMD pose upstream "out of band" - replace with data channel.
-void
-really_make_socket(struct em_state &st)
-{
-#if 1
-	// We shouldn't be using SOCK_STREAM! We're relying on blind luck to get synced packets
-
-	st.socket_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-#else
-	// Doesn't work :(
-	st.socket_fd = socket(PF_INET, SOCK_SEQPACKET, IPPROTO_SCTP);
-#endif
-	ALOGE("Socket fd is %d, errno is %s", st.socket_fd, strerror(errno));
-
-	// Connect to the parent process
-	sockaddr_in serverAddr;
-	serverAddr.sin_family = AF_INET;
-
-	// todo: use inet_pton
-	serverAddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-	serverAddr.sin_port = htons(61943);
-
-	int iResult = connect(st.socket_fd, (struct sockaddr *)&serverAddr, sizeof(serverAddr));
-
-	if (iResult < 0) {
-		die_errno();
-	}
-
-	ALOGE("really_make_socket: Result is %d", iResult);
-}
-
+// quest2 with the webrtc pipeline and ICE callback (mostly implemented in gst_driver.c
 
 
 static void
 hmd_pose(struct em_state &st)
 {
-	return;
+	(void)st;
+#if 0
 	XrResult result = XR_SUCCESS;
 
 
@@ -365,6 +334,7 @@ hmd_pose(struct em_state &st)
 		ALOGE("BAD! %d %s", iResult, strerror(errno));
 		die_errno();
 	}
+#endif
 }
 
 void
@@ -905,10 +875,6 @@ android_main(struct android_app *app)
 	eglMakeCurrent(state.display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
 	ALOGE("FRED: main: releasing the EGL lock");
 	os_mutex_unlock(&state.egl_lock);
-
-	ALOGE("FRED: Really make socket\n");
-	really_make_socket(state);
-
 
 	// Main rendering loop.
 	ALOGE("DEBUG: Starting main loop.\n");
