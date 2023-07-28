@@ -512,8 +512,8 @@ mainloop_one(struct xrt_fs *client, struct em_state &state)
 		ALOGE("Failed to locate views");
 	}
 
-	int width = state.width;
-	int height = state.height;
+	uint32_t width = state.width;
+	uint32_t height = state.height;
 	XrCompositionLayerProjection layer = {};
 	layer.type = XR_TYPE_COMPOSITION_LAYER_PROJECTION;
 	layer.space = state.worldSpace;
@@ -523,14 +523,14 @@ mainloop_one(struct xrt_fs *client, struct em_state &state)
 	projectionViews[0].type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW;
 	projectionViews[0].subImage.swapchain = state.swapchain;
 	projectionViews[0].subImage.imageRect.offset = {0, 0};
-	projectionViews[0].subImage.imageRect.extent = {width, height};
+	projectionViews[0].subImage.imageRect.extent = {static_cast<int32_t>(width), static_cast<int32_t>(height)};
 	projectionViews[0].pose = views[0].pose;
 	projectionViews[0].fov = views[0].fov;
 
 	projectionViews[1].type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW;
 	projectionViews[1].subImage.swapchain = state.swapchain;
-	projectionViews[1].subImage.imageRect.offset = {width, 0};
-	projectionViews[1].subImage.imageRect.extent = {width, height};
+	projectionViews[1].subImage.imageRect.offset = {static_cast<int32_t>(width), 0};
+	projectionViews[1].subImage.imageRect.extent = {static_cast<int32_t>(width), static_cast<int32_t>(height)};
 	projectionViews[1].pose = views[1].pose;
 	projectionViews[1].fov = views[1].fov;
 
@@ -538,21 +538,6 @@ mainloop_one(struct xrt_fs *client, struct em_state &state)
 
 	// Render
 
-	uint32_t imageIndex;
-	result = xrAcquireSwapchainImage(state.swapchain, NULL, &imageIndex);
-
-	if (XR_FAILED(result)) {
-		ALOGE("Failed to acquire swapchain image (%d)", result);
-	}
-
-	XrSwapchainImageWaitInfo waitInfo = {.type = XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO,
-	                                     .timeout = XR_INFINITE_DURATION};
-
-	result = xrWaitSwapchainImage(state.swapchain, &waitInfo);
-
-	if (XR_FAILED(result)) {
-		ALOGE("Failed to wait for swapchain image (%d)", result);
-	}
 
 	// FOR RYAN: we're not asking xrt_fs for a frame, we're checking ourselves what appsink
 	// may have for us. That's why the state.xf logic's been disabled (not needed anymore)
@@ -563,14 +548,28 @@ mainloop_one(struct xrt_fs *client, struct em_state &state)
 		ALOGE("FRED: mainloop_one: Failed make egl context current");
 	}
 
-	struct em_sample sample = {};
+	struct em_sample *sample = em_fs_try_pull_sample(client);
 
-	if (em_fs_try_pull_sample(client, &sample)) {
+	if (sample) {
 
-		state.frame_texture_id = sample.frame_texture_id;
+		uint32_t imageIndex;
+		result = xrAcquireSwapchainImage(state.swapchain, NULL, &imageIndex);
 
+		if (XR_FAILED(result)) {
+			ALOGE("Failed to acquire swapchain image (%d)", result);
+		}
 
-		ALOGE("DEBUG: Binding framebuffer\n");
+		XrSwapchainImageWaitInfo waitInfo = {.type = XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO,
+		                                     .timeout = XR_INFINITE_DURATION};
+
+		result = xrWaitSwapchainImage(state.swapchain, &waitInfo);
+
+		if (XR_FAILED(result)) {
+			ALOGE("Failed to wait for swapchain image (%d)", result);
+		}
+		state.frame_texture_id = sample->frame_texture_id;
+
+		ALOGI("RYLIE: Frame texture id is %d", state.frame_texture_id);
 		glBindFramebuffer(GL_FRAMEBUFFER, state.framebuffers[imageIndex]);
 
 		glViewport(0, 0, state.width * 2, state.height);
@@ -583,18 +582,23 @@ mainloop_one(struct xrt_fs *client, struct em_state &state)
 		ALOGE("DEBUG: DRAWING!\n");
 		for (uint32_t eye = 0; eye < 2; eye++) {
 			glViewport(eye * state.width, 0, state.width, state.height);
-			draw(state.framebuffers[imageIndex], sample.frame_texture_id, sample.frame_texture_target);
+			draw(state.framebuffers[imageIndex], sample->frame_texture_id, sample->frame_texture_target);
 		}
 
 		// Release
 
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
+		xrReleaseSwapchainImage(state.swapchain, NULL);
+
+		if (state.prev_sample != NULL) {
+			em_fs_release_sample(client, state.prev_sample);
+			state.prev_sample = NULL;
+		}
+		state.prev_sample = sample;
 	} else {
 		ALOGE("FRED: NO gst appsink sample...");
 	}
-
-	xrReleaseSwapchainImage(state.swapchain, NULL);
 
 	// Submit frame
 	XrFrameEndInfo endInfo = {};
@@ -605,8 +609,9 @@ mainloop_one(struct xrt_fs *client, struct em_state &state)
 	endInfo.layers = (const XrCompositionLayerBaseHeader *[1]){(XrCompositionLayerBaseHeader *)&layer};
 
 	hmd_pose(state);
-
-	xrEndFrame(state.session, &endInfo);
+	if (sample) {
+		xrEndFrame(state.session, &endInfo);
+	}
 
 	EGLBoolean bret = eglMakeCurrent( //
 	    state.display,                //

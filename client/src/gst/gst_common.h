@@ -37,6 +37,12 @@
 
 struct em_fs;
 
+struct em_sample
+{
+	GLuint frame_texture_id;
+	GLenum frame_texture_target;
+	// bool frame_available;
+};
 struct em_state
 {
 	struct android_app *app;
@@ -84,14 +90,10 @@ struct em_state
 	GLuint frame_texture_id;
 	GLenum frame_texture_target;
 	GLboolean frame_available;
+
+	struct em_sample *prev_sample;
 };
 
-struct em_sample
-{
-	GLuint frame_texture_id;
-	GLenum frame_texture_target;
-	bool frame_available;
-};
 
 #ifdef __cplusplus
 extern "C" {
@@ -113,10 +115,17 @@ em_fs_create_streaming_client(struct xrt_frame_context *xfctx,
  *
  * @pre The Android main EGL context must be active with the lock held when calling.
  *
- * @return true if a new frame is received.
+ * @return null if no new frame is received.
  */
-bool
-em_fs_try_pull_sample(struct xrt_fs *fs, struct em_sample *out_sample);
+struct em_sample *
+em_fs_try_pull_sample(struct xrt_fs *fs);
+
+/*!
+ * Release a sample when no longer used.
+ */
+void
+em_fs_release_sample(struct xrt_fs *fs, struct em_sample *ems);
+
 
 
 #ifdef __cplusplus
