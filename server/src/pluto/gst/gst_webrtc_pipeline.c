@@ -10,6 +10,7 @@
  * @author Olivier Crête <olivier.crete@collabora.com>
  * @author Jakob Bornecrantz <jakob@collabora.com>
  * @author Aaron Boxer <aaron.boxer@collabora.com>
+ * @author Rylie Pavlik <rpavlik@collabora.com>
  * @ingroup aux_util
  */
 
@@ -18,6 +19,7 @@
 #include "util/u_misc.h"
 #include "util/u_debug.h"
 
+// Monado includes
 #include "gstreamer/gst_internal.h"
 #include "gstreamer/gst_pipeline.h"
 
@@ -25,10 +27,12 @@
 
 #include <glib-unix.h>
 #include <gst/gst.h>
+#include <gst/gststructure.h>
 
 #define GST_USE_UNSTABLE_API
 #include <gst/webrtc/datachannel.h>
 #include <gst/webrtc/rtcsessiondescription.h>
+#undef GST_USE_UNSTABLE_API
 
 #include <stdio.h>
 #include <assert.h>
@@ -240,7 +244,11 @@ webrtc_client_connected_cb(MssHttpServer *server, MssClientId client_id, struct 
 	g_signal_connect(webrtcbin, "on-data-channel", G_CALLBACK(webrtc_on_data_channel_cb), NULL);
 
 	// I also think this would work if the pipeline state is READY but /shrug
-	g_signal_emit_by_name(webrtcbin, "create-data-channel", "channel", NULL, &gwp->data_channel);
+
+	// TODO add priority
+	GstStructure *data_channel_options = gst_structure_new_from_string("data-channel-options, ordered=true");
+	g_signal_emit_by_name(webrtcbin, "create-data-channel", "channel", data_channel_options, &gwp->data_channel);
+	gst_clear_structure(&data_channel_options);
 
 	if (!gwp->data_channel) {
 		U_LOG_E("Couldn't make datachannel!");
