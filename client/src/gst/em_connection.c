@@ -31,14 +31,14 @@
 
 
 static void
-data_channel_error_cb(GstWebRTCDataChannel *datachannel, void *data)
+emconn_data_channel_error_cb(GstWebRTCDataChannel *datachannel, void *data)
 {
 	ALOGE("error\n");
 	abort();
 }
 
 static void
-data_channel_close_cb(GstWebRTCDataChannel *datachannel, gpointer user_data)
+emconn_data_channel_close_cb(GstWebRTCDataChannel *datachannel, gpointer user_data)
 {
 	struct em_connection *emconn = user_data;
 	ALOGE("Data channel closed");
@@ -79,8 +79,8 @@ emconn_webrtc_on_data_channel_cb(GstElement *webrtcbin, GstWebRTCDataChannel *da
 
 	timeout_src_id = g_timeout_add_seconds(3, emconn_data_channel_send_message, user_data);
 
-	g_signal_connect(emconn->datachannel, "on-close", G_CALLBACK(data_channel_close_cb), user_data);
-	g_signal_connect(emconn->datachannel, "on-error", G_CALLBACK(data_channel_error_cb), user_data);
+	g_signal_connect(emconn->datachannel, "on-close", G_CALLBACK(emconn_data_channel_close_cb), user_data);
+	g_signal_connect(emconn->datachannel, "on-error", G_CALLBACK(emconn_data_channel_error_cb), user_data);
 	g_signal_connect(emconn->datachannel, "on-message-string", G_CALLBACK(emconn_data_channel_message_string_cb),
 	                 user_data);
 }
