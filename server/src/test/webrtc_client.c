@@ -14,9 +14,16 @@
 
 static gchar *websocket_uri = NULL;
 
-static GOptionEntry options[] = {
-    {"websocket-uri", 'u', 0, G_OPTION_ARG_STRING, &websocket_uri, "Websocket URI of webrtc signaling connection"},
-    {NULL}};
+static GOptionEntry options[] = {{
+                                     "websocket-uri",
+                                     'u',
+                                     0,
+                                     G_OPTION_ARG_STRING,
+                                     &websocket_uri,
+                                     "Websocket URI of webrtc signaling connection",
+                                     "URI",
+                                 },
+                                 {NULL}};
 
 #define WEBSOCKET_URI_DEFAULT "ws://192.168.0.168:8080/ws"
 
