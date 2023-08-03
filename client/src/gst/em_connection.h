@@ -1,4 +1,4 @@
-// Copyright 2020-2023, Collabora, Ltd.
+// Copyright 2022-2023, PlutoVR
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -10,22 +10,8 @@
 
 
 #include <glib-object.h>
-#include <gst/gstelement.h>
-
-#define GST_USE_UNSTABLE_API
-#include <gst/webrtc/webrtc_fwd.h>
-#undef GST_USE_UNSTABLE_API
-
-#include <libsoup/soup-session.h>
 
 #include <stdbool.h>
-
-/// Type of a callback that will launch a pipeline and return a reference to it.
-typedef GstElement *(*emconn_launch_pipeline_callback)(gpointer user_data);
-
-/// Type of a callback on connection drop/shutdown.
-typedef void (*emconn_drop_pipeline_callback)(gpointer user_data);
-
 
 #define EM_TYPE_CONNECTION em_connection_get_type()
 
@@ -45,7 +31,7 @@ G_DECLARE_FINAL_TYPE(EmConnection, em_connection, EM, CONNECTION, GObject)
  * @memberof EmConnection
  */
 EmConnection *
-em_connection_new(gchar* websocket_uri);
+em_connection_new(gchar *websocket_uri);
 
 
 /*!
