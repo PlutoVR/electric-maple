@@ -1,21 +1,21 @@
 // Copyright 2020-2023, Collabora, Ltd.
+// Copyright 2022-2023, PlutoVR
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
- * @brief  WebRTC handshake for ElectricMaple XR streaming frameserver
+ * @brief  WebRTC handshake/connection for ElectricMaple XR streaming frameserver
  * @author Rylie Pavlik <rpavlik@collabora.com>
  * @author Moshi Turner <moses@collabora.com>
  * @author Jakob Bornecrantz <jakob@collabora.com>
  * @author Christoph Haag <christoph.haag@collabora.com>
  * @author Pete Black <pblack@collabora.com>
- * @ingroup xrt_fs_em
+ * @ingroup em_client
  */
 
 #include "em_connection.h"
 
 #include "em_status.h"
 #include "app_log.h"
-
 
 #include <gst/gstelement.h>
 #include <gst/gstobject.h>
@@ -40,29 +40,21 @@ struct _EmConnection
 {
 	GObject parent;
 	SoupSession *soup_session;
+	gchar *websocket_uri;
+	/// Cancellable for websocket connection process
+	GCancellable *ws_cancel;
 	SoupWebsocketConnection *ws;
+
 	GstPipeline *pipeline;
 	GstElement *webrtcbin;
-	gchar *websocket_uri;
 	GstWebRTCDataChannel *datachannel;
+
 	guint timeout_src_id;
 	guint retry_timeout_src_id;
 
 	enum em_status status;
-	/// has the pipeline been launched (@ref launch_pipeline called)
+	/// has the pipeline been launched
 	bool pipeline_launched;
-
-	// struct
-	// {
-	// 	emconn_launch_pipeline_callback callback;
-	// 	gpointer data;
-	// } launch_pipeline;
-
-	// struct
-	// {
-	// 	emconn_drop_pipeline_callback callback;
-	// 	gpointer data;
-	// } drop_pipeline;
 };
 
 
@@ -70,7 +62,11 @@ G_DEFINE_TYPE(EmConnection, em_connection, G_TYPE_OBJECT)
 
 enum
 {
+	// action signals
+	SIGNAL_CONNECT,
+	SIGNAL_DISCONNECT,
 	SIGNAL_SET_PIPELINE,
+	// signals
 	SIGNAL_WEBSOCKET_CONNECTED,
 	SIGNAL_WEBSOCKET_FAILED,
 	SIGNAL_CONNECTED,
@@ -131,6 +127,7 @@ em_connection_get_property(GObject *object, guint property_id, GValue *value, GP
 static void
 em_connection_init(EmConnection *emconn)
 {
+	emconn->ws_cancel = g_cancellable_new();
 	emconn->soup_session = soup_session_new();
 	emconn->websocket_uri = g_strdup(DEFAULT_WEBSOCKET_URI);
 }
@@ -145,6 +142,7 @@ em_connection_dispose(GObject *object)
 	g_free(self->websocket_uri);
 
 	g_clear_object(&self->soup_session);
+	g_clear_object(&self->ws_cancel);
 }
 
 static void
@@ -157,16 +155,44 @@ em_connection_class_init(EmConnectionClass *klass)
 	gobject_class->set_property = em_connection_set_property;
 	gobject_class->get_property = em_connection_get_property;
 
-	properties[PROP_WEBSOCKET_URI] = g_param_spec_string(
-	    "websocket-uri", "WS URI", "WebSocket URI for signaling server.", DEFAULT_WEBSOCKET_URI /* default value */,
-	    G_PARAM_CONSTRUCT_ONLY | G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS);
+	/**
+	 * EmConnection:websocket-uri:
+	 *
+	 * The websocket URI for the signaling server
+	 */
+	g_object_class_install_property(
+	    gobject_class, PROP_WEBSOCKET_URI,
+	    g_param_spec_string("websocket-uri", "WebSocket URI", "WebSocket URI for signaling server.",
+	                        DEFAULT_WEBSOCKET_URI /* default value */,
+	                        G_PARAM_CONSTRUCT_ONLY | G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
-	g_object_class_install_properties(gobject_class, N_PROPERTIES, properties);
+	/**
+	 * EmConnection::connect
+	 * @object: the #EmConnection
+	 *
+	 * Start the connection process
+	 */
+	signals[SIGNAL_CONNECT] =
+	    g_signal_new_class_handler("connect", G_OBJECT_CLASS_TYPE(klass), G_SIGNAL_RUN_LAST | G_SIGNAL_ACTION,
+	                               G_CALLBACK(em_connection_connect), NULL, NULL, NULL, G_TYPE_NONE, 0);
+
+	/**
+	 * EmConnection::disconnect
+	 * @object: the #EmConnection
+	 *
+	 * Stop the connection process or shutdown the connection
+	 */
+	signals[SIGNAL_DISCONNECT] =
+	    g_signal_new_class_handler("disconnect", G_OBJECT_CLASS_TYPE(klass), G_SIGNAL_RUN_LAST | G_SIGNAL_ACTION,
+	                               G_CALLBACK(em_connection_disconnect), NULL, NULL, NULL, G_TYPE_NONE, 0);
 
 	/**
 	 * EmConnection::set-pipeline
 	 * @object: the #EmConnection
 	 * @pipeline: A #GstPipeline
+	 *
+	 * Sets the #GstPipeline containing a #GstWebRTCBin element and begins the WebRTC connection negotiation.
+	 * Should be signalled in response to @on-need-pipeline
 	 */
 	signals[SIGNAL_SET_PIPELINE] = g_signal_new_class_handler(
 	    "set-pipeline", G_OBJECT_CLASS_TYPE(klass), G_SIGNAL_RUN_LAST | G_SIGNAL_ACTION,
@@ -176,22 +202,21 @@ em_connection_class_init(EmConnectionClass *klass)
 	 * EmConnection::websocket-connected
 	 * @object: the #EmConnection
 	 */
-	signals[SIGNAL_WEBSOCKET_CONNECTED] =
-	    g_signal_new("websocket-connected", G_OBJECT_CLASS_TYPE(klass), G_SIGNAL_RUN_LAST, 0, NULL, NULL, NULL,
-	                 G_TYPE_NONE, 1, G_TYPE_POINTER);
+	signals[SIGNAL_WEBSOCKET_CONNECTED] = g_signal_new("websocket-connected", G_OBJECT_CLASS_TYPE(klass),
+	                                                   G_SIGNAL_RUN_LAST, 0, NULL, NULL, NULL, G_TYPE_NONE, 0);
+
 	/**
 	 * EmConnection::websocket-failed
 	 * @object: the #EmConnection
 	 */
-	signals[SIGNAL_WEBSOCKET_FAILED] =
-	    g_signal_new("websocket-failed", G_OBJECT_CLASS_TYPE(klass), G_SIGNAL_RUN_LAST, 0, NULL, NULL, NULL,
-	                 G_TYPE_NONE, 1, G_TYPE_POINTER);
+	signals[SIGNAL_WEBSOCKET_FAILED] = g_signal_new("websocket-failed", G_OBJECT_CLASS_TYPE(klass),
+	                                                G_SIGNAL_RUN_LAST, 0, NULL, NULL, NULL, G_TYPE_NONE, 0);
 	/**
 	 * EmConnection::connected
 	 * @object: the #EmConnection
 	 */
 	signals[SIGNAL_CONNECTED] = g_signal_new("connected", G_OBJECT_CLASS_TYPE(klass), G_SIGNAL_RUN_LAST, 0, NULL,
-	                                         NULL, NULL, G_TYPE_NONE, 1, G_TYPE_POINTER);
+	                                         NULL, NULL, G_TYPE_NONE, 0);
 
 	/**
 	 * EmConnection::on-need-pipeline
@@ -264,7 +289,7 @@ emconn_update_status_from_peer_connection_state(EmConnection *emconn, GstWebRTCP
 static void
 emconn_disconnect_internal(EmConnection *emconn, enum em_status status)
 {
-
+	g_cancellable_cancel(emconn->ws_cancel);
 	if (emconn->timeout_src_id != 0) {
 		g_source_remove(emconn->timeout_src_id);
 		emconn->timeout_src_id = 0;
@@ -281,7 +306,7 @@ emconn_disconnect_internal(EmConnection *emconn, enum em_status status)
 
 	gst_clear_object(&emconn->webrtcbin);
 	gst_clear_object(&emconn->datachannel);
-	g_clear_object(&emconn->pipeline);
+	gst_clear_object(&emconn->pipeline);
 	emconn_update_status(emconn, status);
 }
 
@@ -366,7 +391,6 @@ emconn_schedule_retry_connect(EmConnection *emconn)
 void
 emconn_send_sdp_answer(EmConnection *emconn, const gchar *sdp)
 {
-	// ALOGI("[enter] %s", __FUNCTION__);
 	JsonBuilder *builder;
 	JsonNode *root;
 	gchar *msg_str;
@@ -390,18 +414,11 @@ emconn_send_sdp_answer(EmConnection *emconn, const gchar *sdp)
 
 	json_node_unref(root);
 	g_object_unref(builder);
-
-	// emconn_update_status(emconn, EM_STATUS_CONNECTED_NO_DATA);
-	// emconn_update_status_from_webrtcbin(emconn);
-
-
-	// ALOGI("[exit]  %s", __FUNCTION__);
 }
 
 static void
 emconn_webrtc_on_ice_candidate_cb(GstElement *webrtcbin, guint mlineindex, gchar *candidate, EmConnection *emconn)
 {
-	// ALOGI("[enter] %s", __FUNCTION__);
 	JsonBuilder *builder;
 	JsonNode *root;
 	gchar *msg_str;
@@ -431,15 +448,11 @@ emconn_webrtc_on_ice_candidate_cb(GstElement *webrtcbin, guint mlineindex, gchar
 
 	json_node_unref(root);
 	g_object_unref(builder);
-	// emconn_update_status_from_webrtcbin(emconn);
-	// ALOGI("[exit]  %s", __FUNCTION__);
 }
 
 static void
-emh_on_answer_created(GstPromise *promise, EmConnection *emconn)
+emconn_webrtc_on_answer_created(GstPromise *promise, EmConnection *emconn)
 {
-	// ALOGI("[enter] %s", __FUNCTION__);
-
 	GstWebRTCSessionDescription *answer = NULL;
 	gchar *sdp;
 
@@ -460,14 +473,11 @@ emh_on_answer_created(GstPromise *promise, EmConnection *emconn)
 	g_free(sdp);
 
 	gst_webrtc_session_description_free(answer);
-	// emconn_update_status_from_webrtcbin(emconn);
-	// ALOGI("[exit]  %s", __FUNCTION__);
 }
 
 static void
-emh_process_sdp_offer(EmConnection *emconn, const gchar *sdp)
+emconn_webrtc_process_sdp_offer(EmConnection *emconn, const gchar *sdp)
 {
-	// ALOGI("[enter] %s", __FUNCTION__);
 	GstSDPMessage *sdp_msg = NULL;
 	GstWebRTCSessionDescription *desc = NULL;
 
@@ -490,32 +500,28 @@ emh_process_sdp_offer(EmConnection *emconn, const gchar *sdp)
 		gst_promise_wait(promise);
 		gst_promise_unref(promise);
 
-		g_signal_emit_by_name(
-		    emconn->webrtcbin, "create-answer", NULL,
-		    gst_promise_new_with_change_func((GstPromiseChangeFunc)emh_on_answer_created, emconn, NULL));
+		g_signal_emit_by_name(emconn->webrtcbin, "create-answer", NULL,
+		                      gst_promise_new_with_change_func(
+		                          (GstPromiseChangeFunc)emconn_webrtc_on_answer_created, emconn, NULL));
 	} else {
 		gst_sdp_message_free(sdp_msg);
 	}
-	// emconn_update_status_from_webrtcbin(emconn);
 
 out:
 	g_clear_pointer(&desc, gst_webrtc_session_description_free);
-	// ALOGI("[exit]  %s", __FUNCTION__);
 }
 
 static void
-emh_process_candidate(EmConnection *emconn, guint mlineindex, const gchar *candidate)
+emconn_webrtc_process_candidate(EmConnection *emconn, guint mlineindex, const gchar *candidate)
 {
 	ALOGI("process_candidate: %d %s", mlineindex, candidate);
 
 	g_signal_emit_by_name(emconn->webrtcbin, "add-ice-candidate", mlineindex, candidate);
-	// emconn_update_status_from_webrtcbin(emconn);
 }
 
 static void
 emconn_on_ws_message_cb(SoupWebsocketConnection *connection, gint type, GBytes *message, EmConnection *emconn)
 {
-	// ALOGI("[enter] %s", __FUNCTION__);
 	gsize length = 0;
 	const gchar *msg_data = g_bytes_get_data(message, &length);
 	JsonParser *parser = json_parser_new();
@@ -537,14 +543,14 @@ emconn_on_ws_message_cb(SoupWebsocketConnection *connection, gint type, GBytes *
 
 		if (g_str_equal(msg_type, "offer")) {
 			const gchar *offer_sdp = json_object_get_string_member(msg, "sdp");
-			emh_process_sdp_offer(emconn, offer_sdp);
+			emconn_webrtc_process_sdp_offer(emconn, offer_sdp);
 		} else if (g_str_equal(msg_type, "candidate")) {
 			JsonObject *candidate;
 
 			candidate = json_object_get_object_member(msg, "candidate");
 
-			emh_process_candidate(emconn, json_object_get_int_member(candidate, "sdpMLineIndex"),
-			                      json_object_get_string_member(candidate, "candidate"));
+			emconn_webrtc_process_candidate(emconn, json_object_get_int_member(candidate, "sdpMLineIndex"),
+			                                json_object_get_string_member(candidate, "candidate"));
 		}
 	} else {
 		g_debug("Error parsing message: %s", error->message);
@@ -553,14 +559,12 @@ emconn_on_ws_message_cb(SoupWebsocketConnection *connection, gint type, GBytes *
 
 out:
 	g_object_unref(parser);
-	// ALOGI("[exit]  %s", __FUNCTION__);
 }
 
 
 static void
 emconn_websocket_connected_cb(GObject *session, GAsyncResult *res, EmConnection *emconn)
 {
-	// ALOGI("[enter] %s", __FUNCTION__);
 
 	GError *error = NULL;
 
@@ -572,6 +576,7 @@ emconn_websocket_connected_cb(GObject *session, GAsyncResult *res, EmConnection 
 		ALOGW("Websocket connection failed, may not be available. Will retry.");
 		g_signal_emit(emconn, signals[SIGNAL_WEBSOCKET_FAILED], 0);
 		emconn_update_status(emconn, EM_STATUS_WILL_RETRY);
+		return;
 	}
 	g_assert_no_error(error);
 	GstBus *bus;
@@ -587,9 +592,6 @@ emconn_websocket_connected_cb(GObject *session, GAsyncResult *res, EmConnection 
 		ALOGE("on-need-pipeline signal did not return a pipeline!");
 		em_connection_disconnect(emconn);
 	}
-	// gst_object_ref_sink(emconn->pipeline);
-
-	// ALOGI("[exit]  %s", __FUNCTION__);
 }
 
 
@@ -619,13 +621,14 @@ emconn_connect_internal(EmConnection *emconn, enum em_status status)
 {
 	em_connection_disconnect(emconn);
 
+	g_cancellable_reset(emconn->ws_cancel);
 	ALOGE("RYLIE: calling soup_session_websocket_connect_async. websocket_uri = %s", emconn->websocket_uri);
 #if SOUP_MAJOR_VERSION == 2
 	soup_session_websocket_connect_async(emconn->soup_session,                                     // session
 	                                     soup_message_new(SOUP_METHOD_GET, emconn->websocket_uri), // message
 	                                     NULL,                                                     // origin
 	                                     NULL,                                                     // protocols
-	                                     NULL,                                                     // cancellable
+	                                     emconn->ws_cancel,                                        // cancellable
 	                                     (GAsyncReadyCallback)emconn_websocket_connected_cb,       // callback
 	                                     emconn);                                                  // user_data
 
@@ -635,7 +638,7 @@ emconn_connect_internal(EmConnection *emconn, enum em_status status)
 	                                     NULL,                                                     // origin
 	                                     NULL,                                                     // protocols
 	                                     0,                                                        // io_prority
-	                                     NULL,                                                     // cancellable
+	                                     emconn->ws_cancel,                                        // cancellable
 	                                     emh_websocket_connected_cb,                               // callback
 	                                     emconn);                                                  // user_data
 
