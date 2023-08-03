@@ -15,6 +15,8 @@
 #define XR_USE_PLATFORM_ANDROID
 #define XR_USE_GRAPHICS_API_OPENGL_ES
 
+#include "em_status.h"
+
 #include "xrt/xrt_frame.h"
 #include "os/os_threading.h"
 
@@ -36,6 +38,7 @@
 #include "xrt/xrt_frameserver.h"
 
 struct em_fs;
+
 
 struct em_sample
 {
@@ -125,6 +128,12 @@ em_fs_try_pull_sample(struct xrt_fs *fs);
  */
 void
 em_fs_release_sample(struct xrt_fs *fs, struct em_sample *ems);
+
+/*!
+ * Send a message to the server
+ */
+bool
+em_fs_send_bytes(struct xrt_fs *fs, const uint8_t *data, size_t len);
 
 
 

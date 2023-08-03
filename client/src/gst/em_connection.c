@@ -13,12 +13,15 @@
 
 #include "em_connection.h"
 
+#include "em_status.h"
 #include "gst_internal.h"
 #include "app_log.h"
 
 
 #include <gst/gstelement.h>
 #include <gst/gstobject.h>
+#include <stdbool.h>
+#include <string.h>
 
 #define GST_USE_UNSTABLE_API
 #include <gst/webrtc/webrtc.h>
@@ -29,12 +32,110 @@
 
 #include <json-glib/json-glib.h>
 
+#define SECONDS_BETWEEN_RETRY (3)
+
+
+#define MAKE_CASE(E)                                                                                                   \
+	case E: return #E
+
+static const char *
+em_status_to_string(enum em_status status)
+{
+	switch (status) {
+		MAKE_CASE(EM_STATUS_IDLE_NOT_CONNECTED);
+		MAKE_CASE(EM_STATUS_CONNECTING);
+		MAKE_CASE(EM_STATUS_WILL_RETRY);
+		MAKE_CASE(EM_STATUS_NEGOTIATING);
+		MAKE_CASE(EM_STATUS_CONNECTED_NO_DATA);
+		MAKE_CASE(EM_STATUS_CONNECTED);
+	default: return "!Unknown!";
+	}
+}
+static const char *
+peer_connection_state_to_string(GstWebRTCPeerConnectionState state)
+{
+
+	switch (state) {
+		MAKE_CASE(GST_WEBRTC_PEER_CONNECTION_STATE_NEW);
+		MAKE_CASE(GST_WEBRTC_PEER_CONNECTION_STATE_CONNECTING);
+		MAKE_CASE(GST_WEBRTC_PEER_CONNECTION_STATE_CONNECTED);
+		MAKE_CASE(GST_WEBRTC_PEER_CONNECTION_STATE_DISCONNECTED);
+		MAKE_CASE(GST_WEBRTC_PEER_CONNECTION_STATE_FAILED);
+		MAKE_CASE(GST_WEBRTC_PEER_CONNECTION_STATE_CLOSED);
+	default: return "!Unknown!";
+	}
+}
+#undef MAKE_CASE
 
 static void
-emconn_data_channel_error_cb(GstWebRTCDataChannel *datachannel, void *data)
+emconn_update_status(struct em_connection *emconn, enum em_status status)
 {
+	if (status == emconn->status) {
+		ALOGI("emconn: state update: already in %s", em_status_to_string(emconn->status));
+		return;
+	}
+	ALOGI("emconn: state update: %s -> %s", em_status_to_string(emconn->status), em_status_to_string(status));
+	emconn->status = status;
+}
+
+static void
+emconn_update_status_from_webrtcbin(struct em_connection *emconn)
+{
+	if (!emconn->webrtcbin) {
+		return;
+	}
+	GstWebRTCPeerConnectionState state;
+	g_object_get(emconn->webrtcbin, "connection-state", &state, NULL);
+	ALOGI("RYLIE: webrtc peer connection state is %s", peer_connection_state_to_string(state));
+
+	switch (state) {
+	case GST_WEBRTC_PEER_CONNECTION_STATE_NEW: break;
+	case GST_WEBRTC_PEER_CONNECTION_STATE_CONNECTING: emconn_update_status(emconn, EM_STATUS_NEGOTIATING); break;
+	case GST_WEBRTC_PEER_CONNECTION_STATE_CONNECTED:
+		emconn_update_status(emconn, EM_STATUS_CONNECTED_NO_DATA);
+		break;
+
+	case GST_WEBRTC_PEER_CONNECTION_STATE_DISCONNECTED:
+	case GST_WEBRTC_PEER_CONNECTION_STATE_CLOSED: emconn_update_status(emconn, EM_STATUS_IDLE_NOT_CONNECTED); break;
+
+	case GST_WEBRTC_PEER_CONNECTION_STATE_FAILED: emconn_update_status(emconn, EM_STATUS_DISCONNECTED_ERROR); break;
+	}
+}
+
+static void
+emconn_disconnect_internal(struct em_connection *emconn, enum em_status status)
+{
+
+	if (emconn->timeout_src_id != 0) {
+		g_source_remove(emconn->timeout_src_id);
+		emconn->timeout_src_id = 0;
+	}
+	if (emconn->retry_timeout_src_id != 0) {
+		g_source_remove(emconn->retry_timeout_src_id);
+		emconn->retry_timeout_src_id = 0;
+	}
+	if (emconn->pipeline_launched) {
+		(emconn->drop_pipeline.callback)(emconn->drop_pipeline.data);
+		emconn->pipeline_launched = false;
+	}
+	if (emconn->ws) {
+		g_object_unref(emconn->ws);
+		emconn->ws = NULL;
+	}
+	gst_clear_object(&emconn->webrtcbin);
+	gst_clear_object(&emconn->datachannel);
+	emconn_update_status(emconn, status);
+}
+
+
+static void
+emconn_data_channel_error_cb(GstWebRTCDataChannel *datachannel, gpointer user_data)
+{
+	struct em_connection *emconn = user_data;
 	ALOGE("error\n");
-	abort();
+	emconn_update_status_from_webrtcbin(emconn);
+	emconn_disconnect_internal(emconn, EM_STATUS_DISCONNECTED_ERROR);
+	// abort();
 }
 
 static void
@@ -42,17 +143,15 @@ emconn_data_channel_close_cb(GstWebRTCDataChannel *datachannel, gpointer user_da
 {
 	struct em_connection *emconn = user_data;
 	ALOGE("Data channel closed");
-
-	g_source_remove(emconn->timeout_src_id);
-	emconn->timeout_src_id = 0;
-	g_clear_object(&datachannel);
-	g_clear_object(&emconn->datachannel);
+	emconn_disconnect_internal(emconn, EM_STATUS_DISCONNECTED_REMOTE_CLOSE);
 }
 
 static void
-emconn_data_channel_message_string_cb(GstWebRTCDataChannel *datachannel, gchar *str, void *data)
+emconn_data_channel_message_string_cb(GstWebRTCDataChannel *datachannel, gchar *str, gpointer user_data)
 {
 	ALOGE("Received data channel message: %s", str);
+	struct em_connection *emconn = user_data;
+	emconn_update_status_from_webrtcbin(emconn);
 }
 
 static gboolean
@@ -66,23 +165,43 @@ emconn_data_channel_send_message(gpointer user_data)
 }
 
 static void
+emconn_connect_internal(struct em_connection *emconn, enum em_status status);
+
+static gboolean
+emconn_retry_connect(gpointer user_data)
+{
+	struct em_connection *emconn = user_data;
+	emconn_connect_internal(emconn, EM_STATUS_CONNECTING_RETRY);
+	emconn->retry_timeout_src_id = 0;
+	return G_SOURCE_REMOVE;
+}
+
+static void
 emconn_webrtc_on_data_channel_cb(GstElement *webrtcbin, GstWebRTCDataChannel *data_channel, void *user_data)
 {
 	struct em_connection *emconn = user_data;
-	guint timeout_src_id;
 
+	emconn_update_status_from_webrtcbin(emconn);
 	ALOGE("Successfully created datachannel");
 
 	g_assert_null(emconn->datachannel);
 
 	emconn->datachannel = GST_WEBRTC_DATA_CHANNEL(data_channel);
 
-	timeout_src_id = g_timeout_add_seconds(3, emconn_data_channel_send_message, user_data);
+	emconn->timeout_src_id = g_timeout_add_seconds(3, emconn_data_channel_send_message, user_data);
 
 	g_signal_connect(emconn->datachannel, "on-close", G_CALLBACK(emconn_data_channel_close_cb), user_data);
 	g_signal_connect(emconn->datachannel, "on-error", G_CALLBACK(emconn_data_channel_error_cb), user_data);
 	g_signal_connect(emconn->datachannel, "on-message-string", G_CALLBACK(emconn_data_channel_message_string_cb),
 	                 user_data);
+	emconn_update_status(emconn, EM_STATUS_CONNECTED);
+}
+
+static void
+emconn_schedule_retry_connect(struct em_connection *emconn)
+{
+	ALOGI("Scheduling retry of connection in %d seconds", SECONDS_BETWEEN_RETRY);
+	emconn->retry_timeout_src_id = g_timeout_add_seconds(SECONDS_BETWEEN_RETRY, emconn_retry_connect, emconn);
 }
 
 
@@ -113,6 +232,11 @@ emconn_send_sdp_answer(struct em_connection *emconn, const gchar *sdp)
 
 	json_node_unref(root);
 	g_object_unref(builder);
+
+	// emconn_update_status(emconn, EM_STATUS_CONNECTED_NO_DATA);
+	emconn_update_status_from_webrtcbin(emconn);
+
+
 	ALOGI("[exit]  %s", __FUNCTION__);
 }
 
@@ -150,6 +274,7 @@ emconn_webrtc_on_ice_candidate_cb(GstElement *webrtcbin, guint mlineindex, gchar
 
 	json_node_unref(root);
 	g_object_unref(builder);
+	emconn_update_status_from_webrtcbin(emconn);
 	ALOGI("[exit]  %s", __FUNCTION__);
 }
 
@@ -179,6 +304,7 @@ emh_on_answer_created(GstPromise *promise, gpointer user_data)
 	g_free(sdp);
 
 	gst_webrtc_session_description_free(answer);
+	emconn_update_status_from_webrtcbin(emconn);
 	ALOGI("[exit]  %s", __FUNCTION__);
 }
 
@@ -214,6 +340,7 @@ emh_process_sdp_offer(struct em_connection *emconn, const gchar *sdp)
 	} else {
 		gst_sdp_message_free(sdp_msg);
 	}
+	emconn_update_status_from_webrtcbin(emconn);
 
 out:
 	g_clear_pointer(&desc, gst_webrtc_session_description_free);
@@ -226,6 +353,7 @@ emh_process_candidate(struct em_connection *emconn, guint mlineindex, const gcha
 	ALOGI("process_candidate: %d %s\n", mlineindex, candidate);
 
 	g_signal_emit_by_name(emconn->webrtcbin, "add-ice-candidate", mlineindex, candidate);
+	emconn_update_status_from_webrtcbin(emconn);
 }
 
 static void
@@ -283,9 +411,13 @@ emconn_websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user
 	GError *error = NULL;
 
 	g_assert(!emconn->ws);
-	struct em_fs *vid = (struct em_fs *)user_data;
 
 	emconn->ws = soup_session_websocket_connect_finish(SOUP_SESSION(session), res, &error);
+	// TODO if we couldn't connect, we actually have an error here, handle this better
+	if (error) {
+		ALOGW("Websocket connection failed, may not be available. Will retry.");
+		emconn_update_status(emconn, EM_STATUS_WILL_RETRY);
+	}
 	g_assert_no_error(error);
 	GstBus *bus;
 
@@ -296,6 +428,8 @@ emconn_websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user
 	g_autoptr(GstElement) pipeline =
 	    gst_object_ref_sink(emconn->launch_pipeline.callback(emconn->launch_pipeline.data));
 
+	emconn->pipeline_launched = true;
+	emconn_update_status(emconn, EM_STATUS_NEGOTIATING);
 
 	ALOGI("RYLIE: getting webrtcbin");
 	emconn->webrtcbin = gst_bin_get_by_name(GST_BIN(pipeline), "webrtc");
@@ -305,15 +439,11 @@ emconn_websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user
 	g_signal_connect(emconn->webrtcbin, "on-data-channel", G_CALLBACK(emconn_webrtc_on_data_channel_cb), emconn);
 	ALOGI("[exit]  %s", __FUNCTION__);
 }
-
-void
-em_connection_connect(struct em_connection *emconn)
+static void
+emconn_connect_internal(struct em_connection *emconn, enum em_status status)
 {
-	ALOGI("[enter] %s", __FUNCTION__);
-	if (emconn->ws) {
-		g_object_unref(emconn->ws);
-		emconn->ws = NULL;
-	}
+	em_connection_disconnect(emconn);
+
 	ALOGE("RYLIE: calling soup_session_websocket_connect_async. websocket_uri = %s", emconn->websocket_uri);
 #if SOUP_MAJOR_VERSION == 2
 	soup_session_websocket_connect_async(emconn->soup_session,                                     // session
@@ -335,24 +465,55 @@ em_connection_connect(struct em_connection *emconn)
 	                                     emconn);                                                  // user_data
 
 #endif
+	emconn_update_status(emconn, status);
+}
+
+void
+em_connection_connect(struct em_connection *emconn)
+{
+	ALOGI("[enter] %s", __FUNCTION__);
+	emconn_connect_internal(emconn, EM_STATUS_CONNECTING);
 	ALOGI("[exit]  %s", __FUNCTION__);
 }
 
 void
+em_connection_disconnect(struct em_connection *emconn)
+{
+	emconn_disconnect_internal(emconn, EM_STATUS_IDLE_NOT_CONNECTED);
+}
+
+bool
+em_connection_send_bytes(struct em_connection *emconn, GBytes *bytes)
+{
+	if (emconn->status != EM_STATUS_CONNECTED) {
+		ALOGW("RYLIE: Cannot send bytes when status is %s", em_status_to_string(emconn->status));
+		return false;
+	}
+
+	gboolean success = gst_webrtc_data_channel_send_data_full(emconn->datachannel, bytes, NULL);
+
+	return success == TRUE;
+}
+
+void
 em_connection_init(struct em_connection *emconn,
-                   emconn_launch_pipeline_callback callback,
+                   emconn_launch_pipeline_callback launch_callback,
+                   emconn_drop_pipeline_callback drop_callback,
                    gpointer data,
                    gchar *websocket_uri)
 {
 	ALOGI("[enter] %s", __FUNCTION__);
-	emconn->soup_session = NULL;
-	emconn->ws = NULL;
-	emconn->webrtcbin = NULL;
+	memset(emconn, 0, sizeof(*emconn));
+	// emconn->soup_session = NULL;
+	// emconn->ws = NULL;
+	// emconn->webrtcbin = NULL;
 	emconn->websocket_uri = g_strdup(websocket_uri);
-	emconn->datachannel = NULL;
-	emconn->timeout_src_id = 0;
-	emconn->launch_pipeline.callback = callback;
+	// emconn->datachannel = NULL;
+	// emconn->timeout_src_id = 0;
+	emconn->launch_pipeline.callback = launch_callback;
 	emconn->launch_pipeline.data = data;
+	emconn->drop_pipeline.callback = drop_callback;
+	emconn->drop_pipeline.data = data;
 	emconn->soup_session = soup_session_new();
 	// emconn_connect(emconn);
 	ALOGI("[exit]  %s", __FUNCTION__);
@@ -363,17 +524,11 @@ em_connection_fini(struct em_connection *emconn)
 {
 	ALOGI("[enter] %s", __FUNCTION__);
 
+	em_connection_disconnect(emconn);
 
-	g_source_remove(emconn->timeout_src_id);
-	emconn->timeout_src_id = 0;
-
-	gst_clear_object(&emconn->datachannel);
-	gst_clear_object(&emconn->webrtcbin);
 	g_free(emconn->websocket_uri);
-	if (emconn->ws) {
-		g_object_unref(emconn->ws);
-		emconn->ws = NULL;
-	}
+
+
 	if (emconn->soup_session) {
 		g_object_unref(emconn->soup_session);
 		emconn->soup_session = NULL;
