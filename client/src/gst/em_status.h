@@ -17,10 +17,8 @@ enum em_status
 	EM_STATUS_IDLE_NOT_CONNECTED = 0,
 	/// Connecting to the signaling server websocket
 	EM_STATUS_CONNECTING,
-	/// Connecting to the signaling server websocket (auto retry after error)
-	EM_STATUS_CONNECTING_RETRY,
-	/// Failed but will retry connection to the signaling server websocket
-	EM_STATUS_WILL_RETRY,
+	/// Failed connecting to the signaling server websocket
+	EM_STATUS_WEBSOCKET_FAILED,
 	/// Signaling server connection established, negotiating for full WebRTC connection
 	// TODO do we need more steps here?
 	EM_STATUS_NEGOTIATING,
@@ -43,8 +41,7 @@ em_status_to_string(enum em_status status)
 	switch (status) {
 		EM_MAKE_CASE(EM_STATUS_IDLE_NOT_CONNECTED);
 		EM_MAKE_CASE(EM_STATUS_CONNECTING);
-		EM_MAKE_CASE(EM_STATUS_CONNECTING_RETRY);
-		EM_MAKE_CASE(EM_STATUS_WILL_RETRY);
+		EM_MAKE_CASE(EM_STATUS_WEBSOCKET_FAILED);
 		EM_MAKE_CASE(EM_STATUS_NEGOTIATING);
 		EM_MAKE_CASE(EM_STATUS_CONNECTED_NO_DATA);
 		EM_MAKE_CASE(EM_STATUS_CONNECTED);
@@ -54,9 +51,3 @@ em_status_to_string(enum em_status status)
 	}
 }
 #undef EM_MAKE_CASE
-
-inline bool
-em_status_is_connecting(enum em_status status)
-{
-	return status == EM_STATUS_CONNECTING || status == EM_STATUS_CONNECTING_RETRY;
-}
