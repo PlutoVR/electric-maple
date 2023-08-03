@@ -773,6 +773,16 @@ launch_pipeline(gpointer user_data)
 	}
 }
 
+static void
+drop_pipeline(gpointer user_data)
+{
+	struct em_fs *vid = (struct em_fs *)user_data;
+	if (vid->pipeline) {
+		gst_element_set_state(vid->pipeline, GST_STATE_NULL);
+	}
+	gst_clear_object(&vid->pipeline);
+	gst_clear_object(&vid->appsink);
+}
 /*
  *
  * Frame server methods.
@@ -914,7 +924,7 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,
 		websocket_uri = g_strdup(WEBSOCKET_URI_DEFAULT);
 	}
 
-	em_connection_init(&vid->connection, launch_pipeline, vid, websocket_uri);
+	em_connection_init(&vid->connection, launch_pipeline, drop_pipeline, vid, websocket_uri);
 
 	em_connection_connect(&vid->connection);
 	ALOGD("started async connect call, about to spawn em_fs_mainloop");
@@ -1081,4 +1091,17 @@ em_fs_try_pull_sample(struct xrt_fs *fs)
 	// move sample ownership into the return value
 	ret->sample = sample;
 	return &(ret->base);
+}
+
+
+bool
+em_fs_send_bytes(struct xrt_fs *fs, const uint8_t *data, size_t len)
+{
+	ALOGI("RYLIE: Sending bytes!");
+	struct em_fs *vid = em_fs(fs);
+	GBytes *bytes = g_bytes_new(data, len);
+
+	bool result = em_connection_send_bytes(&vid->connection, bytes);
+	g_bytes_unref(bytes);
+	return result;
 }
