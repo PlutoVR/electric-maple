@@ -1029,7 +1029,7 @@ em_fs_try_pull_sample(struct xrt_fs *fs)
 	// WILL BLOCK until there's a sample.
 
 	// Get Newest sample from GST appsink. Waiting 1ms here before giving up (might want to adjust that time)
-	ALOGE("DEBUG: Trying to get new gstgl sample, waiting max 1ms\n");
+	// ALOGE("DEBUG: Trying to get new gstgl sample, waiting max 1ms\n");
 
 	struct em_fs *vid = em_fs(fs);
 	GstSample *sample =
@@ -1097,6 +1097,10 @@ em_fs_try_pull_sample(struct xrt_fs *fs)
 bool
 em_fs_send_bytes(struct xrt_fs *fs, const uint8_t *data, size_t len)
 {
+	if (fs == NULL) {
+		ALOGI("RYLIE: %s returning without action because fs == NULL", __FUNCTION__);
+		return false;
+	}
 	ALOGI("RYLIE: Sending bytes!");
 	struct em_fs *vid = em_fs(fs);
 	GBytes *bytes = g_bytes_new(data, len);
