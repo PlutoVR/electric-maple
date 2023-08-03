@@ -21,10 +21,6 @@
 #include "util/u_trace_marker.h"
 #include "util/u_misc.h"
 #include "util/u_debug.h"
-#include "util/u_format.h"
-#include "util/u_frame.h"
-
-#include "gst_common.h"
 
 #include <GLES3/gl3.h>
 #include <stdlib.h>
@@ -44,7 +40,6 @@
 #include <gst/video/video-frame.h>
 #include <gst/gl/gstglsyncmeta.h>
 
-#include "gstjniutils.h"
 
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
@@ -99,7 +94,7 @@ struct em_fs
 
 	struct os_thread_helper play_thread;
 
-	struct em_connection connection;
+	EmConnection *connection;
 
 	GMainLoop *loop;
 	GstElement *pipeline;
@@ -370,7 +365,7 @@ stop_pipeline(struct em_fs *vid)
 	vid->is_running = false;
 	gst_element_set_state(vid->pipeline, GST_STATE_NULL);
 	os_thread_helper_destroy(&vid->play_thread);
-	em_connection_fini(&vid->connection);
+	g_clear_object(&vid->connection);
 	gst_clear_object(&vid->pipeline);
 	gst_clear_object(&vid->display);
 	gst_clear_object(&vid->android_main_context);
@@ -923,10 +918,9 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,
 	if (!websocket_uri) {
 		websocket_uri = g_strdup(WEBSOCKET_URI_DEFAULT);
 	}
+	vid->connection = em_connection_new(launch_pipeline, drop_pipeline, vid, websocket_uri);
 
-	em_connection_init(&vid->connection, launch_pipeline, drop_pipeline, vid, websocket_uri);
-
-	em_connection_connect(&vid->connection);
+	em_connection_connect(vid->connection);
 	ALOGD("started async connect call, about to spawn em_fs_mainloop");
 
 
@@ -1105,7 +1099,7 @@ em_fs_send_bytes(struct xrt_fs *fs, const uint8_t *data, size_t len)
 	struct em_fs *vid = em_fs(fs);
 	GBytes *bytes = g_bytes_new(data, len);
 
-	bool result = em_connection_send_bytes(&vid->connection, bytes);
+	bool result = em_connection_send_bytes(vid->connection, bytes);
 	g_bytes_unref(bytes);
 	return result;
 }

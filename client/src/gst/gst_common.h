@@ -15,8 +15,6 @@
 #define XR_USE_PLATFORM_ANDROID
 #define XR_USE_GRAPHICS_API_OPENGL_ES
 
-#include "em_status.h"
-
 #include "xrt/xrt_frame.h"
 #include "os/os_threading.h"
 
