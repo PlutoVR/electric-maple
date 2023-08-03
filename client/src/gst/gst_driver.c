@@ -570,72 +570,21 @@ gst_bus_cb(GstBus *bus, GstMessage *message, gpointer data)
 }
 
 
-// static void
-// data_channel_error_cb(GstWebRTCDataChannel *datachannel, void *data)
-// {
-// 	ALOGE("error\n");
-// 	abort();
-// }
-
-// static void
-// data_channel_close_cb(GstWebRTCDataChannel *datachannel, gpointer timeout_src_id)
-// {
-// 	ALOGE("Data channel closed\n");
-
-// 	g_source_remove(GPOINTER_TO_UINT(timeout_src_id));
-// 	g_clear_object(&datachannel);
-// }
-
-// static void
-// data_channel_message_string_cb(GstWebRTCDataChannel *datachannel, gchar *str, void *data)
-// {
-// 	ALOGE("Received data channel message: %s\n", str);
-// }
-
-// static gboolean
-// datachannel_send_message(gpointer unused)
-// {
-// 	g_signal_emit_by_name(datachannel, "send-string", "Hi! from Pluto client");
-
-// 	return G_SOURCE_CONTINUE;
-// }
-
-// static void
-// webrtc_on_data_channel_cb(GstElement *webrtcbin, GstWebRTCDataChannel *data_channel, void *data)
-// {
-// 	guint timeout_src_id;
-
-// 	ALOGE("Successfully created datachannel\n");
-
-// 	g_assert_null(datachannel);
-
-// 	datachannel = GST_WEBRTC_DATA_CHANNEL(data_channel);
-
-// 	timeout_src_id = g_timeout_add_seconds(3, datachannel_send_message, NULL);
-
-// 	g_signal_connect(datachannel, "on-close", G_CALLBACK(data_channel_close_cb), GUINT_TO_POINTER(timeout_src_id));
-// 	g_signal_connect(datachannel, "on-error", G_CALLBACK(data_channel_error_cb), GUINT_TO_POINTER(timeout_src_id));
-// 	g_signal_connect(datachannel, "on-message-string", G_CALLBACK(data_channel_message_string_cb), NULL);
-// }
-
-#define RYLIE "RYLIE: "
-
 static void
 em_init_gst_and_capture_context(struct em_fs *vid, EGLDisplay display, EGLContext context)
 {
 
-	ALOGI(RYLIE "wrapping egl context");
+	ALOGI("RYLIE: wrapping egl context");
 
 	EGLContext old_context = eglGetCurrentContext();
 	EGLSurface old_read_surface = eglGetCurrentSurface(EGL_READ);
 	EGLSurface old_draw_surface = eglGetCurrentSurface(EGL_DRAW);
 
-	ALOGV(RYLIE "eglMakeCurrent make-current");
+	ALOGV("RYLIE: eglMakeCurrent make-current");
 
-	// E_LOG_E("DEBUG: display=%p, surface=%p, ");
 	//  We'll need and active egl context below
 	if (eglMakeCurrent(display, EGL_NO_SURFACE /* vid->state->surface */, EGL_NO_SURFACE, context) == EGL_FALSE) {
-		ALOGV(RYLIE "em_init_gst_and_capture_context: Failed make egl context current");
+		ALOGV("RYLIE: em_init_gst_and_capture_context: Failed make egl context current");
 	}
 
 	const GstGLPlatform egl_platform = GST_GL_PLATFORM_EGL;
@@ -645,7 +594,7 @@ em_init_gst_and_capture_context(struct em_fs *vid, EGLDisplay display, EGLContex
 	vid->android_main_context = g_object_ref_sink(
 	    gst_gl_context_new_wrapped(vid->gst_gl_display, android_main_egl_context_handle, egl_platform, gl_api));
 
-	ALOGV(RYLIE "eglMakeCurrent un-make-current");
+	ALOGV("RYLIE: eglMakeCurrent un-make-current");
 	eglMakeCurrent(display, old_draw_surface, old_read_surface, old_context);
 }
 
@@ -669,117 +618,100 @@ new_sample_cb(GstElement *appsink, gpointer data)
 // (offers and candidates) will suggest a webrtc connection surely living on some
 // 192.168.1.X IP adresses into your local WAN so yeah, be advised.
 
-static GstElement *
-launch_pipeline(gpointer user_data)
+static void
+on_need_pipeline_cb(EmConnection *emconn, struct em_fs *vid)
 {
 
 	GError *error = NULL;
 
-	struct em_fs *vid = (struct em_fs *)user_data;
-	{
 
-		// decodebin3 seems to .. hang?
-		// omxh264dec doesn't seem to exist
+	// decodebin3 seems to .. hang?
+	// omxh264dec doesn't seem to exist
 
-		uint32_t width = 480;
-		uint32_t height = 270;
+	uint32_t width = 480;
+	uint32_t height = 270;
 
-		// We'll need and active egl context below before setting up gstgl (as explained previously)
-		ALOGE("FRED: websocket_connected_cb: Trying to get the EGL lock");
-		os_mutex_lock(&vid->state->egl_lock);
-		ALOGE("FRED : make current display=%p, surface=%p, context=%p", vid->state->display,
-		      vid->state->surface, vid->state->context);
-		if (eglMakeCurrent(vid->state->display, vid->state->surface, vid->state->surface,
-		                   vid->state->context) == EGL_FALSE) {
-			ALOGE("FRED: websocket_connected_cb: Failed make egl context current");
-		}
+	// We'll need an active egl context below before setting up gstgl (as explained previously)
+	ALOGE("FRED: websocket_connected_cb: Trying to get the EGL lock");
+	os_mutex_lock(&vid->state->egl_lock);
+	ALOGE("FRED : make current display=%p, surface=%p, context=%p", vid->state->display, vid->state->surface,
+	      vid->state->context);
+	if (eglMakeCurrent(vid->state->display, vid->state->surface, vid->state->surface, vid->state->context) ==
+	    EGL_FALSE) {
+		ALOGE("FRED: websocket_connected_cb: Failed make egl context current");
+	}
 
-		gchar *pipeline_string = g_strdup_printf(
-		    "webrtcbin name=webrtc bundle-policy=max-bundle ! "
-		    "rtph264depay ! "
-		    "h264parse ! "
-		    "video/x-h264,stream-format=(string)byte-stream, alignment=(string)au,parsed=(boolean)true !"
-		    "amcviddec-omxqcomvideodecoderavc ! "
-		    "glsinkbin name=glsink");
+	gchar *pipeline_string = g_strdup_printf(
+	    "webrtcbin name=webrtc bundle-policy=max-bundle ! "
+	    "rtph264depay ! "
+	    "h264parse ! "
+	    "video/x-h264,stream-format=(string)byte-stream, alignment=(string)au,parsed=(boolean)true !"
+	    "amcviddec-omxqcomvideodecoderavc ! "
+	    "glsinkbin name=glsink");
 
-		// THIS IS THE TEST PIPELINE FOR TESTING WITH APPSINK AT VARIOUS PHASES OF THE PIPELINE AND
-		// SEE IF YOU GET SAMPLES WITH THE BELOW g_signal_connect(..., new_sample_cb) signal.
-		// for example, for testing that the h264parser gives you stuff :
-		//                "webrtcbin name=webrtc bundle-policy=max-bundle ! rtph264depay ! h264parse ! appsink
-		//                name=appsink");
+	// THIS IS THE TEST PIPELINE FOR TESTING WITH APPSINK AT VARIOUS PHASES OF THE PIPELINE AND
+	// SEE IF YOU GET SAMPLES WITH THE BELOW g_signal_connect(..., new_sample_cb) signal.
+	// for example, for testing that the h264parser gives you stuff :
+	//                "webrtcbin name=webrtc bundle-policy=max-bundle ! rtph264depay ! h264parse ! appsink
+	//                name=appsink");
 
-		ALOGI("launching pipeline\n");
-		if (NULL == vid) {
-			ALOGE("FRED: OH ! NULL VID - this shouldn't happen !");
-		}
-		vid->pipeline = gst_object_ref_sink(gst_parse_launch(pipeline_string, &error));
-		if (vid->pipeline == NULL) {
-			ALOGE("FRED: Failed creating pipeline : Bad source");
-			ALOGE("%s", error->message);
-			abort();
-		}
+	ALOGI("launching pipeline\n");
+	if (NULL == vid) {
+		ALOGE("FRED: OH ! NULL VID - this shouldn't happen !");
+	}
+	vid->pipeline = gst_object_ref_sink(gst_parse_launch(pipeline_string, &error));
+	if (vid->pipeline == NULL) {
+		ALOGE("FRED: Failed creating pipeline : Bad source: %s", error->message);
+		abort();
+	}
 
-		// And we unCurrent the egl context.
-		eglMakeCurrent(vid->state->display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
-		ALOGE("FRED: websocket_connected: releasing the EGL lock");
-		os_mutex_unlock(&vid->state->egl_lock);
+	// And we unCurrent the egl context.
+	eglMakeCurrent(vid->state->display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+	ALOGE("FRED: websocket_connected: releasing the EGL lock");
+	os_mutex_unlock(&vid->state->egl_lock);
 
-		// We convert the string SINK_CAPS above into a GstCaps that elements below can understand.
-		// the "video/x-raw(" GST_CAPS_FEATURE_MEMORY_GL_MEMORY ")," part of the caps is read :
-		// video/x-raw(memory:GLMemory) and is really important for getting zero-copy gl textures.
-		// It tells the pipeline (especially the decoder) that an internal android:Surface should
-		// get created internally (using the provided gstgl contexts above) so that the appsink
-		// can basically pull the samples out using an GLConsumer (this is just for context, as
-		// all of those constructs will be hidden from you, but are turned on by that CAPS).
-		g_autoptr(GstCaps) caps = gst_caps_from_string(SINK_CAPS);
+	// We convert the string SINK_CAPS above into a GstCaps that elements below can understand.
+	// the "video/x-raw(" GST_CAPS_FEATURE_MEMORY_GL_MEMORY ")," part of the caps is read :
+	// video/x-raw(memory:GLMemory) and is really important for getting zero-copy gl textures.
+	// It tells the pipeline (especially the decoder) that an internal android:Surface should
+	// get created internally (using the provided gstgl contexts above) so that the appsink
+	// can basically pull the samples out using an GLConsumer (this is just for context, as
+	// all of those constructs will be hidden from you, but are turned on by that CAPS).
+	g_autoptr(GstCaps) caps = gst_caps_from_string(SINK_CAPS);
 
-		// THIS SHOULD BE UNCOMMENTED ONLY WHEN TURNING THE TEST PIPELINE ON ABOVE
+	// THIS SHOULD BE UNCOMMENTED ONLY WHEN TURNING THE TEST PIPELINE ON ABOVE
 #if 0
 		vid->appsink = gst_bin_get_by_name(GST_BIN(vid->pipeline), "appsink");
 		gst_app_sink_set_emit_signals(GST_APP_SINK(vid->appsink), TRUE);
 		g_signal_connect(vid->appsink, "new-sample", G_CALLBACK(new_sample_cb), NULL);
 #else
 
-		// THIS SHOULD BE COMMENTED WHEN TURNING THE TEST PIPELINE
-		// FRED: We create the appsink 'manually' here because glsink's ALREADY a sink and so if we stick
-		//       glsinkbin ! appsink in our pipeline_string for automatic linking, gst_parse will NOT like this,
-		//       as glsinkbin (a sink) cannot link to anything upstream (appsink being 'another' sink). So we
-		//       manually link them below using glsinkbin's 'sink' pad -> appsink.
-		vid->appsink = gst_element_factory_make("appsink", NULL);
-		g_object_set(vid->appsink, "caps", caps, NULL);
-		g_autoptr(GstElement) glsinkbin = gst_bin_get_by_name(GST_BIN(vid->pipeline), "glsink");
-		g_object_set(glsinkbin, "sink", vid->appsink, NULL);
+	// THIS SHOULD BE COMMENTED WHEN TURNING THE TEST PIPELINE
+	// FRED: We create the appsink 'manually' here because glsink's ALREADY a sink and so if we stick
+	//       glsinkbin ! appsink in our pipeline_string for automatic linking, gst_parse will NOT like this,
+	//       as glsinkbin (a sink) cannot link to anything upstream (appsink being 'another' sink). So we
+	//       manually link them below using glsinkbin's 'sink' pad -> appsink.
+	vid->appsink = gst_element_factory_make("appsink", NULL);
+	g_object_set(vid->appsink, "caps", caps, NULL);
+	g_autoptr(GstElement) glsinkbin = gst_bin_get_by_name(GST_BIN(vid->pipeline), "glsink");
+	g_object_set(glsinkbin, "sink", vid->appsink, NULL);
 #endif
 
-		g_autoptr(GstBus) bus = gst_element_get_bus(vid->pipeline);
-		gst_bus_set_sync_handler(bus, bus_sync_handler_cb, vid, NULL);
-		gst_bus_add_watch(bus, gst_bus_cb, vid->pipeline);
-		g_object_unref(bus);
+	g_autoptr(GstBus) bus = gst_element_get_bus(vid->pipeline);
+	gst_bus_set_sync_handler(bus, bus_sync_handler_cb, vid, NULL);
+	gst_bus_add_watch(bus, gst_bus_cb, vid->pipeline);
+	g_object_unref(bus);
 
-		// FOR RYAN : We are STARTING the pipeline. From this point forth, if built with
-		// GST_DEBUG=*:6, you should see LOADS of GST output, including the webrtc negotiation.
-		gst_element_set_state(vid->pipeline, GST_STATE_PLAYING);
+	// FOR RYAN : We are STARTING the pipeline. From this point forth, if built with
+	// GST_DEBUG=*:6, you should see LOADS of GST output, including the webrtc negotiation.
 
-		// FIXME: Implement this when implementing data channel
-		// g_signal_connect(webrtcbin, "on-data-channel", G_CALLBACK(webrtc_on_data_channel_cb), NULL);
-
-		vid->is_running = TRUE;
-		return vid->pipeline;
-	}
-}
-
-static void
-on_need_pipeline_cb(EmConnection *emconn, struct em_fs *vid)
-{
-	GstPipeline *pipeline = GST_PIPELINE(launch_pipeline(vid));
-	g_signal_emit_by_name(emconn, "set-pipeline", pipeline, NULL);
+	vid->is_running = TRUE;
+	g_signal_emit_by_name(emconn, "set-pipeline", GST_PIPELINE(vid->pipeline), NULL);
 }
 
 static void
 on_drop_pipeline_cb(EmConnection *emconn, struct em_fs *vid)
 {
-	// GstPipeline *pipeline = GST_PIPELINE(launch_pipeline(vid));
-	// g_signal_emit_by_name(emconn, "set-pipeline", pipeline, NULL);
 	if (vid->pipeline) {
 		gst_element_set_state(vid->pipeline, GST_STATE_NULL);
 	}
@@ -787,16 +719,6 @@ on_drop_pipeline_cb(EmConnection *emconn, struct em_fs *vid)
 	gst_clear_object(&vid->appsink);
 }
 
-// static void
-// drop_pipeline(gpointer user_data)
-// {
-// 	struct em_fs *vid = (struct em_fs *)user_data;
-// 	if (vid->pipeline) {
-// 		gst_element_set_state(vid->pipeline, GST_STATE_NULL);
-// 	}
-// 	gst_clear_object(&vid->pipeline);
-// 	gst_clear_object(&vid->appsink);
-// }
 /*
  *
  * Frame server methods.
@@ -910,8 +832,6 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,
                       EGLContext context)
 {
 	struct em_fs *vid = U_TYPED_CALLOC(struct em_fs);
-	// the_em_fs = vid;
-	// state->vid = vid;
 	vid->format = format;
 	vid->stereo_format = stereo_format;
 	vid->state = state;
@@ -925,7 +845,6 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,
 	int ret = os_thread_helper_init(&vid->play_thread);
 	if (ret < 0) {
 		ALOGE("ERROR: Failed to init thread");
-		// g_free(pipeline_string);
 		free(vid);
 		return NULL;
 	}
@@ -1102,7 +1021,6 @@ em_fs_try_pull_sample(struct xrt_fs *fs)
 	}
 
 	gst_video_frame_unmap(&frame);
-	// gst_sample_unref(sample);
 	// move sample ownership into the return value
 	ret->sample = sample;
 	return &(ret->base);
