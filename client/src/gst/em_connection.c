@@ -31,8 +31,6 @@
 
 #include <json-glib/json-glib.h>
 
-#define SECONDS_BETWEEN_RETRY (3)
-
 /*!
  * Data required for the handshake to complete and to maintain the connection.
  */
@@ -49,12 +47,7 @@ struct _EmConnection
 	GstElement *webrtcbin;
 	GstWebRTCDataChannel *datachannel;
 
-	guint timeout_src_id;
-	guint retry_timeout_src_id;
-
 	enum em_status status;
-	/// has the pipeline been launched
-	bool pipeline_launched;
 };
 
 
@@ -290,17 +283,11 @@ static void
 emconn_disconnect_internal(EmConnection *emconn, enum em_status status)
 {
 	g_cancellable_cancel(emconn->ws_cancel);
-	if (emconn->timeout_src_id != 0) {
-		g_source_remove(emconn->timeout_src_id);
-		emconn->timeout_src_id = 0;
-	}
-	if (emconn->retry_timeout_src_id != 0) {
-		g_source_remove(emconn->retry_timeout_src_id);
-		emconn->retry_timeout_src_id = 0;
-	}
-	if (emconn->pipeline_launched) {
+
+	// Stop the pipeline, if it exists
+	if (emconn->pipeline) {
+		gst_element_set_state(GST_ELEMENT(emconn->pipeline), GST_STATE_NULL);
 		g_signal_emit(emconn, signals[SIGNAL_ON_DROP_PIPELINE], 0);
-		emconn->pipeline_launched = false;
 	}
 	g_clear_object(&emconn->ws);
 
@@ -334,14 +321,6 @@ emconn_data_channel_message_string_cb(GstWebRTCDataChannel *datachannel, gchar *
 
 static void
 emconn_connect_internal(EmConnection *emconn, enum em_status status);
-
-static gboolean
-emconn_retry_connect(EmConnection *emconn)
-{
-	emconn_connect_internal(emconn, EM_STATUS_CONNECTING_RETRY);
-	emconn->retry_timeout_src_id = 0;
-	return G_SOURCE_REMOVE;
-}
 
 static void
 emconn_webrtc_deep_notify_callback(GstObject *self, GstObject *prop_object, GParamSpec *prop, EmConnection *emconn)
@@ -378,15 +357,6 @@ emconn_webrtc_on_data_channel_cb(GstElement *webrtcbin, GstWebRTCDataChannel *da
 	emconn_update_status(emconn, EM_STATUS_CONNECTED);
 	g_signal_emit(emconn, signals[SIGNAL_CONNECTED], 0);
 }
-
-static void
-emconn_schedule_retry_connect(EmConnection *emconn)
-{
-	ALOGW("%s: Scheduling retry of connection in %d seconds", __FUNCTION__, SECONDS_BETWEEN_RETRY);
-	emconn->retry_timeout_src_id =
-	    g_timeout_add_seconds(SECONDS_BETWEEN_RETRY, G_SOURCE_FUNC(emconn_retry_connect), emconn);
-}
-
 
 void
 emconn_send_sdp_answer(EmConnection *emconn, const gchar *sdp)
@@ -571,11 +541,11 @@ emconn_websocket_connected_cb(GObject *session, GAsyncResult *res, EmConnection 
 	g_assert(!emconn->ws);
 
 	emconn->ws = soup_session_websocket_connect_finish(SOUP_SESSION(session), res, &error);
-	// TODO if we couldn't connect, we actually have an error here, handle this better
+
 	if (error) {
-		ALOGW("Websocket connection failed, may not be available. Will retry.");
+		ALOGW("Websocket connection failed, may not be available.");
 		g_signal_emit(emconn, signals[SIGNAL_WEBSOCKET_FAILED], 0);
-		emconn_update_status(emconn, EM_STATUS_WILL_RETRY);
+		emconn_update_status(emconn, EM_STATUS_WEBSOCKET_FAILED);
 		return;
 	}
 	g_assert_no_error(error);
@@ -585,22 +555,32 @@ emconn_websocket_connected_cb(GObject *session, GAsyncResult *res, EmConnection 
 	g_signal_connect(emconn->ws, "message", G_CALLBACK(emconn_on_ws_message_cb), emconn);
 	g_signal_emit(emconn, signals[SIGNAL_WEBSOCKET_CONNECTED], 0);
 
-	ALOGI("RYLIE: launching pipeline");
+	ALOGI("RYLIE: creating pipeline");
 	g_assert_null(emconn->pipeline);
 	g_signal_emit(emconn, signals[SIGNAL_ON_NEED_PIPELINE], 0);
 	if (emconn->pipeline == NULL) {
 		ALOGE("on-need-pipeline signal did not return a pipeline!");
 		em_connection_disconnect(emconn);
+		return;
 	}
+	// OK, if we get here, we have a websocket connection, and a pipeline fully configured
+	// so we can start the pipeline playing
+
+	ALOGI("RYLIE: Setting pipeline state to PLAYING");
+	gst_element_set_state(GST_ELEMENT(emconn->pipeline), GST_STATE_PLAYING);
 }
 
 
 static void
 em_connection_set_pipeline(EmConnection *emconn, GstPipeline *pipeline)
 {
+	g_assert_nonnull(pipeline);
+	if (emconn->pipeline) {
+		// stop old pipeline if applicable
+		gst_element_set_state(GST_ELEMENT(emconn->pipeline), GST_STATE_NULL);
+	}
 	gst_clear_object(&emconn->pipeline);
 	emconn->pipeline = gst_object_ref_sink(pipeline);
-	emconn->pipeline_launched = true;
 
 	emconn_update_status(emconn, EM_STATUS_NEGOTIATING);
 
