@@ -6,7 +6,6 @@
  * @author Moshi Turner <moses@collabora.com>
  */
 
-
 #include "gst/app_log.h"
 #include "gst/gst_common.h"
 #include "render.hpp"
@@ -287,10 +286,8 @@ die_errno()
 
 
 static void
-hmd_pose(struct em_state &st)
+hmd_pose(struct em_state &st, struct xrt_fs *client)
 {
-	(void)st;
-#if 0
 	XrResult result = XR_SUCCESS;
 
 
@@ -301,6 +298,7 @@ hmd_pose(struct em_state &st)
 	result = xrLocateSpace(st.viewSpace, st.worldSpace, os_monotonic_get_ns(), &hmdLocalLocation);
 	if (result != XR_SUCCESS) {
 		ALOGE("Bad!");
+		return;
 	}
 
 	XrPosef hmdLocalPose = hmdLocalLocation.pose;
@@ -326,15 +324,18 @@ hmd_pose(struct em_state &st)
 	pb_ostream_t os = pb_ostream_from_buffer(buffer, sizeof(buffer));
 
 	pb_encode(&os, pluto_TrackingMessage_fields, &message);
-
+	ALOGW("RYLIE: Sending HMD pose message");
 	// TODO use webrtc data channel instead of this extra socket
-	int iResult = send(st.socket_fd, buffer, pluto_TrackingMessage_size, 0);
+	bool bResult = em_fs_send_bytes(client, buffer, os.bytes_written);
+	// int iResult = send(st.socket_fd, buffer, pluto_TrackingMessage_size, 0);
 
-	if (iResult <= 0) {
-		ALOGE("BAD! %d %s", iResult, strerror(errno));
-		die_errno();
+	// if (iResult <= 0) {
+	// 	ALOGE("BAD! %d %s", iResult, strerror(errno));
+	// 	die_errno();
+	// }
+	if (!bResult) {
+		ALOGE("RYLIE: Could not queue HMD pose message!");
 	}
-#endif
 }
 
 void
@@ -512,10 +513,11 @@ mainloop_one(struct xrt_fs *client, struct em_state &state)
 	// FOR RYAN: we're not asking xrt_fs for a frame, we're checking ourselves what appsink
 	// may have for us. That's why the state.xf logic's been disabled (not needed anymore)
 	// if (state.xf) {
-	ALOGE("FRED: mainloop_one: Trying to get the EGL lock");
+	// ALOGE("FRED: mainloop_one: Trying to get the EGL lock");
 	os_mutex_lock(&state.egl_lock);
 	if (eglMakeCurrent(state.display, state.surface, state.surface, state.context) == EGL_FALSE) {
 		ALOGE("FRED: mainloop_one: Failed make egl context current");
+		return;
 	}
 
 	struct em_sample *sample = em_fs_try_pull_sample(client);
@@ -527,6 +529,7 @@ mainloop_one(struct xrt_fs *client, struct em_state &state)
 
 		if (XR_FAILED(result)) {
 			ALOGE("Failed to acquire swapchain image (%d)", result);
+			std::abort();
 		}
 
 		XrSwapchainImageWaitInfo waitInfo = {.type = XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO,
@@ -536,10 +539,11 @@ mainloop_one(struct xrt_fs *client, struct em_state &state)
 
 		if (XR_FAILED(result)) {
 			ALOGE("Failed to wait for swapchain image (%d)", result);
+			std::abort();
 		}
 		state.frame_texture_id = sample->frame_texture_id;
 
-		ALOGI("RYLIE: Frame texture id is %d", state.frame_texture_id);
+		// ALOGI("RYLIE: Frame texture id is %d", state.frame_texture_id);
 		glBindFramebuffer(GL_FRAMEBUFFER, state.framebuffers[imageIndex]);
 
 		glViewport(0, 0, state.width * 2, state.height);
@@ -567,19 +571,19 @@ mainloop_one(struct xrt_fs *client, struct em_state &state)
 		}
 		state.prev_sample = sample;
 	} else {
-		ALOGE("FRED: NO gst appsink sample...");
+		// ALOGE("FRED: NO gst appsink sample...");
 	}
 
-	// Submit frame
-	XrFrameEndInfo endInfo = {};
-	endInfo.type = XR_TYPE_FRAME_END_INFO;
-	endInfo.displayTime = frameState.predictedDisplayTime;
-	endInfo.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
-	endInfo.layerCount = frameState.shouldRender ? 1 : 0;
-	endInfo.layers = (const XrCompositionLayerBaseHeader *[1]){(XrCompositionLayerBaseHeader *)&layer};
-
-	hmd_pose(state);
 	if (sample) {
+		// Submit frame (if we actually got one)
+		XrFrameEndInfo endInfo = {};
+		endInfo.type = XR_TYPE_FRAME_END_INFO;
+		endInfo.displayTime = frameState.predictedDisplayTime;
+		endInfo.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
+		endInfo.layerCount = frameState.shouldRender ? 1 : 0;
+		endInfo.layers = (const XrCompositionLayerBaseHeader *[1]){(XrCompositionLayerBaseHeader *)&layer};
+
+		hmd_pose(state, client);
 		xrEndFrame(state.session, &endInfo);
 	}
 
@@ -591,7 +595,7 @@ mainloop_one(struct xrt_fs *client, struct em_state &state)
 	if (bret != EGL_TRUE) {
 		ALOGE("eglMakeCurrent(Un-make): false, %u", eglGetError());
 	}
-	ALOGE("FRED: mainloop_one: releasing the EGL lock");
+	// ALOGE("FRED: mainloop_one: releasing the EGL lock");
 	os_mutex_unlock(&state.egl_lock);
 }
 

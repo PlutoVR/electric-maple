@@ -34,6 +34,27 @@ enum em_status
 	EM_STATUS_DISCONNECTED_REMOTE_CLOSE,
 };
 
+#define EM_MAKE_CASE(E)                                                                                                   \
+	case E: return #E
+
+static inline const char *
+em_status_to_string(enum em_status status)
+{
+	switch (status) {
+		EM_MAKE_CASE(EM_STATUS_IDLE_NOT_CONNECTED);
+		EM_MAKE_CASE(EM_STATUS_CONNECTING);
+		EM_MAKE_CASE(EM_STATUS_CONNECTING_RETRY);
+		EM_MAKE_CASE(EM_STATUS_WILL_RETRY);
+		EM_MAKE_CASE(EM_STATUS_NEGOTIATING);
+		EM_MAKE_CASE(EM_STATUS_CONNECTED_NO_DATA);
+		EM_MAKE_CASE(EM_STATUS_CONNECTED);
+		EM_MAKE_CASE(EM_STATUS_DISCONNECTED_ERROR);
+		EM_MAKE_CASE(EM_STATUS_DISCONNECTED_REMOTE_CLOSE);
+	default: return "!Unknown!";
+	}
+}
+#undef EM_MAKE_CASE
+
 inline bool
 em_status_is_connecting(enum em_status status)
 {
