@@ -14,7 +14,6 @@
 #include "em_connection.h"
 
 #include "em_status.h"
-#include "gst_internal.h"
 #include "app_log.h"
 
 
@@ -38,19 +37,6 @@
 #define MAKE_CASE(E)                                                                                                   \
 	case E: return #E
 
-static const char *
-em_status_to_string(enum em_status status)
-{
-	switch (status) {
-		MAKE_CASE(EM_STATUS_IDLE_NOT_CONNECTED);
-		MAKE_CASE(EM_STATUS_CONNECTING);
-		MAKE_CASE(EM_STATUS_WILL_RETRY);
-		MAKE_CASE(EM_STATUS_NEGOTIATING);
-		MAKE_CASE(EM_STATUS_CONNECTED_NO_DATA);
-		MAKE_CASE(EM_STATUS_CONNECTED);
-	default: return "!Unknown!";
-	}
-}
 static const char *
 peer_connection_state_to_string(GstWebRTCPeerConnectionState state)
 {
@@ -79,15 +65,8 @@ emconn_update_status(struct em_connection *emconn, enum em_status status)
 }
 
 static void
-emconn_update_status_from_webrtcbin(struct em_connection *emconn)
+emconn_update_status_from_peer_connection_state(struct em_connection *emconn, GstWebRTCPeerConnectionState state)
 {
-	if (!emconn->webrtcbin) {
-		return;
-	}
-	GstWebRTCPeerConnectionState state;
-	g_object_get(emconn->webrtcbin, "connection-state", &state, NULL);
-	ALOGI("RYLIE: webrtc peer connection state is %s", peer_connection_state_to_string(state));
-
 	switch (state) {
 	case GST_WEBRTC_PEER_CONNECTION_STATE_NEW: break;
 	case GST_WEBRTC_PEER_CONNECTION_STATE_CONNECTING: emconn_update_status(emconn, EM_STATUS_NEGOTIATING); break;
@@ -101,6 +80,18 @@ emconn_update_status_from_webrtcbin(struct em_connection *emconn)
 	case GST_WEBRTC_PEER_CONNECTION_STATE_FAILED: emconn_update_status(emconn, EM_STATUS_DISCONNECTED_ERROR); break;
 	}
 }
+
+// static void
+// emconn_update_status_from_webrtcbin(struct em_connection *emconn)
+// {
+// 	if (!emconn->webrtcbin) {
+// 		return;
+// 	}
+// 	GstWebRTCPeerConnectionState state;
+// 	g_object_get(emconn->webrtcbin, "connection-state", &state, NULL);
+// 	ALOGI("RYLIE: webrtc peer connection state is %s", peer_connection_state_to_string(state));
+// 	emconn_update_status_from_peer_connection_state(emconn, state);
+// }
 
 static void
 emconn_disconnect_internal(struct em_connection *emconn, enum em_status status)
@@ -132,8 +123,7 @@ static void
 emconn_data_channel_error_cb(GstWebRTCDataChannel *datachannel, gpointer user_data)
 {
 	struct em_connection *emconn = user_data;
-	ALOGE("error\n");
-	emconn_update_status_from_webrtcbin(emconn);
+	ALOGE("RYLIE: %s: error", __FUNCTION__);
 	emconn_disconnect_internal(emconn, EM_STATUS_DISCONNECTED_ERROR);
 	// abort();
 }
@@ -142,27 +132,26 @@ static void
 emconn_data_channel_close_cb(GstWebRTCDataChannel *datachannel, gpointer user_data)
 {
 	struct em_connection *emconn = user_data;
-	ALOGE("Data channel closed");
+	ALOGE("RYLIE: %s: Data channel closed", __FUNCTION__);
 	emconn_disconnect_internal(emconn, EM_STATUS_DISCONNECTED_REMOTE_CLOSE);
 }
 
 static void
 emconn_data_channel_message_string_cb(GstWebRTCDataChannel *datachannel, gchar *str, gpointer user_data)
 {
-	ALOGE("Received data channel message: %s", str);
+	ALOGE("RYLIE: %s: Received data channel message: %s", __FUNCTION__, str);
 	struct em_connection *emconn = user_data;
-	emconn_update_status_from_webrtcbin(emconn);
 }
 
-static gboolean
-emconn_data_channel_send_message(gpointer user_data)
-{
-	ALOGI("RYLIE: Sending message to server");
-	struct em_connection *emconn = user_data;
-	g_signal_emit_by_name(emconn->datachannel, "send-string", "Hi! from Pluto client");
+// static gboolean
+// emconn_data_channel_send_message(gpointer user_data)
+// {
+// 	ALOGI("RYLIE: Sending message to server");
+// 	struct em_connection *emconn = user_data;
+// 	g_signal_emit_by_name(emconn->datachannel, "send-string", "Hi! from Pluto client");
 
-	return G_SOURCE_CONTINUE;
-}
+// 	return G_SOURCE_CONTINUE;
+// }
 
 static void
 emconn_connect_internal(struct em_connection *emconn, enum em_status status);
@@ -177,18 +166,28 @@ emconn_retry_connect(gpointer user_data)
 }
 
 static void
+emconn_webrtc_deep_notify_callback(GstObject *self, GstObject *prop_object, GParamSpec *prop, gpointer user_data)
+{
+	struct em_connection *emconn = user_data;
+	GstWebRTCPeerConnectionState state;
+	g_object_get(prop_object, "connection-state", &state, NULL);
+	ALOGI("RYLIE: deep-notify callback says peer connection state is %s", peer_connection_state_to_string(state));
+	emconn_update_status_from_peer_connection_state(emconn, state);
+}
+
+static void
 emconn_webrtc_on_data_channel_cb(GstElement *webrtcbin, GstWebRTCDataChannel *data_channel, void *user_data)
 {
 	struct em_connection *emconn = user_data;
 
-	emconn_update_status_from_webrtcbin(emconn);
+	// emconn_update_status_from_webrtcbin(emconn);
 	ALOGE("Successfully created datachannel");
 
 	g_assert_null(emconn->datachannel);
 
 	emconn->datachannel = GST_WEBRTC_DATA_CHANNEL(data_channel);
 
-	emconn->timeout_src_id = g_timeout_add_seconds(3, emconn_data_channel_send_message, user_data);
+	// emconn->timeout_src_id = g_timeout_add_seconds(3, emconn_data_channel_send_message, user_data);
 
 	g_signal_connect(emconn->datachannel, "on-close", G_CALLBACK(emconn_data_channel_close_cb), user_data);
 	g_signal_connect(emconn->datachannel, "on-error", G_CALLBACK(emconn_data_channel_error_cb), user_data);
@@ -234,7 +233,7 @@ emconn_send_sdp_answer(struct em_connection *emconn, const gchar *sdp)
 	g_object_unref(builder);
 
 	// emconn_update_status(emconn, EM_STATUS_CONNECTED_NO_DATA);
-	emconn_update_status_from_webrtcbin(emconn);
+	// emconn_update_status_from_webrtcbin(emconn);
 
 
 	ALOGI("[exit]  %s", __FUNCTION__);
@@ -274,7 +273,7 @@ emconn_webrtc_on_ice_candidate_cb(GstElement *webrtcbin, guint mlineindex, gchar
 
 	json_node_unref(root);
 	g_object_unref(builder);
-	emconn_update_status_from_webrtcbin(emconn);
+	// emconn_update_status_from_webrtcbin(emconn);
 	ALOGI("[exit]  %s", __FUNCTION__);
 }
 
@@ -304,7 +303,7 @@ emh_on_answer_created(GstPromise *promise, gpointer user_data)
 	g_free(sdp);
 
 	gst_webrtc_session_description_free(answer);
-	emconn_update_status_from_webrtcbin(emconn);
+	// emconn_update_status_from_webrtcbin(emconn);
 	ALOGI("[exit]  %s", __FUNCTION__);
 }
 
@@ -316,7 +315,7 @@ emh_process_sdp_offer(struct em_connection *emconn, const gchar *sdp)
 	GstWebRTCSessionDescription *desc = NULL;
 
 
-	ALOGE("Received offer: %s\n\n", sdp);
+	ALOGE("Received offer: %s\n", sdp);
 
 	if (gst_sdp_message_new_from_text(sdp, &sdp_msg) != GST_SDP_OK) {
 		g_debug("Error parsing SDP description");
@@ -340,7 +339,7 @@ emh_process_sdp_offer(struct em_connection *emconn, const gchar *sdp)
 	} else {
 		gst_sdp_message_free(sdp_msg);
 	}
-	emconn_update_status_from_webrtcbin(emconn);
+	// emconn_update_status_from_webrtcbin(emconn);
 
 out:
 	g_clear_pointer(&desc, gst_webrtc_session_description_free);
@@ -350,10 +349,10 @@ out:
 static void
 emh_process_candidate(struct em_connection *emconn, guint mlineindex, const gchar *candidate)
 {
-	ALOGI("process_candidate: %d %s\n", mlineindex, candidate);
+	ALOGI("process_candidate: %d %s", mlineindex, candidate);
 
 	g_signal_emit_by_name(emconn->webrtcbin, "add-ice-candidate", mlineindex, candidate);
-	emconn_update_status_from_webrtcbin(emconn);
+	// emconn_update_status_from_webrtcbin(emconn);
 }
 
 static void
@@ -378,7 +377,7 @@ emconn_on_ws_message_cb(SoupWebsocketConnection *connection, gint type, GBytes *
 		}
 
 		msg_type = json_object_get_string_member(msg, "msg");
-		ALOGI("Websocket message received: %s\n", msg_type);
+		ALOGI("Websocket message received: %s", msg_type);
 
 		if (g_str_equal(msg_type, "offer")) {
 			const gchar *offer_sdp = json_object_get_string_member(msg, "sdp");
@@ -437,6 +436,8 @@ emconn_websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user
 	g_assert(G_IS_OBJECT(emconn->webrtcbin));
 	g_signal_connect(emconn->webrtcbin, "on-ice-candidate", G_CALLBACK(emconn_webrtc_on_ice_candidate_cb), emconn);
 	g_signal_connect(emconn->webrtcbin, "on-data-channel", G_CALLBACK(emconn_webrtc_on_data_channel_cb), emconn);
+	g_signal_connect(emconn->webrtcbin, "deep-notify::connection-state",
+	                 G_CALLBACK(emconn_webrtc_deep_notify_callback), emconn);
 	ALOGI("[exit]  %s", __FUNCTION__);
 }
 static void
