@@ -41,6 +41,7 @@ struct _EmConnection
 	GObject parent;
 	SoupSession *soup_session;
 	SoupWebsocketConnection *ws;
+	GstPipeline *pipeline;
 	GstElement *webrtcbin;
 	gchar *websocket_uri;
 	GstWebRTCDataChannel *datachannel;
@@ -51,17 +52,17 @@ struct _EmConnection
 	/// has the pipeline been launched (@ref launch_pipeline called)
 	bool pipeline_launched;
 
-	struct
-	{
-		emconn_launch_pipeline_callback callback;
-		gpointer data;
-	} launch_pipeline;
+	// struct
+	// {
+	// 	emconn_launch_pipeline_callback callback;
+	// 	gpointer data;
+	// } launch_pipeline;
 
-	struct
-	{
-		emconn_drop_pipeline_callback callback;
-		gpointer data;
-	} drop_pipeline;
+	// struct
+	// {
+	// 	emconn_drop_pipeline_callback callback;
+	// 	gpointer data;
+	// } drop_pipeline;
 };
 
 
@@ -69,14 +70,148 @@ G_DEFINE_TYPE(EmConnection, em_connection, G_TYPE_OBJECT)
 
 enum
 {
-	SIGNAL_WS_CONNECTED,
-	SIGNAL_WS_FAILED,
+	SIGNAL_SET_PIPELINE,
+	SIGNAL_WEBSOCKET_CONNECTED,
+	SIGNAL_WEBSOCKET_FAILED,
 	SIGNAL_CONNECTED,
 	SIGNAL_STATUS_CHANGE,
+	SIGNAL_ON_NEED_PIPELINE,
+	SIGNAL_ON_DROP_PIPELINE,
 	N_SIGNALS
 };
 
 static guint signals[N_SIGNALS];
+typedef enum
+{
+	PROP_WEBSOCKET_URI = 1,
+	// PROP_STATUS,
+	N_PROPERTIES
+} EmConnectionProperty;
+
+static GParamSpec *properties[N_PROPERTIES] = {
+    NULL,
+};
+
+#define DEFAULT_WEBSOCKET_URI "ws://127.0.0.1:8080/ws"
+
+static void
+em_connection_set_pipeline(EmConnection *emconn, GstPipeline *pipeline);
+
+/* GObject method implementations */
+
+static void
+em_connection_set_property(GObject *object, guint property_id, const GValue *value, GParamSpec *pspec)
+{
+	EmConnection *self = EM_CONNECTION(object);
+
+	switch ((EmConnectionProperty)property_id) {
+	case PROP_WEBSOCKET_URI:
+		g_free(self->websocket_uri);
+		self->websocket_uri = g_value_dup_string(value);
+		ALOGI("RYLIE: websocket URI assigned; %s", self->websocket_uri);
+		break;
+
+
+	default: G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec); break;
+	}
+}
+
+static void
+em_connection_get_property(GObject *object, guint property_id, GValue *value, GParamSpec *pspec)
+{
+	EmConnection *self = EM_CONNECTION(object);
+
+	switch ((EmConnectionProperty)property_id) {
+	case PROP_WEBSOCKET_URI: g_value_set_string(value, self->websocket_uri); break;
+
+	default: G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec); break;
+	}
+}
+
+static void
+em_connection_init(EmConnection *emconn)
+{
+	emconn->soup_session = soup_session_new();
+	emconn->websocket_uri = g_strdup(DEFAULT_WEBSOCKET_URI);
+}
+
+static void
+em_connection_dispose(GObject *object)
+{
+	EmConnection *self = EM_CONNECTION(object);
+
+	em_connection_disconnect(self);
+
+	g_free(self->websocket_uri);
+
+	g_clear_object(&self->soup_session);
+}
+
+static void
+em_connection_class_init(EmConnectionClass *klass)
+{
+	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
+
+	gobject_class->dispose = em_connection_dispose;
+
+	gobject_class->set_property = em_connection_set_property;
+	gobject_class->get_property = em_connection_get_property;
+
+	properties[PROP_WEBSOCKET_URI] = g_param_spec_string(
+	    "websocket-uri", "WS URI", "WebSocket URI for signaling server.", DEFAULT_WEBSOCKET_URI /* default value */,
+	    G_PARAM_CONSTRUCT_ONLY | G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS);
+
+	g_object_class_install_properties(gobject_class, N_PROPERTIES, properties);
+
+	/**
+	 * EmConnection::set-pipeline
+	 * @object: the #EmConnection
+	 * @pipeline: A #GstPipeline
+	 */
+	signals[SIGNAL_SET_PIPELINE] = g_signal_new_class_handler(
+	    "set-pipeline", G_OBJECT_CLASS_TYPE(klass), G_SIGNAL_RUN_LAST | G_SIGNAL_ACTION,
+	    G_CALLBACK(em_connection_set_pipeline), NULL, NULL, NULL, G_TYPE_NONE, 1, G_TYPE_POINTER);
+
+	/**
+	 * EmConnection::websocket-connected
+	 * @object: the #EmConnection
+	 */
+	signals[SIGNAL_WEBSOCKET_CONNECTED] =
+	    g_signal_new("websocket-connected", G_OBJECT_CLASS_TYPE(klass), G_SIGNAL_RUN_LAST, 0, NULL, NULL, NULL,
+	                 G_TYPE_NONE, 1, G_TYPE_POINTER);
+	/**
+	 * EmConnection::websocket-failed
+	 * @object: the #EmConnection
+	 */
+	signals[SIGNAL_WEBSOCKET_FAILED] =
+	    g_signal_new("websocket-failed", G_OBJECT_CLASS_TYPE(klass), G_SIGNAL_RUN_LAST, 0, NULL, NULL, NULL,
+	                 G_TYPE_NONE, 1, G_TYPE_POINTER);
+	/**
+	 * EmConnection::connected
+	 * @object: the #EmConnection
+	 */
+	signals[SIGNAL_CONNECTED] = g_signal_new("connected", G_OBJECT_CLASS_TYPE(klass), G_SIGNAL_RUN_LAST, 0, NULL,
+	                                         NULL, NULL, G_TYPE_NONE, 1, G_TYPE_POINTER);
+
+	/**
+	 * EmConnection::on-need-pipeline
+	 * @object: the #EmConnection
+	 *
+	 * Your handler for this must emit @set-pipeline
+	 */
+	signals[SIGNAL_ON_NEED_PIPELINE] = g_signal_new("on-need-pipeline", G_OBJECT_CLASS_TYPE(klass),
+	                                                G_SIGNAL_RUN_LAST, 0, NULL, NULL, NULL, G_TYPE_NONE, 0);
+
+	/**
+	 * EmConnection::on-drop-pipeline
+	 * @object: the #EmConnection
+	 *
+	 * If you store any references in your handler for @on-need-pipeline you must make a handler for this signal to
+	 * drop them.
+	 */
+	signals[SIGNAL_ON_DROP_PIPELINE] = g_signal_new("on-drop-pipeline", G_OBJECT_CLASS_TYPE(klass),
+	                                                G_SIGNAL_RUN_LAST, 0, NULL, NULL, NULL, G_TYPE_NONE, 0);
+}
 
 
 #define MAKE_CASE(E)                                                                                                   \
@@ -139,15 +274,14 @@ emconn_disconnect_internal(EmConnection *emconn, enum em_status status)
 		emconn->retry_timeout_src_id = 0;
 	}
 	if (emconn->pipeline_launched) {
-		(emconn->drop_pipeline.callback)(emconn->drop_pipeline.data);
+		g_signal_emit(emconn, signals[SIGNAL_ON_DROP_PIPELINE], 0);
 		emconn->pipeline_launched = false;
 	}
-	if (emconn->ws) {
-		g_object_unref(emconn->ws);
-		emconn->ws = NULL;
-	}
+	g_clear_object(&emconn->ws);
+
 	gst_clear_object(&emconn->webrtcbin);
 	gst_clear_object(&emconn->datachannel);
+	g_clear_object(&emconn->pipeline);
 	emconn_update_status(emconn, status);
 }
 
@@ -436,6 +570,7 @@ emconn_websocket_connected_cb(GObject *session, GAsyncResult *res, EmConnection 
 	// TODO if we couldn't connect, we actually have an error here, handle this better
 	if (error) {
 		ALOGW("Websocket connection failed, may not be available. Will retry.");
+		g_signal_emit(emconn, signals[SIGNAL_WEBSOCKET_FAILED], 0);
 		emconn_update_status(emconn, EM_STATUS_WILL_RETRY);
 	}
 	g_assert_no_error(error);
@@ -443,16 +578,32 @@ emconn_websocket_connected_cb(GObject *session, GAsyncResult *res, EmConnection 
 
 	ALOGI("RYLIE: Websocket connected");
 	g_signal_connect(emconn->ws, "message", G_CALLBACK(emconn_on_ws_message_cb), emconn);
+	g_signal_emit(emconn, signals[SIGNAL_WEBSOCKET_CONNECTED], 0);
 
 	ALOGI("RYLIE: launching pipeline");
-	g_autoptr(GstElement) pipeline =
-	    gst_object_ref_sink(emconn->launch_pipeline.callback(emconn->launch_pipeline.data));
+	g_assert_null(emconn->pipeline);
+	g_signal_emit(emconn, signals[SIGNAL_ON_NEED_PIPELINE], 0);
+	if (emconn->pipeline == NULL) {
+		ALOGE("on-need-pipeline signal did not return a pipeline!");
+		em_connection_disconnect(emconn);
+	}
+	// gst_object_ref_sink(emconn->pipeline);
 
+	// ALOGI("[exit]  %s", __FUNCTION__);
+}
+
+
+static void
+em_connection_set_pipeline(EmConnection *emconn, GstPipeline *pipeline)
+{
+	gst_clear_object(&emconn->pipeline);
+	emconn->pipeline = gst_object_ref_sink(pipeline);
 	emconn->pipeline_launched = true;
+
 	emconn_update_status(emconn, EM_STATUS_NEGOTIATING);
 
 	ALOGI("RYLIE: getting webrtcbin");
-	emconn->webrtcbin = gst_bin_get_by_name(GST_BIN(pipeline), "webrtc");
+	emconn->webrtcbin = gst_bin_get_by_name(GST_BIN(emconn->pipeline), "webrtc");
 	g_assert_nonnull(emconn->webrtcbin);
 	g_assert(G_IS_OBJECT(emconn->webrtcbin));
 	g_signal_connect(emconn->webrtcbin, "on-ice-candidate", G_CALLBACK(emconn_webrtc_on_ice_candidate_cb), emconn);
@@ -461,8 +612,8 @@ emconn_websocket_connected_cb(GObject *session, GAsyncResult *res, EmConnection 
 	g_signal_connect(emconn->webrtcbin, "on-data-channel", G_CALLBACK(emconn_webrtc_on_data_channel_cb), emconn);
 	g_signal_connect(emconn->webrtcbin, "deep-notify::connection-state",
 	                 G_CALLBACK(emconn_webrtc_deep_notify_callback), emconn);
-	// ALOGI("[exit]  %s", __FUNCTION__);
 }
+
 static void
 emconn_connect_internal(EmConnection *emconn, enum em_status status)
 {
@@ -492,27 +643,15 @@ emconn_connect_internal(EmConnection *emconn, enum em_status status)
 	emconn_update_status(emconn, status);
 }
 
-static void
-em_connection_init(EmConnection *emconn)
-{
-	emconn->soup_session = soup_session_new();
-}
+
+/* public (non-GObject) methods */
 
 EmConnection *
-em_connection_new(emconn_launch_pipeline_callback launch_callback,
-                  emconn_drop_pipeline_callback drop_callback,
-                  gpointer data,
-                  gchar *websocket_uri)
+em_connection_new(gchar *websocket_uri)
 {
-	EmConnection *self = EM_CONNECTION(g_object_new(EM_TYPE_CONNECTION, NULL));
-
-	self->websocket_uri = g_strdup(websocket_uri);
-	self->launch_pipeline.callback = launch_callback;
-	self->launch_pipeline.data = data;
-	self->drop_pipeline.callback = drop_callback;
-	self->drop_pipeline.data = data;
-	return self;
+	return EM_CONNECTION(g_object_new(EM_TYPE_CONNECTION, "websocket-uri", websocket_uri, NULL));
 }
+
 
 void
 em_connection_connect(EmConnection *emconn)
@@ -537,38 +676,4 @@ em_connection_send_bytes(EmConnection *emconn, GBytes *bytes)
 	gboolean success = gst_webrtc_data_channel_send_data_full(emconn->datachannel, bytes, NULL);
 
 	return success == TRUE;
-}
-
-
-static void
-em_connection_dispose(GObject *object)
-{
-	EmConnection *self = EM_CONNECTION(object);
-
-	em_connection_disconnect(self);
-
-	g_free(self->websocket_uri);
-
-	if (self->soup_session) {
-		g_clear_object(&self->soup_session);
-	}
-}
-
-static void
-em_connection_class_init(EmConnectionClass *klass)
-{
-	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
-
-	gobject_class->dispose = em_connection_dispose;
-
-	signals[SIGNAL_WS_CONNECTED] = g_signal_new("ws-connected", G_OBJECT_CLASS_TYPE(klass), G_SIGNAL_RUN_LAST, 0,
-	                                            NULL, NULL, NULL, G_TYPE_NONE, 1, G_TYPE_POINTER);
-
-	signals[SIGNAL_WS_FAILED] = g_signal_new("ws-failed", G_OBJECT_CLASS_TYPE(klass), G_SIGNAL_RUN_LAST, 0, NULL,
-	                                         NULL, NULL, G_TYPE_NONE, 1, G_TYPE_POINTER);
-
-	signals[SIGNAL_CONNECTED] = g_signal_new("connected", G_OBJECT_CLASS_TYPE(klass), G_SIGNAL_RUN_LAST, 0, NULL,
-	                                         NULL, NULL, G_TYPE_NONE, 1, G_TYPE_POINTER);
-	signals[SIGNAL_STATUS_CHANGE] = g_signal_new("status-change", G_OBJECT_CLASS_TYPE(klass), G_SIGNAL_RUN_LAST, 0,
-	                                             NULL, NULL, NULL, G_TYPE_NONE, 1, G_TYPE_POINTER);
 }

@@ -31,25 +31,27 @@ typedef void (*emconn_drop_pipeline_callback)(gpointer user_data);
 
 G_DECLARE_FINAL_TYPE(EmConnection, em_connection, EM, CONNECTION, GObject)
 
-/*!
- * Create a connection object
- *
+/*
  * @param launch_callback Function pointer to call to create a pipeline
  * @param drop_callback Function pointer to call when dropping a connection - must be idempotent
  * @param data Optional userdata to include when calling @p launch_callback and @p drop_callback
+ */
+
+/*!
+ * Create a connection object
+ *
  * @param websocket_uri The websocket URI to connect to. Ownership does not transfer (we copy it)
  *
  * @memberof EmConnection
  */
 EmConnection *
-em_connection_new(emconn_launch_pipeline_callback launch_callback,
-                  emconn_drop_pipeline_callback drop_callback,
-                  gpointer data,
-                  gchar *websocket_uri);
+em_connection_new(gchar* websocket_uri);
 
 
 /*!
  * Actually start connecting to the server
+ *
+ * @memberof EmConnection
  */
 void
 em_connection_connect(EmConnection *emconn);
@@ -57,6 +59,8 @@ em_connection_connect(EmConnection *emconn);
 
 /*!
  * Drop the server connection, if any.
+ *
+ * @memberof EmConnection
  */
 void
 em_connection_disconnect(EmConnection *emconn);
@@ -64,6 +68,8 @@ em_connection_disconnect(EmConnection *emconn);
 
 /*!
  * Send a message to the server
+ *
+ * @memberof EmConnection
  */
 bool
 em_connection_send_bytes(EmConnection *emconn, GBytes *bytes);

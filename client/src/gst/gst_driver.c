@@ -769,15 +769,34 @@ launch_pipeline(gpointer user_data)
 }
 
 static void
-drop_pipeline(gpointer user_data)
+on_need_pipeline_cb(EmConnection *emconn, struct em_fs *vid)
 {
-	struct em_fs *vid = (struct em_fs *)user_data;
+	GstPipeline *pipeline = GST_PIPELINE(launch_pipeline(vid));
+	g_signal_emit_by_name(emconn, "set-pipeline", pipeline, NULL);
+}
+
+static void
+on_drop_pipeline_cb(EmConnection *emconn, struct em_fs *vid)
+{
+	// GstPipeline *pipeline = GST_PIPELINE(launch_pipeline(vid));
+	// g_signal_emit_by_name(emconn, "set-pipeline", pipeline, NULL);
 	if (vid->pipeline) {
 		gst_element_set_state(vid->pipeline, GST_STATE_NULL);
 	}
 	gst_clear_object(&vid->pipeline);
 	gst_clear_object(&vid->appsink);
 }
+
+// static void
+// drop_pipeline(gpointer user_data)
+// {
+// 	struct em_fs *vid = (struct em_fs *)user_data;
+// 	if (vid->pipeline) {
+// 		gst_element_set_state(vid->pipeline, GST_STATE_NULL);
+// 	}
+// 	gst_clear_object(&vid->pipeline);
+// 	gst_clear_object(&vid->appsink);
+// }
 /*
  *
  * Frame server methods.
@@ -918,7 +937,9 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,
 	if (!websocket_uri) {
 		websocket_uri = g_strdup(WEBSOCKET_URI_DEFAULT);
 	}
-	vid->connection = em_connection_new(launch_pipeline, drop_pipeline, vid, websocket_uri);
+	vid->connection = em_connection_new(websocket_uri);
+	g_signal_connect(vid->connection, "on-need-pipeline", G_CALLBACK(on_need_pipeline_cb), vid);
+	g_signal_connect(vid->connection, "on-drop-pipeline", G_CALLBACK(on_drop_pipeline_cb), vid);
 
 	em_connection_connect(vid->connection);
 	ALOGD("started async connect call, about to spawn em_fs_mainloop");

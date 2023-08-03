@@ -34,7 +34,7 @@ enum em_status
 	EM_STATUS_DISCONNECTED_REMOTE_CLOSE,
 };
 
-#define EM_MAKE_CASE(E)                                                                                                   \
+#define EM_MAKE_CASE(E)                                                                                                \
 	case E: return #E
 
 static inline const char *
