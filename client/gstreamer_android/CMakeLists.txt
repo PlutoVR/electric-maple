@@ -5,8 +5,9 @@ target_link_libraries(
 		${GST_LIBRARIES}
 		-Wl,--whole-archive
 		${GST_ARCH_DIR}/lib/libgstreamer-1.0.a
+		${GIO_LIBRARIES}
+		${GLIB_LIBRARIES}
 		-Wl,--no-whole-archive
-		${JSONGLIB_LIBRARIES}
 		EGL::EGL
 	PUBLIC ${ANDROID_LOG_LIBRARY} z
 	)

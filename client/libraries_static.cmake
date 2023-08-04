@@ -32,7 +32,7 @@ set(GST_LIBRARIES
     ${GST_ARCH_DIR}/lib/libvorbis.a
     ${GST_ARCH_DIR}/lib/libgstapp-1.0.a
     ${GST_ARCH_DIR}/lib/libopus.a
-    ${GST_ARCH_DIR}/lib/libglib-2.0.a
+    # ${GST_ARCH_DIR}/lib/libglib-2.0.a
     ${GST_ARCH_DIR}/lib/libgstinsertbin-1.0.a
     ${GST_ARCH_DIR}/lib/libcairo.a
     ${GST_ARCH_DIR}/lib/libgstisoff-1.0.a
@@ -281,15 +281,15 @@ set(GST_LIBRARIES
     ${GST_ARCH_DIR}/lib/libnice.a
     ${GST_ARCH_DIR}/lib/libgstplay-1.0.a
     ${GST_ARCH_DIR}/lib/libgstallocators-1.0.a
-    ${GST_ARCH_DIR}/lib/gio/modules/libgioopenssl.a
+    # ${GST_ARCH_DIR}/lib/gio/modules/libgioopenssl.a
     ${GST_ARCH_DIR}/lib/libgdk_pixbuf-2.0.a
     ${GST_ARCH_DIR}/lib/libgstbasecamerabinsrc-1.0.a
     ${GST_ARCH_DIR}/lib/libmpg123.a
     ${GST_ARCH_DIR}/lib/libswresample.a
     ${GST_ARCH_DIR}/lib/libz.a
-    ${GST_ARCH_DIR}/lib/libsoup-2.4.a
+    # ${GST_ARCH_DIR}/lib/libsoup-2.4.a
     ${GST_ARCH_DIR}/lib/libFLAC.a
-    ${GST_ARCH_DIR}/lib/libgio-2.0.a
+    # ${GST_ARCH_DIR}/lib/libgio-2.0.a
     ${GST_ARCH_DIR}/lib/libexpat.a
     ${GST_ARCH_DIR}/lib/libvpx.a
     # ${GST_ARCH_DIR}/lib/libavutil.a
