@@ -667,9 +667,6 @@ android_main(struct android_app *app)
 
 	registerGlDebugCallback();
 
-	// Un-make current
-	eglMakeCurrent(state.display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
-
 	// Initialize OpenXR loader
 	PFN_xrInitializeLoaderKHR xrInitializeLoaderKHR = NULL;
 	XR_LOAD(xrInitializeLoaderKHR);
@@ -754,22 +751,29 @@ android_main(struct android_app *app)
 
 	state.frame_texture_id = generateRandomTexture(state.width, state.height, 2);
 
+	// Un-make current
+	eglMakeCurrent(state.display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+
+	// Set up gstreamer
+	gst_init(0, NULL);
+
+	// Set up our own objects
+	ALOGI("%s: creating stream client object", __FUNCTION__);
+	EmStreamClient *stream_client = em_stream_client_new();
+
+	ALOGI("%s: telling stream client about EGL", __FUNCTION__);
+	em_stream_client_set_egl_context(stream_client, state.display, state.context, state.surface);
+
 	ALOGI("%s: creating connection object", __FUNCTION__);
 	EmConnection *connection = em_connection_new_localhost();
 
 	g_signal_connect(connection, "connected", G_CALLBACK(connected_cb), &state);
 
-	ALOGI("%s: creating stream client object", __FUNCTION__);
-	EmStreamClient *stream_client = em_stream_client_new(connection);
-
-	ALOGI("%s: telling stream client about EGL", __FUNCTION__);
-	em_stream_client_set_egl_context(stream_client, state.display, state.context, state.surface);
-
 	ALOGI("%s: starting connection", __FUNCTION__);
 	em_connection_connect(connection);
 
 	ALOGI("%s: starting stream client mainloop thread", __FUNCTION__);
-	em_stream_client_spawn_thread(stream_client);
+	em_stream_client_spawn_thread(stream_client, connection);
 
 	// OpenXR session
 	ALOGE("FRED: Creating OpenXR session...");

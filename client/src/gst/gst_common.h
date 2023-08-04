@@ -12,18 +12,15 @@
 
 #pragma once
 
-#include "em_connection.h"
-#include "em_stream_client.h"
-#define XR_USE_PLATFORM_ANDROID
 #define XR_USE_GRAPHICS_API_OPENGL_ES
-
-#include "xrt/xrt_frame.h"
-#include "os/os_threading.h"
 
 #include <GLES3/gl3.h>
 #include <GLES3/gl3ext.h>
 #include <EGL/egl.h>
+#ifdef __ANDROID__
+#define XR_USE_PLATFORM_ANDROID
 #include <jni.h>
+#endif
 
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
@@ -34,8 +31,6 @@
 
 #include <string.h>
 #include <stdbool.h>
-
-#include "xrt/xrt_frameserver.h"
 
 struct em_fs;
 
@@ -48,9 +43,11 @@ struct em_sample
 };
 struct em_state
 {
+#ifdef __ANDROID__
 	struct android_app *app;
 	JNIEnv *jni;
 	JavaVM *java_vm;
+#endif
 	bool hasPermissions;
 
 	bool connected;
@@ -96,47 +93,3 @@ struct em_state
 
 	struct em_sample *prev_sample;
 };
-
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-/*!
- * Create an ElectricMaple XR streaming frameserver with default parameters.
- *
- * Must call from a thread in which we can safely make @p context active.
- */
-struct xrt_fs *
-em_fs_create_streaming_client(struct xrt_frame_context *xfctx,
-                              struct em_state *state,
-                              EGLDisplay display,
-                              EGLContext context);
-
-/*!
- * Attempt to retrieve a sample.
- *
- * @pre The Android main EGL context must be active with the lock held when calling.
- *
- * @return null if no new frame is received.
- */
-struct em_sample *
-em_fs_try_pull_sample(struct xrt_fs *fs);
-
-/*!
- * Release a sample when no longer used.
- */
-void
-em_fs_release_sample(struct xrt_fs *fs, struct em_sample *ems);
-
-/*!
- * Send a message to the server
- */
-bool
-em_fs_send_bytes(struct xrt_fs *fs, const uint8_t *data, size_t len);
-
-
-
-#ifdef __cplusplus
-}
-#endif

@@ -13,11 +13,7 @@
 #include <gst/gstpipeline.h>
 #include <stdbool.h>
 
-
-#ifdef __cplusplus
-extern "C" {
-#endif // __cplusplus
-
+G_BEGIN_DECLS
 
 #define EM_TYPE_CONNECTION em_connection_get_type()
 
@@ -70,6 +66,4 @@ em_connection_send_bytes(EmConnection *emconn, GBytes *bytes);
 void
 em_connection_set_pipeline(EmConnection *emconn, GstPipeline *pipeline);
 
-#ifdef __cplusplus
-} // extern "C"
-#endif // __cplusplus
+G_END_DECLS

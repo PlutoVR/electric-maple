@@ -31,12 +31,10 @@ G_DECLARE_FINAL_TYPE(EmStreamClient, em_stream_client, EM, STREAM_CLIENT, GObjec
 /*!
  * Create a stream client object, providing the connection object
  *
- * @param connection The connection to use
- *
  * @memberof EmStreamClient
  */
 EmStreamClient *
-em_stream_client_new(EmConnection *connection);
+em_stream_client_new();
 
 /*!
  * Initialize the EGL context and surface.
@@ -105,9 +103,11 @@ em_stream_client_egl_end(EmStreamClient *sc);
 
 /*!
  * Start the GMainLoop embedded in this object in a new thread
+ *
+ * @param connection The connection to use
  */
 void
-em_stream_client_spawn_thread(EmStreamClient *sc);
+em_stream_client_spawn_thread(EmStreamClient *sc, EmConnection *connection);
 
 /*!
  * Stop the pipeline and the mainloop thread.

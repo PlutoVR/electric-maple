@@ -131,10 +131,16 @@ em_connection_dispose(GObject *object)
 
 	em_connection_disconnect(self);
 
-	g_free(self->websocket_uri);
-
 	g_clear_object(&self->soup_session);
 	g_clear_object(&self->ws_cancel);
+}
+
+static void
+em_connection_finalize(GObject *object)
+{
+	EmConnection *self = EM_CONNECTION(object);
+
+	g_free(self->websocket_uri);
 }
 
 static void
@@ -143,6 +149,7 @@ em_connection_class_init(EmConnectionClass *klass)
 	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 
 	gobject_class->dispose = em_connection_dispose;
+	gobject_class->finalize = em_connection_finalize;
 
 	gobject_class->set_property = em_connection_set_property;
 	gobject_class->get_property = em_connection_get_property;
@@ -281,10 +288,11 @@ emconn_update_status_from_peer_connection_state(EmConnection *emconn, GstWebRTCP
 static void
 emconn_disconnect_internal(EmConnection *emconn, enum em_status status)
 {
-	g_cancellable_cancel(emconn->ws_cancel);
-
+	if (emconn->ws_cancel != NULL) {
+		g_cancellable_cancel(emconn->ws_cancel);
+	}
 	// Stop the pipeline, if it exists
-	if (emconn->pipeline) {
+	if (emconn->pipeline != NULL) {
 		gst_element_set_state(GST_ELEMENT(emconn->pipeline), GST_STATE_NULL);
 		g_signal_emit(emconn, signals[SIGNAL_ON_DROP_PIPELINE], 0);
 	}
@@ -618,7 +626,7 @@ emconn_connect_internal(EmConnection *emconn, enum em_status status)
 	                                     NULL,                                                     // protocols
 	                                     0,                                                        // io_prority
 	                                     emconn->ws_cancel,                                        // cancellable
-	                                     emh_websocket_connected_cb,                               // callback
+	                                     (GAsyncReadyCallback)emconn_websocket_connected_cb,       // callback
 	                                     emconn);                                                  // user_data
 
 #endif

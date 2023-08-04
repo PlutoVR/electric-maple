@@ -150,22 +150,18 @@ em_stream_client_egl_save(EmStreamClient *sc);
 static void
 em_stream_client_egl_restore(EmStreamClient *sc, EGLDisplay display);
 
+static void
+em_stream_client_set_connection(EmStreamClient *sc, EmConnection *connection);
+
 /* GObject method implementations */
 
 static void
 em_stream_client_set_property(GObject *object, guint property_id, const GValue *value, GParamSpec *pspec)
 {
-	EmStreamClient *self = EM_STREAM_CLIENT(object);
-
 	switch ((EmStreamClientProperty)property_id) {
 
 	case PROP_CONNECTION:
-		g_clear_object(&self->connection);
-		self->connection = g_value_dup_object(value);
-
-		g_signal_connect(self->connection, "on-need-pipeline", G_CALLBACK(on_need_pipeline_cb), self);
-		g_signal_connect(self->connection, "on-drop-pipeline", G_CALLBACK(on_drop_pipeline_cb), self);
-		ALOGI("EmConnection assigned");
+		em_stream_client_set_connection(EM_STREAM_CLIENT(object), EM_CONNECTION(g_value_get_object(value)));
 		break;
 
 	default: G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec); break;
@@ -175,10 +171,9 @@ em_stream_client_set_property(GObject *object, guint property_id, const GValue *
 static void
 em_stream_client_get_property(GObject *object, guint property_id, GValue *value, GParamSpec *pspec)
 {
-	EmStreamClient *self = EM_STREAM_CLIENT(object);
 
 	switch ((EmStreamClientProperty)property_id) {
-	case PROP_CONNECTION: g_value_set_object(value, self->connection); break;
+	case PROP_CONNECTION: g_value_set_object(value, EM_STREAM_CLIENT(object)->connection); break;
 
 	default: G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec); break;
 	}
@@ -187,20 +182,20 @@ em_stream_client_get_property(GObject *object, guint property_id, GValue *value,
 static void
 em_stream_client_init(EmStreamClient *sc)
 {
-	ALOGI("RYLIE: %s: creating stuff", __FUNCTION__);
+	ALOGI("%s: creating stuff", __FUNCTION__);
 
 	sc->loop = g_main_loop_new(NULL, FALSE);
 	os_mutex_init(&sc->egl_lock);
 	g_assert(os_thread_helper_init(&sc->play_thread) >= 0);
-	ALOGI("RYLIE: %s: done creating stuff", __FUNCTION__);
+	ALOGI("%s: done creating stuff", __FUNCTION__);
 }
-
 static void
 em_stream_client_dispose(GObject *object)
 {
+	// May be called multiple times during destruction.
+	// Stop things and clear ref counted things here.
 	EmStreamClient *self = EM_STREAM_CLIENT(object);
 	em_stream_client_stop(self);
-	os_thread_helper_destroy(&self->play_thread);
 	g_clear_object(&self->loop);
 	g_clear_object(&self->connection);
 	gst_clear_object(&self->pipeline);
@@ -210,30 +205,39 @@ em_stream_client_dispose(GObject *object)
 	gst_clear_object(&self->display);
 	gst_clear_object(&self->context);
 	gst_clear_object(&self->appsink);
+}
+
+static void
+em_stream_client_finalize(GObject *object)
+{
+	// only called once, after dispose
+	EmStreamClient *self = EM_STREAM_CLIENT(object);
+	os_thread_helper_destroy(&self->play_thread);
 	os_mutex_destroy(&self->egl_lock);
 }
 
 static void
 em_stream_client_class_init(EmStreamClientClass *klass)
 {
-	gst_init(0, NULL);
 
 	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 
 	gobject_class->dispose = em_stream_client_dispose;
+	gobject_class->finalize = em_stream_client_finalize;
 
-	gobject_class->set_property = em_stream_client_set_property;
-	gobject_class->get_property = em_stream_client_get_property;
+	// gobject_class->set_property = em_stream_client_set_property;
+	// gobject_class->get_property = em_stream_client_get_property;
 
 	/**
 	 * EmStreamClient:connection:
 	 *
 	 * The websocket URI for the signaling server
 	 */
-	g_object_class_install_property(
-	    gobject_class, PROP_CONNECTION,
-	    g_param_spec_object("connection", "Connection", "EmConnection object for XR streaming", EM_TYPE_CONNECTION,
-	                        G_PARAM_CONSTRUCT_ONLY | G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	// g_object_class_install_property(
+	//     gobject_class, PROP_CONNECTION,
+	//     g_param_spec_object("connection", "Connection", "EmConnection object for XR streaming",
+	//     EM_TYPE_CONNECTION,
+	//                         G_PARAM_CONSTRUCT_ONLY | G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 }
 
 /*
@@ -405,9 +409,21 @@ em_stream_client_thread_func(void *ptr)
  * Public functions
  */
 EmStreamClient *
-em_stream_client_new(EmConnection *connection)
+em_stream_client_new()
 {
-	return EM_STREAM_CLIENT(g_object_new(EM_TYPE_STREAM_CLIENT, "connection", connection, NULL));
+	ALOGI("%s: before g_object_new", __FUNCTION__);
+	gpointer self_untyped = g_object_new(EM_TYPE_STREAM_CLIENT, NULL);
+	if (self_untyped == NULL) {
+		ALOGE("%s: g_object_new failed to allocate", __FUNCTION__);
+		return NULL;
+	}
+	EmStreamClient *self = EM_STREAM_CLIENT(self_untyped);
+
+	// EmStreamClient *self = EM_STREAM_CLIENT(g_object_new(EM_TYPE_STREAM_CLIENT, "connection", connection, NULL));
+	ALOGI("%s: after g_object_new", __FUNCTION__);
+	// em_stream_client_set_connection(self, connection);
+	// ALOGI("%s: after em_stream_client_set_connection", __FUNCTION__);
+	return self;
 }
 
 void
@@ -480,10 +496,11 @@ em_stream_client_egl_end(EmStreamClient *sc)
 }
 
 void
-em_stream_client_spawn_thread(EmStreamClient *sc)
+em_stream_client_spawn_thread(EmStreamClient *sc, EmConnection *connection)
 {
 	ALOGI("%s: Starting stream client mainloop thread", __FUNCTION__);
-	int ret = os_thread_helper_start(&sc->play_thread, em_stream_client_thread_func, sc);
+	em_stream_client_set_connection(sc, connection);
+	int ret = os_thread_helper_start(&sc->play_thread, &em_stream_client_thread_func, sc);
 	(void)ret;
 	g_assert(ret == 0);
 }
@@ -493,8 +510,10 @@ em_stream_client_stop(EmStreamClient *sc)
 {
 	ALOGI("%s: Stopping pipeline and ending thread", __FUNCTION__);
 
-	gst_element_set_state(sc->pipeline, GST_STATE_NULL);
-	os_thread_helper_destroy(&sc->play_thread);
+	if (sc->pipeline != NULL) {
+		gst_element_set_state(sc->pipeline, GST_STATE_NULL);
+		os_thread_helper_stop_and_wait(&sc->play_thread);
+	}
 	gst_clear_object(&sc->pipeline);
 	gst_clear_object(&sc->appsink);
 	gst_clear_object(&sc->context);
@@ -603,4 +622,14 @@ static void
 em_stream_client_egl_restore(EmStreamClient *sc, EGLDisplay display)
 {
 	eglMakeCurrent(display, sc->old_egl.draw_surface, sc->old_egl.read_surface, sc->old_egl.context);
+}
+
+static void
+em_stream_client_set_connection(EmStreamClient *sc, EmConnection *connection)
+{
+	g_clear_object(&sc->connection);
+	sc->connection = g_object_ref(connection);
+	g_signal_connect(sc->connection, "on-need-pipeline", G_CALLBACK(on_need_pipeline_cb), sc);
+	g_signal_connect(sc->connection, "on-drop-pipeline", G_CALLBACK(on_drop_pipeline_cb), sc);
+	ALOGI("%s: EmConnection assigned", __FUNCTION__);
 }
