@@ -6,14 +6,18 @@
  */
 
 #pragma once
+
 #include "xrt/xrt_system.h"
 #include "xrt/xrt_device.h"
 #include "xrt/xrt_instance.h"
 #include "xrt/xrt_tracking.h"
 #include "xrt/xrt_compositor.h"
+#include "xrt/xrt_frame.h"
 
 #include "util/u_pacing.h"
 #include "util/u_logging.h"
+
+#include "gstreamer/gst_pipeline.h"
 
 // #include "pl_comp.h"
 // #include "pl_driver.h"
@@ -60,8 +64,11 @@ struct pluto_program
 	//! Space overseer, implemented for now using helper code.
 	struct xrt_space_overseer *xso;
 
+	struct xrt_frame_context xfctx = {};
+	struct gstreamer_pipeline *pipeline;
 };
 
+#define GST_APPSINK_NAME "ElectricMapleServer"
 
 // compositor interface functions
 
