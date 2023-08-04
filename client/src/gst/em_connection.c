@@ -84,8 +84,6 @@ static GParamSpec *properties[N_PROPERTIES] = {
 
 #define DEFAULT_WEBSOCKET_URI "ws://127.0.0.1:8080/ws"
 
-static void
-em_connection_set_pipeline(EmConnection *emconn, GstPipeline *pipeline);
 
 /* GObject method implementations */
 
@@ -572,7 +570,7 @@ emconn_websocket_connected_cb(GObject *session, GAsyncResult *res, EmConnection 
 }
 
 
-static void
+void
 em_connection_set_pipeline(EmConnection *emconn, GstPipeline *pipeline)
 {
 	g_assert_nonnull(pipeline);
@@ -636,6 +634,11 @@ em_connection_new(gchar *websocket_uri)
 	return EM_CONNECTION(g_object_new(EM_TYPE_CONNECTION, "websocket-uri", websocket_uri, NULL));
 }
 
+EmConnection *
+em_connection_new_localhost()
+{
+	return EM_CONNECTION(g_object_new(EM_TYPE_CONNECTION, NULL));
+}
 
 void
 em_connection_connect(EmConnection *emconn)

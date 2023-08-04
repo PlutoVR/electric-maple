@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
- * @brief  Internal header for the connection module of the ElectricMaple XR streaming solution
+ * @brief  Header for the connection module of the ElectricMaple XR streaming solution
  * @author Ryan Pavlik <rpavlik@collabora.com>
  * @ingroup em_client
  */
@@ -10,8 +10,14 @@
 
 
 #include <glib-object.h>
-
+#include <gst/gstpipeline.h>
 #include <stdbool.h>
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif // __cplusplus
+
 
 #define EM_TYPE_CONNECTION em_connection_get_type()
 
@@ -27,6 +33,8 @@ G_DECLARE_FINAL_TYPE(EmConnection, em_connection, EM, CONNECTION, GObject)
 EmConnection *
 em_connection_new(gchar *websocket_uri);
 
+EmConnection *
+em_connection_new_localhost();
 
 /*!
  * Actually start connecting to the server
@@ -54,7 +62,14 @@ em_connection_disconnect(EmConnection *emconn);
 bool
 em_connection_send_bytes(EmConnection *emconn, GBytes *bytes);
 
-// /// Clean up the handshake struct fields
-// /// @memberof em_handshake
-// void
-// em_connection_fini(struct em_connection *emconn);
+/*!
+ * Assign a pipeline for use.
+ *
+ * Will be started when the websocket connection comes up in order to negotiate using the webrtcbin.
+ */
+void
+em_connection_set_pipeline(EmConnection *emconn, GstPipeline *pipeline);
+
+#ifdef __cplusplus
+} // extern "C"
+#endif // __cplusplus

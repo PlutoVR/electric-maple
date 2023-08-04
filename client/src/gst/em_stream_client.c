@@ -11,9 +11,11 @@
 #include "em_stream_client.h"
 #include "app_log.h"
 #include "em_connection.h"
+#include "gst_common.h" // for em_sample
 
 #include "os/os_threading.h"
 
+#include <GLES2/gl2ext.h>
 #include <gst/app/gstappsink.h>
 #include <gst/gl/gl.h>
 #include <gst/gl/gstglsyncmeta.h>
@@ -27,7 +29,13 @@
 #include <gst/video/video-frame.h>
 
 #include <EGL/egl.h>
+#include <string.h>
 
+struct em_sc_sample
+{
+	struct em_sample base;
+	GstSample *sample;
+};
 
 struct _EmStreamClient
 {
@@ -47,6 +55,13 @@ struct _EmStreamClient
 	GstGLContext *context;
 
 	GstElement *appsink;
+
+	GLenum frame_texture_target;
+	GLenum texture_target;
+	GLuint texture_id;
+
+	int width;
+	int height;
 
 	struct
 	{
@@ -68,7 +83,7 @@ struct _EmStreamClient
 	// This mutex protects the EGL context below across main and gstgl threads
 	struct os_mutex egl_lock;
 
-	bool is_running;
+	bool pipeline_is_running;
 };
 
 G_DEFINE_TYPE(EmStreamClient, em_stream_client, G_TYPE_OBJECT);
@@ -112,6 +127,9 @@ typedef enum
 
 // clang-format on
 
+/*
+ * callbacks
+ */
 
 static void
 on_need_pipeline_cb(EmConnection *emconn, EmStreamClient *sc);
@@ -119,49 +137,18 @@ on_need_pipeline_cb(EmConnection *emconn, EmStreamClient *sc);
 static void
 on_drop_pipeline_cb(EmConnection *emconn, EmStreamClient *sc);
 
+static void *
+em_stream_client_thread_func(void *ptr);
+
 /*
  * Helper functions
  */
 
 static void
-em_stream_client_egl_save(EmStreamClient *sc)
-{
-	sc->old_egl.context = eglGetCurrentContext();
-	sc->old_egl.read_surface = eglGetCurrentSurface(EGL_READ);
-	sc->old_egl.draw_surface = eglGetCurrentSurface(EGL_DRAW);
-}
+em_stream_client_egl_save(EmStreamClient *sc);
 
 static void
-em_stream_client_egl_restore(EmStreamClient *sc, EGLDisplay display)
-{
-	eglMakeCurrent(display, sc->old_egl.draw_surface, sc->old_egl.read_surface, sc->old_egl.context);
-}
-
-
-static bool
-em_stream_client_egl_begin(EmStreamClient *sc)
-{
-	em_stream_client_egl_mutex_lock(sc);
-	em_stream_client_egl_save(sc);
-	ALOGE("%s : make current display=%p, surface=%p, context=%p", __FUNCTION__, sc->egl.display, sc->egl.surface,
-	      sc->egl.android_main_context);
-	if (eglMakeCurrent(sc->egl.display, sc->egl.surface, sc->egl.surface, sc->egl.android_main_context) ==
-	    EGL_FALSE) {
-		ALOGE("%s: Failed make egl context current", __FUNCTION__);
-		em_stream_client_egl_mutex_unlock(sc);
-		return false;
-	}
-
-	return true;
-}
-
-static void
-em_stream_client_egl_end(EmStreamClient *sc)
-{
-	ALOGI("%s: Make egl context un-current", __FUNCTION__);
-	em_stream_client_egl_restore(sc, sc->egl.display);
-	em_stream_client_egl_mutex_unlock(sc);
-}
+em_stream_client_egl_restore(EmStreamClient *sc, EGLDisplay display);
 
 /* GObject method implementations */
 
@@ -200,16 +187,29 @@ em_stream_client_get_property(GObject *object, guint property_id, GValue *value,
 static void
 em_stream_client_init(EmStreamClient *sc)
 {
+	ALOGI("RYLIE: %s: creating stuff", __FUNCTION__);
 
 	sc->loop = g_main_loop_new(NULL, FALSE);
 	os_mutex_init(&sc->egl_lock);
+	g_assert(os_thread_helper_init(&sc->play_thread) >= 0);
+	ALOGI("RYLIE: %s: done creating stuff", __FUNCTION__);
 }
 
 static void
 em_stream_client_dispose(GObject *object)
 {
 	EmStreamClient *self = EM_STREAM_CLIENT(object);
+	em_stream_client_stop(self);
+	os_thread_helper_destroy(&self->play_thread);
+	g_clear_object(&self->loop);
 	g_clear_object(&self->connection);
+	gst_clear_object(&self->pipeline);
+	gst_clear_object(&self->gst_gl_display);
+	gst_clear_object(&self->gst_gl_context);
+	gst_clear_object(&self->gst_gl_other_context);
+	gst_clear_object(&self->display);
+	gst_clear_object(&self->context);
+	gst_clear_object(&self->appsink);
 	os_mutex_destroy(&self->egl_lock);
 }
 
@@ -232,11 +232,13 @@ em_stream_client_class_init(EmStreamClientClass *klass)
 	 */
 	g_object_class_install_property(
 	    gobject_class, PROP_CONNECTION,
-	    g_param_spec_string("connection", "Connection", "EmConnection object for XR streaming",
-	                        NULL /* default value */,
+	    g_param_spec_object("connection", "Connection", "EmConnection object for XR streaming", EM_TYPE_CONNECTION,
 	                        G_PARAM_CONSTRUCT_ONLY | G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 }
 
+/*
+ * callbacks
+ */
 
 static GstBusSyncReply
 bus_sync_handler_cb(GstBus *bus, GstMessage *msg, EmStreamClient *sc)
@@ -266,25 +268,50 @@ bus_sync_handler_cb(GstBus *bus, GstMessage *msg, EmStreamClient *sc)
 	return GST_BUS_PASS;
 }
 
-/// Sets pipeline state to null, and stops+destroys the frame server thread
-/// before cleaning up gstreamer objects
-static void
-stop_pipeline(EmStreamClient *sc)
+static gboolean
+gst_bus_cb(GstBus *bus, GstMessage *message, gpointer data)
 {
-	// sc->is_running = false;
-	gst_element_set_state(sc->pipeline, GST_STATE_NULL);
-	os_thread_helper_destroy(&sc->play_thread);
-	g_clear_object(&sc->connection);
-	gst_clear_object(&sc->pipeline);
-	gst_clear_object(&sc->display);
-	gst_clear_object(&sc->android_main_context);
-	gst_clear_object(&sc->context);
+	// LOG_MSG(message);
+
+	GstBin *pipeline = GST_BIN(data);
+
+	switch (GST_MESSAGE_TYPE(message)) {
+	case GST_MESSAGE_ERROR: {
+		GError *gerr = NULL;
+		gchar *debug_msg = NULL;
+		gst_message_parse_error(message, &gerr, &debug_msg);
+		GST_DEBUG_BIN_TO_DOT_FILE(pipeline, GST_DEBUG_GRAPH_SHOW_ALL, "pipeline-error");
+		gchar *dotdata = gst_debug_bin_to_dot_data(pipeline, GST_DEBUG_GRAPH_SHOW_ALL);
+		ALOGE("gst_bus_cb: DOT data: %s", dotdata);
+
+		ALOGE("gst_bus_cb: Error: %s (%s)", gerr->message, debug_msg);
+		g_error("gst_bus_cb: Error: %s (%s)", gerr->message, debug_msg);
+		g_error_free(gerr);
+		g_free(debug_msg);
+	} break;
+	case GST_MESSAGE_WARNING: {
+		GError *gerr = NULL;
+		gchar *debug_msg = NULL;
+		gst_message_parse_warning(message, &gerr, &debug_msg);
+		GST_DEBUG_BIN_TO_DOT_FILE(pipeline, GST_DEBUG_GRAPH_SHOW_ALL, "pipeline-warning");
+		ALOGW("gst_bus_cb: Warning: %s (%s)", gerr->message, debug_msg);
+		g_warning("gst_bus_cb: Warning: %s (%s)", gerr->message, debug_msg);
+		g_error_free(gerr);
+		g_free(debug_msg);
+	} break;
+	case GST_MESSAGE_EOS: {
+		g_error("gst_bus_cb: Got EOS!!");
+	} break;
+	default: break;
+	}
+	return TRUE;
 }
 
 static void
 on_need_pipeline_cb(EmConnection *emconn, EmStreamClient *sc)
 {
-
+	g_assert_nonnull(sc);
+	g_assert_nonnull(emconn);
 	GError *error = NULL;
 
 
@@ -295,13 +322,9 @@ on_need_pipeline_cb(EmConnection *emconn, EmStreamClient *sc)
 	uint32_t height = 270;
 
 	// We'll need an active egl context below before setting up gstgl (as explained previously)
-	ALOGE("FRED: websocket_connected_cb: Trying to get the EGL lock");
-	em_stream_client_egl_mutex_lock(sc);
-	ALOGE("FRED : make current display=%p, surface=%p, context=%p", sc->state->display, sc->state->surface,
-	      sc->state->context);
-	if (eglMakeCurrent(sc->state->display, sc->state->surface, sc->state->surface, sc->state->context) ==
-	    EGL_FALSE) {
-		ALOGE("FRED: websocket_connected_cb: Failed make egl context current");
+	if (!em_stream_client_egl_begin_pbuffer(sc)) {
+		ALOGE("%s: Failed to make EGL context current, cannot create pipeline!", __FUNCTION__);
+		return;
 	}
 
 	gchar *pipeline_string = g_strdup_printf(
@@ -312,26 +335,14 @@ on_need_pipeline_cb(EmConnection *emconn, EmStreamClient *sc)
 	    "amcviddec-omxqcomvideodecoderavc ! "
 	    "glsinkbin name=glsink");
 
-	// THIS IS THE TEST PIPELINE FOR TESTING WITH APPSINK AT VARIOUS PHASES OF THE PIPELINE AND
-	// SEE IF YOU GET SAMPLES WITH THE BELOW g_signal_connect(..., new_sample_cb) signal.
-	// for example, for testing that the h264parser gives you stuff :
-	//                "webrtcbin name=webrtc bundle-policy=max-bundle ! rtph264depay ! h264parse ! appsink
-	//                name=appsink");
-
-	ALOGI("launching pipeline\n");
-	if (NULL == sc) {
-		ALOGE("FRED: OH ! NULL VID - this shouldn't happen !");
-	}
 	sc->pipeline = gst_object_ref_sink(gst_parse_launch(pipeline_string, &error));
 	if (sc->pipeline == NULL) {
 		ALOGE("FRED: Failed creating pipeline : Bad source: %s", error->message);
 		abort();
 	}
 
-	// And we unCurrent the egl context.
-	eglMakeCurrent(sc->state->display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
-	ALOGE("FRED: websocket_connected: releasing the EGL lock");
-	os_mutex_unlock(&sc->state->egl_lock);
+	// Un-current the EGL context
+	em_stream_client_egl_end(sc);
 
 	// We convert the string SINK_CAPS above into a GstCaps that elements below can understand.
 	// the "video/x-raw(" GST_CAPS_FEATURE_MEMORY_GL_MEMORY ")," part of the caps is read :
@@ -342,14 +353,6 @@ on_need_pipeline_cb(EmConnection *emconn, EmStreamClient *sc)
 	// all of those constructs will be hidden from you, but are turned on by that CAPS).
 	g_autoptr(GstCaps) caps = gst_caps_from_string(SINK_CAPS);
 
-	// THIS SHOULD BE UNCOMMENTED ONLY WHEN TURNING THE TEST PIPELINE ON ABOVE
-#if 0
-		sc->appsink = gst_bin_get_by_name(GST_BIN(sc->pipeline), "appsink");
-		gst_app_sink_set_emit_signals(GST_APP_SINK(sc->appsink), TRUE);
-		g_signal_connect(sc->appsink, "new-sample", G_CALLBACK(new_sample_cb), NULL);
-#else
-
-	// THIS SHOULD BE COMMENTED WHEN TURNING THE TEST PIPELINE
 	// FRED: We create the appsink 'manually' here because glsink's ALREADY a sink and so if we stick
 	//       glsinkbin ! appsink in our pipeline_string for automatic linking, gst_parse will NOT like this,
 	//       as glsinkbin (a sink) cannot link to anything upstream (appsink being 'another' sink). So we
@@ -358,17 +361,19 @@ on_need_pipeline_cb(EmConnection *emconn, EmStreamClient *sc)
 	g_object_set(sc->appsink, "caps", caps, NULL);
 	g_autoptr(GstElement) glsinkbin = gst_bin_get_by_name(GST_BIN(sc->pipeline), "glsink");
 	g_object_set(glsinkbin, "sink", sc->appsink, NULL);
-#endif
 
 	g_autoptr(GstBus) bus = gst_element_get_bus(sc->pipeline);
-	gst_bus_set_sync_handler(bus, bus_sync_handler_cb, sc, NULL);
+	// We set this up to inject the EGL context
+	gst_bus_set_sync_handler(bus, (GstBusSyncHandler)bus_sync_handler_cb, sc, NULL);
+
+	// This just watches for errors and such
 	gst_bus_add_watch(bus, gst_bus_cb, sc->pipeline);
 	g_object_unref(bus);
 
-	// FOR RYAN : We are STARTING the pipeline. From this point forth, if built with
-	// GST_DEBUG=*:6, you should see LOADS of GST output, including the webrtc negotiation.
+	sc->pipeline_is_running = TRUE;
 
-	sc->is_running = TRUE;
+	// This actually hands over the pipeline. Once our own handler returns, the pipeline will be started by the
+	// connection.
 	g_signal_emit_by_name(emconn, "set-pipeline", GST_PIPELINE(sc->pipeline), NULL);
 }
 
@@ -380,6 +385,20 @@ on_drop_pipeline_cb(EmConnection *emconn, EmStreamClient *sc)
 	}
 	gst_clear_object(&sc->pipeline);
 	gst_clear_object(&sc->appsink);
+}
+
+static void *
+em_stream_client_thread_func(void *ptr)
+{
+
+	EmStreamClient *sc = (EmStreamClient *)ptr;
+
+	ALOGI("%s: running GMainLoop", __FUNCTION__);
+	ALOGD("em_fs_mainloop: running GMainLoop!");
+	g_main_loop_run(sc->loop);
+	ALOGI("%s: g_main_loop_run returned", __FUNCTION__);
+
+	return NULL;
 }
 
 /*
@@ -429,4 +448,159 @@ void
 em_stream_client_egl_mutex_unlock(EmStreamClient *sc)
 {
 	os_mutex_unlock(&sc->egl_lock);
+}
+
+bool
+em_stream_client_egl_begin(EmStreamClient *sc, EGLSurface draw, EGLSurface read)
+{
+	em_stream_client_egl_mutex_lock(sc);
+	em_stream_client_egl_save(sc);
+	ALOGE("%s : make current display=%p, draw surface=%p, read surface=%p, context=%p", __FUNCTION__,
+	      sc->egl.display, draw, read, sc->egl.android_main_context);
+	if (eglMakeCurrent(sc->egl.display, draw, read, sc->egl.android_main_context) == EGL_FALSE) {
+		ALOGE("%s: Failed make egl context current", __FUNCTION__);
+		em_stream_client_egl_mutex_unlock(sc);
+		return false;
+	}
+	return true;
+}
+
+bool
+em_stream_client_egl_begin_pbuffer(EmStreamClient *sc)
+{
+	return em_stream_client_egl_begin(sc, sc->egl.surface, sc->egl.surface);
+}
+
+void
+em_stream_client_egl_end(EmStreamClient *sc)
+{
+	ALOGI("%s: Make egl context un-current", __FUNCTION__);
+	em_stream_client_egl_restore(sc, sc->egl.display);
+	em_stream_client_egl_mutex_unlock(sc);
+}
+
+void
+em_stream_client_spawn_thread(EmStreamClient *sc)
+{
+	ALOGI("%s: Starting stream client mainloop thread", __FUNCTION__);
+	int ret = os_thread_helper_start(&sc->play_thread, em_stream_client_thread_func, sc);
+	(void)ret;
+	g_assert(ret == 0);
+}
+
+void
+em_stream_client_stop(EmStreamClient *sc)
+{
+	ALOGI("%s: Stopping pipeline and ending thread", __FUNCTION__);
+
+	gst_element_set_state(sc->pipeline, GST_STATE_NULL);
+	os_thread_helper_destroy(&sc->play_thread);
+	gst_clear_object(&sc->pipeline);
+	gst_clear_object(&sc->appsink);
+	gst_clear_object(&sc->context);
+
+	sc->pipeline_is_running = false;
+}
+
+struct em_sample *
+em_stream_client_try_pull_sample(EmStreamClient *sc)
+{
+
+	// FOR RYAN : As mentioned, the glsinkbin -> appsink part of the gstreamer pipeline in gst_driver.c
+	// will output "samples" that might be signalled for using "new_sample_cb" in gst_driver (useful for
+	// testing if the gstreamer sink elements are giving us "anything"), but also on which we can "poll"
+	// to see and that's what we do here. Note that the non-try version of the call "gst_app_sink_pull_sample"
+	// WILL BLOCK until there's a sample.
+
+	// Get Newest sample from GST appsink. Waiting 1ms here before giving up (might want to adjust that time)
+	// ALOGE("DEBUG: Trying to get new gstgl sample, waiting max 1ms\n");
+
+	GstSample *sample = gst_app_sink_try_pull_sample(GST_APP_SINK(sc->appsink), (GstClockTime)(1000 * GST_USECOND));
+
+	if (sample == NULL) {
+		return NULL;
+	}
+
+	ALOGE("FRED: GOT A SAMPLE !!!");
+	GstBuffer *buffer = gst_sample_get_buffer(sample);
+	GstCaps *caps = gst_sample_get_caps(sample);
+
+	GstVideoInfo info;
+	gst_video_info_from_caps(&info, caps);
+	/*gint width = GST_VIDEO_INFO_WIDTH (&info);
+	gint height = GST_VIDEO_INFO_HEIGHT (&info);*/
+
+	// FOR RYAN: Handle resize according to how it's done in PlutosphereOXR
+	/*if (width != sc->width || height != sc->height) {
+	    sc->width = width;
+	    sc->height = height;
+	}*/
+
+	struct em_sc_sample *ret = calloc(1, sizeof(struct em_sc_sample));
+
+	GstVideoFrame frame;
+	GstMapFlags flags = (GstMapFlags)(GST_MAP_READ | GST_MAP_GL);
+	gst_video_frame_map(&frame, &info, buffer, flags);
+	ret->base.frame_texture_id = *(GLuint *)frame.data[0];
+
+	if (sc->context == NULL) {
+		ALOGI("%s: Retrieving the GStreamer EGL context", __FUNCTION__);
+		/* Get GStreamer's gl context. */
+		gst_gl_query_local_gl_context(sc->appsink, GST_PAD_SINK, &sc->context);
+
+		/* Check if we have 2D or OES textures */
+		GstStructure *s = gst_caps_get_structure(caps, 0);
+		const gchar *texture_target_str = gst_structure_get_string(s, "texture-target");
+		if (g_str_equal(texture_target_str, GST_GL_TEXTURE_TARGET_EXTERNAL_OES_STR)) {
+			sc->frame_texture_target = GL_TEXTURE_EXTERNAL_OES;
+		} else if (g_str_equal(texture_target_str, GST_GL_TEXTURE_TARGET_2D_STR)) {
+			sc->frame_texture_target = GL_TEXTURE_2D;
+			ALOGE("RYLIE: Got GL_TEXTURE_2D instead of expected GL_TEXTURE_EXTERNAL_OES");
+		} else {
+			g_assert_not_reached();
+		}
+	}
+	ret->base.frame_texture_target = sc->frame_texture_target;
+
+	GstGLSyncMeta *sync_meta = gst_buffer_get_gl_sync_meta(buffer);
+	if (sync_meta) {
+		/* MOSHI: the set_sync() seems to be needed for resizing */
+		gst_gl_sync_meta_set_sync_point(sync_meta, sc->context);
+		gst_gl_sync_meta_wait(sync_meta, sc->context);
+	}
+
+	gst_video_frame_unmap(&frame);
+	// move sample ownership into the return value
+	ret->sample = sample;
+	return &(ret->base);
+}
+
+void
+em_stream_client_release_sample(EmStreamClient *sc, struct em_sample *ems)
+{
+
+	struct em_sc_sample *impl = (struct em_sc_sample *)ems;
+	ALOGW("RYLIE: Releasing sample with texture ID %d", ems->frame_texture_id);
+	gst_sample_unref(impl->sample);
+	free(impl);
+}
+
+
+/*
+ * Helper functions
+ */
+
+
+static void
+em_stream_client_egl_save(EmStreamClient *sc)
+{
+	sc->old_egl.context = eglGetCurrentContext();
+	sc->old_egl.read_surface = eglGetCurrentSurface(EGL_READ);
+	sc->old_egl.draw_surface = eglGetCurrentSurface(EGL_DRAW);
+}
+
+static void
+em_stream_client_egl_restore(EmStreamClient *sc, EGLDisplay display)
+{
+	eglMakeCurrent(display, sc->old_egl.draw_surface, sc->old_egl.read_surface, sc->old_egl.context);
 }

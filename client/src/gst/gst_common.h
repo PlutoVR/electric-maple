@@ -12,6 +12,8 @@
 
 #pragma once
 
+#include "em_connection.h"
+#include "em_stream_client.h"
 #define XR_USE_PLATFORM_ANDROID
 #define XR_USE_GRAPHICS_API_OPENGL_ES
 
@@ -51,10 +53,15 @@ struct em_state
 	JavaVM *java_vm;
 	bool hasPermissions;
 
-	struct em_fs *vid;
+	bool connected;
+
+	// struct em_fs *vid;
+
+	// EmConnection *connection;
+	// EmStreamClient *stream_client;
 
 	// This mutex protects the EGL context below across main and gstgl threads
-	struct os_mutex egl_lock;
+	// struct os_mutex egl_lock;
 
 	EGLDisplay display;
 	// context created in initializeEGL
@@ -77,17 +84,12 @@ struct em_state
 	uint32_t width;
 	uint32_t height;
 
-	// TODO This socket is for sending the HMD pose upstream "out of band" - replace with data channel.
-	int socket_fd;
-	struct sockaddr_in socket_addr;
 
 	// this is bad, we want an xrt_frame_node etc.
 
 	int way;
 
-	struct xrt_frame_sink frame_sink;
-	struct xrt_frame *xf;
-	// this is the GL texture id used by the main renderer. This is what gst/ code should also be using.
+	// this is the GL texture id used by the main renderer.
 	GLuint frame_texture_id;
 	GLenum frame_texture_target;
 	GLboolean frame_available;
