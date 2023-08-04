@@ -146,6 +146,7 @@ em_connection_finalize(GObject *object)
 static void
 em_connection_class_init(EmConnectionClass *klass)
 {
+	ALOGE("RYLIE: %s: Begin", __FUNCTION__);
 	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 
 	gobject_class->dispose = em_connection_dispose;
@@ -235,6 +236,7 @@ em_connection_class_init(EmConnectionClass *klass)
 	 */
 	signals[SIGNAL_ON_DROP_PIPELINE] = g_signal_new("on-drop-pipeline", G_OBJECT_CLASS_TYPE(klass),
 	                                                G_SIGNAL_RUN_LAST, 0, NULL, NULL, NULL, G_TYPE_NONE, 0);
+	ALOGE("RYLIE: %s: End", __FUNCTION__);
 }
 
 

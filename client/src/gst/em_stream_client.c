@@ -220,6 +220,7 @@ em_stream_client_finalize(GObject *object)
 static void
 em_stream_client_class_init(EmStreamClientClass *klass)
 {
+	ALOGE("RYLIE: %s: Begin", __FUNCTION__);
 
 	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 
@@ -239,6 +240,7 @@ em_stream_client_class_init(EmStreamClientClass *klass)
 	//     g_param_spec_object("connection", "Connection", "EmConnection object for XR streaming",
 	//     EM_TYPE_CONNECTION,
 	//                         G_PARAM_CONSTRUCT_ONLY | G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	ALOGE("RYLIE: %s: End", __FUNCTION__);
 }
 
 /*
