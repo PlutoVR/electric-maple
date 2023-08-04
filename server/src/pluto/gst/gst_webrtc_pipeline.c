@@ -215,6 +215,12 @@ data_channel_close_cb(GstWebRTCDataChannel *datachannel, struct gstreamer_webrtc
 }
 
 static void
+data_channel_message_data_cb(GstWebRTCDataChannel *datachannel, GBytes *data, struct gstreamer_webrtc_pipeline *gwp)
+{
+	// U_LOG_E("Received data channel binary message: %d\n", g_bytes_get_size(data));
+}
+
+static void
 data_channel_message_string_cb(GstWebRTCDataChannel *datachannel, gchar *str, struct gstreamer_webrtc_pipeline *gwp)
 {
 	U_LOG_E("Received data channel message: %s\n", str);
@@ -259,6 +265,7 @@ webrtc_client_connected_cb(MssHttpServer *server, MssClientId client_id, struct 
 		g_signal_connect(gwp->data_channel, "on-open", G_CALLBACK(data_channel_open_cb), gwp);
 		g_signal_connect(gwp->data_channel, "on-close", G_CALLBACK(data_channel_close_cb), gwp);
 		g_signal_connect(gwp->data_channel, "on-error", G_CALLBACK(data_channel_error_cb), gwp);
+		g_signal_connect(gwp->data_channel, "on-message-data", G_CALLBACK(data_channel_message_data_cb), gwp);
 		g_signal_connect(gwp->data_channel, "on-message-string", G_CALLBACK(data_channel_message_string_cb),
 		                 gwp);
 	}
