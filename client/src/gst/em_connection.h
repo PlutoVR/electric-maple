@@ -17,12 +17,6 @@
 
 G_DECLARE_FINAL_TYPE(EmConnection, em_connection, EM, CONNECTION, GObject)
 
-/*
- * @param launch_callback Function pointer to call to create a pipeline
- * @param drop_callback Function pointer to call when dropping a connection - must be idempotent
- * @param data Optional userdata to include when calling @p launch_callback and @p drop_callback
- */
-
 /*!
  * Create a connection object
  *

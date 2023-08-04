@@ -70,6 +70,7 @@ enum
 };
 
 static guint signals[N_SIGNALS];
+
 typedef enum
 {
 	PROP_WEBSOCKET_URI = 1,

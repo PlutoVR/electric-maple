@@ -1,4 +1,4 @@
-add_library(pluto_vf SHARED gst_driver.c em_connection.c)
+add_library(pluto_vf SHARED gst_driver.c em_connection.c em_pipeline.c)
 target_link_libraries(
 	pluto_vf
 	PRIVATE
