@@ -184,6 +184,7 @@ em_stream_client_init(EmStreamClient *sc)
 {
 	ALOGI("%s: creating stuff", __FUNCTION__);
 
+    memset(sc, 0, sizeof(EmStreamClient));
 	sc->loop = g_main_loop_new(NULL, FALSE);
 	os_mutex_init(&sc->egl_lock);
 	g_assert(os_thread_helper_init(&sc->play_thread) >= 0);
