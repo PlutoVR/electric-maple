@@ -54,6 +54,14 @@ em_stream_client_set_egl_context(EmStreamClient *sc,
                                  EGLDisplay display,
                                  EGLContext context,
                                  EGLSurface pbuffer_surface);
+/*!
+ * Set the connection.
+ *
+ * @sc: self
+ * @connection: The connection to use
+ */
+void
+em_stream_client_set_connection(EmStreamClient *sc, EmConnection *connection);
 
 /*!
  * Lock the mutex for the "main" EGL context supplied via @ref em_stream_client_set_egl_context
@@ -103,11 +111,9 @@ em_stream_client_egl_end(EmStreamClient *sc);
 
 /*!
  * Start the GMainLoop embedded in this object in a new thread
- *
- * @param connection The connection to use
  */
 void
-em_stream_client_spawn_thread(EmStreamClient *sc, EmConnection *connection);
+em_stream_client_spawn_thread(EmStreamClient *sc);
 
 /*!
  * Stop the pipeline and the mainloop thread.

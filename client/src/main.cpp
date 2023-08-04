@@ -766,14 +766,14 @@ android_main(struct android_app *app)
 
 	ALOGI("%s: creating connection object", __FUNCTION__);
 	EmConnection *connection = em_connection_new_localhost();
-
 	g_signal_connect(connection, "connected", G_CALLBACK(connected_cb), &state);
+	em_stream_client_set_connection(stream_client, connection);
 
 	ALOGI("%s: starting connection", __FUNCTION__);
 	em_connection_connect(connection);
 
 	ALOGI("%s: starting stream client mainloop thread", __FUNCTION__);
-	em_stream_client_spawn_thread(stream_client, connection);
+	em_stream_client_spawn_thread(stream_client);
 
 	// OpenXR session
 	ALOGE("FRED: Creating OpenXR session...");

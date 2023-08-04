@@ -150,9 +150,6 @@ em_stream_client_egl_save(EmStreamClient *sc);
 static void
 em_stream_client_egl_restore(EmStreamClient *sc, EGLDisplay display);
 
-static void
-em_stream_client_set_connection(EmStreamClient *sc, EmConnection *connection);
-
 /* GObject method implementations */
 
 static void
@@ -456,6 +453,19 @@ em_stream_client_set_egl_context(EmStreamClient *sc, EGLDisplay display, EGLCont
 }
 
 void
+em_stream_client_set_connection(EmStreamClient *sc, EmConnection *connection)
+{
+	g_clear_object(&sc->connection);
+	if (connection != NULL) {
+		sc->connection = g_object_ref(connection);
+		g_signal_connect(sc->connection, "on-need-pipeline", G_CALLBACK(on_need_pipeline_cb), sc);
+		g_signal_connect(sc->connection, "on-drop-pipeline", G_CALLBACK(on_drop_pipeline_cb), sc);
+		ALOGI("%s: EmConnection assigned", __FUNCTION__);
+	}
+}
+
+
+void
 em_stream_client_egl_mutex_lock(EmStreamClient *sc)
 {
 	os_mutex_lock(&sc->egl_lock);
@@ -497,10 +507,9 @@ em_stream_client_egl_end(EmStreamClient *sc)
 }
 
 void
-em_stream_client_spawn_thread(EmStreamClient *sc, EmConnection *connection)
+em_stream_client_spawn_thread(EmStreamClient *sc)
 {
 	ALOGI("%s: Starting stream client mainloop thread", __FUNCTION__);
-	em_stream_client_set_connection(sc, connection);
 	int ret = os_thread_helper_start(&sc->play_thread, &em_stream_client_thread_func, sc);
 	(void)ret;
 	g_assert(ret == 0);
@@ -623,14 +632,4 @@ static void
 em_stream_client_egl_restore(EmStreamClient *sc, EGLDisplay display)
 {
 	eglMakeCurrent(display, sc->old_egl.draw_surface, sc->old_egl.read_surface, sc->old_egl.context);
-}
-
-static void
-em_stream_client_set_connection(EmStreamClient *sc, EmConnection *connection)
-{
-	g_clear_object(&sc->connection);
-	sc->connection = g_object_ref(connection);
-	g_signal_connect(sc->connection, "on-need-pipeline", G_CALLBACK(on_need_pipeline_cb), sc);
-	g_signal_connect(sc->connection, "on-drop-pipeline", G_CALLBACK(on_drop_pipeline_cb), sc);
-	ALOGI("%s: EmConnection assigned", __FUNCTION__);
 }
