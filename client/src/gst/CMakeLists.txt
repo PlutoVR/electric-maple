@@ -5,8 +5,6 @@ target_link_libraries(
 		aux_util
 		${JSONGLIB_LIBRARIES}
 		${LIBSOUP_LIBRARIES}
-		${GIO_LIBRARIES}
-		${GLIB_LIBRARIES}
 	PUBLIC
 		OpenXR::openxr_loader # actually only need headers but prefab doesn't expose that
 		EGL::EGL
