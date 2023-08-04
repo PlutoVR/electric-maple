@@ -629,8 +629,10 @@ static void
 em_stream_client_set_connection(EmStreamClient *sc, EmConnection *connection)
 {
 	g_clear_object(&sc->connection);
-	sc->connection = g_object_ref(connection);
-	g_signal_connect(sc->connection, "on-need-pipeline", G_CALLBACK(on_need_pipeline_cb), sc);
-	g_signal_connect(sc->connection, "on-drop-pipeline", G_CALLBACK(on_drop_pipeline_cb), sc);
-	ALOGI("%s: EmConnection assigned", __FUNCTION__);
+	if (connection != NULL) {
+		sc->connection = g_object_ref(connection);
+		g_signal_connect(sc->connection, "on-need-pipeline", G_CALLBACK(on_need_pipeline_cb), sc);
+		g_signal_connect(sc->connection, "on-drop-pipeline", G_CALLBACK(on_drop_pipeline_cb), sc);
+		ALOGI("%s: EmConnection assigned", __FUNCTION__);
+	}
 }
