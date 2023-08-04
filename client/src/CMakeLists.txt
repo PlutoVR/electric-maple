@@ -1,4 +1,7 @@
 add_subdirectory(gst)
+if(NOT ANDROID)
+	return()
+endif()
 
 # build native_app_glue as a static lib
 add_library(
