@@ -25,7 +25,7 @@ set(GST_LIBRARIES
     ${GST_ARCH_DIR}/lib/libgstvalidate-1.0.a
     ${GST_ARCH_DIR}/lib/libffi.a
     ${GST_ARCH_DIR}/lib/libgstvideo-1.0.a
-    ${GST_ARCH_DIR}/lib/libavformat.a
+    # ${GST_ARCH_DIR}/lib/libavformat.a
     ${GST_ARCH_DIR}/lib/libgstrtp-1.0.a
     ${GST_ARCH_DIR}/lib/libgsturidownloader-1.0.a
     ${GST_ARCH_DIR}/lib/libwavpack.a
@@ -66,7 +66,7 @@ set(GST_LIBRARIES
     ${GST_ARCH_DIR}/lib/libgstcodecs-1.0.a
     ${GST_ARCH_DIR}/lib/libges-1.0.a
     ${GST_ARCH_DIR}/lib/libwebrtc_audio_processing.a
-    ${GST_ARCH_DIR}/lib/libavcodec.a
+    # ${GST_ARCH_DIR}/lib/libavcodec.a
     ${GST_ARCH_DIR}/lib/libjpeg.a
     ${GST_ARCH_DIR}/lib/libxml2.a
     ${GST_ARCH_DIR}/lib/libpango-1.0.a
@@ -173,7 +173,7 @@ set(GST_LIBRARIES
     ${GST_ARCH_DIR}/lib/gstreamer-1.0/libgstaudiovisualizers.a
     ${GST_ARCH_DIR}/lib/gstreamer-1.0/libgstx264.a
     ${GST_ARCH_DIR}/lib/gstreamer-1.0/libgstalphacolor.a
-    ${GST_ARCH_DIR}/lib/gstreamer-1.0/libgstlibav.a
+    # ${GST_ARCH_DIR}/lib/gstreamer-1.0/libgstlibav.a
     ${GST_ARCH_DIR}/lib/gstreamer-1.0/libgstremovesilence.a
     ${GST_ARCH_DIR}/lib/gstreamer-1.0/libgstges.a
     ${GST_ARCH_DIR}/lib/gstreamer-1.0/libgstgio.a
@@ -292,7 +292,7 @@ set(GST_LIBRARIES
     ${GST_ARCH_DIR}/lib/libgio-2.0.a
     ${GST_ARCH_DIR}/lib/libexpat.a
     ${GST_ARCH_DIR}/lib/libvpx.a
-    ${GST_ARCH_DIR}/lib/libavutil.a
+    # ${GST_ARCH_DIR}/lib/libavutil.a
     ${GST_ARCH_DIR}/lib/libgstadaptivedemux-1.0.a
     ${GST_ARCH_DIR}/lib/libvo-aacenc.a
     ${GST_ARCH_DIR}/lib/libsbc.a
@@ -307,7 +307,7 @@ set(GST_LIBRARIES
     ${GST_ARCH_DIR}/lib/libgstcheck-1.0.a
     ${GST_ARCH_DIR}/lib/libavfilter.a
     ${GST_ARCH_DIR}/lib/libgstcontroller-1.0.a
-    ${GST_ARCH_DIR}/lib/libturbojpeg.a
+    # ${GST_ARCH_DIR}/lib/libturbojpeg.a
 	)
 set(LIBSOUP_LIBRARIES ${GST_ARCH_DIR}/lib/libsoup-2.4.a)
 set(JSONGLIB_LIBRARIES ${GST_ARCH_DIR}/lib/libjson-glib-1.0.a)
