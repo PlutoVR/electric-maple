@@ -345,7 +345,7 @@ em_fs_mainloop(void *ptr)
         if (ret == GST_STATE_CHANGE_FAILURE) {
                 ALOGE("Noooo");
         } else {
-                ALOGE("Successfully changed state!");
+                ALOGI("Successfully changed state!");
         }
 
         while (vid->is_running) {
@@ -632,9 +632,9 @@ on_need_pipeline_cb(EmConnection *emconn, struct em_fs *vid)
 	uint32_t height = 270;
 
 	// We'll need an active egl context below before setting up gstgl (as explained previously)
-	ALOGE("FRED: websocket_connected_cb: Trying to get the EGL lock");
+	ALOGI("FRED: websocket_connected_cb: Trying to get the EGL lock");
 	os_mutex_lock(&vid->state->egl_lock);
-	ALOGE("FRED : make current display=%p, surface=%p, context=%p", vid->state->display, vid->state->surface,
+	ALOGI("FRED : make current display=%p, surface=%p, context=%p", vid->state->display, vid->state->surface,
 	      vid->state->context);
 	if (eglMakeCurrent(vid->state->display, vid->state->surface, vid->state->surface, vid->state->context) ==
 	    EGL_FALSE) {
@@ -667,7 +667,7 @@ on_need_pipeline_cb(EmConnection *emconn, struct em_fs *vid)
 
 	// And we unCurrent the egl context.
 	eglMakeCurrent(vid->state->display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
-	ALOGE("FRED: websocket_connected: releasing the EGL lock");
+	ALOGI("FRED: websocket_connected: releasing the EGL lock");
 	os_mutex_unlock(&vid->state->egl_lock);
 
 	// We convert the string SINK_CAPS above into a GstCaps that elements below can understand.
@@ -838,7 +838,7 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,
 
 	GstBus *bus = NULL;
 
-	ALOGE("FRED: alloc_and_init_common\n");
+	ALOGI("FRED: alloc_and_init_common\n");
 
 	em_init_gst_and_capture_context(vid, display, context);
 
@@ -864,7 +864,7 @@ alloc_and_init_common(struct xrt_frame_context *xfctx,
 	ALOGD("started async connect call, about to spawn em_fs_mainloop");
 
 
-	ALOGE("FRED: Starting Play_thread");
+	ALOGI("FRED: Starting Play_thread");
 	ret = os_thread_helper_start(&vid->play_thread, em_fs_mainloop, vid);
 	if (ret != 0) {
 		ALOGE("Failed to start thread '%i'", ret);
@@ -947,7 +947,7 @@ void
 em_fs_release_sample(struct xrt_fs *fs, struct em_sample *ems)
 {
 	struct em_sample_impl *impl = (struct em_sample_impl *)ems;
-	ALOGW("RYLIE: Releasing sample with texture ID %d", ems->frame_texture_id);
+	// ALOGW("RYLIE: Releasing sample with texture ID %d", ems->frame_texture_id);
 	gst_sample_unref(impl->sample);
 	free(impl);
 }
@@ -963,7 +963,7 @@ em_fs_try_pull_sample(struct xrt_fs *fs)
 	// WILL BLOCK until there's a sample.
 
 	// Get Newest sample from GST appsink. Waiting 1ms here before giving up (might want to adjust that time)
-	// ALOGE("DEBUG: Trying to get new gstgl sample, waiting max 1ms\n");
+	// ALOGI("DEBUG: Trying to get new gstgl sample, waiting max 1ms\n");
 
 	struct em_fs *vid = em_fs(fs);
 	GstSample *sample =
@@ -973,7 +973,6 @@ em_fs_try_pull_sample(struct xrt_fs *fs)
 		return NULL;
 	}
 
-	ALOGE("FRED: GOT A SAMPLE !!!");
 	GstBuffer *buffer = gst_sample_get_buffer(sample);
 	GstCaps *caps = gst_sample_get_caps(sample);
 
@@ -1034,7 +1033,7 @@ em_fs_send_bytes(struct xrt_fs *fs, const uint8_t *data, size_t len)
 		ALOGI("RYLIE: %s returning without action because fs == NULL", __FUNCTION__);
 		return false;
 	}
-	ALOGI("RYLIE: Sending bytes!");
+	// ALOGI("RYLIE: Sending bytes!");
 	struct em_fs *vid = em_fs(fs);
 	GBytes *bytes = g_bytes_new(data, len);
 

@@ -138,30 +138,6 @@ onAppCmd(struct android_app *app, int32_t cmd)
 	}
 }
 
-// FOR RYLIE: The below is a remnant of xrt_fs usage (monado-provided "frame-server")
-//           in time, completely get rid of monado since the below's not used.
-//           what is now pushing the frame is gstsl in the glsinkbin gstreamer
-//           element, and it's making the frames available as gl textures directly.
-//           No need to deal with GstBuffer as it's done in the monado frameserver part.
-// TODO but we still have to keep a reference to frames currently being used!
-void
-sink_push_frame(struct xrt_frame_sink *xfs, struct xrt_frame *xf)
-{
-	ALOGE("FRED: sink_push_frame called!");
-	if (!xf) {
-		ALOGE("what??");
-		return;
-	}
-	struct em_state *st = container_of(xfs, struct em_state, frame_sink);
-
-	// This can cause a segfault if we hold onto one frame for too long so OH.
-	if (!st->xf) {
-		//		xrt_frame_reference(&xf, st->xf);
-		xrt_frame_reference(&st->xf, xf);
-	}
-	ALOGE("Called! %d %p %u %u %zu", st->frame_texture_id, xf->data, xf->width, xf->height, xf->stride);
-}
-
 // FOR RYLIE : The function was use by Moshi to render "something" on app start.
 //            mainly for making sure the renderer (implemented in Render.cpp) was
 //            working. In your case, when integrating to PlutosphereOXR, you're
@@ -324,15 +300,11 @@ hmd_pose(struct em_state &st, struct xrt_fs *client)
 	pb_ostream_t os = pb_ostream_from_buffer(buffer, sizeof(buffer));
 
 	pb_encode(&os, pluto_TrackingMessage_fields, &message);
-	ALOGW("RYLIE: Sending HMD pose message");
-	// TODO use webrtc data channel instead of this extra socket
-	bool bResult = em_fs_send_bytes(client, buffer, os.bytes_written);
-	// int iResult = send(st.socket_fd, buffer, pluto_TrackingMessage_size, 0);
+	// ALOGW("RYLIE: Sending HMD pose message");
 
-	// if (iResult <= 0) {
-	// 	ALOGE("BAD! %d %s", iResult, strerror(errno));
-	// 	die_errno();
-	// }
+	bool bResult = em_fs_send_bytes(client, buffer, os.bytes_written);
+
+
 	if (!bResult) {
 		ALOGE("RYLIE: Could not queue HMD pose message!");
 	}
@@ -513,7 +485,7 @@ mainloop_one(struct xrt_fs *client, struct em_state &state)
 	// FOR RYLIE: we're not asking xrt_fs for a frame, we're checking ourselves what appsink
 	// may have for us. That's why the state.xf logic's been disabled (not needed anymore)
 	// if (state.xf) {
-	// ALOGE("FRED: mainloop_one: Trying to get the EGL lock");
+	// ALOGI("FRED: mainloop_one: Trying to get the EGL lock");
 	os_mutex_lock(&state.egl_lock);
 	if (eglMakeCurrent(state.display, state.surface, state.surface, state.context) == EGL_FALSE) {
 		ALOGE("FRED: mainloop_one: Failed make egl context current");
@@ -550,10 +522,7 @@ mainloop_one(struct xrt_fs *client, struct em_state &state)
 
 
 		glClearColor(0.0f, 1.0f, 0.0f, 1.0f);
-		//    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		// Just display purple nothingness
-		ALOGE("DEBUG: DRAWING!\n");
 		for (uint32_t eye = 0; eye < 2; eye++) {
 			glViewport(eye * state.width, 0, state.width, state.height);
 			draw(state.framebuffers[imageIndex], sample->frame_texture_id, sample->frame_texture_target);
@@ -688,7 +657,7 @@ android_main(struct android_app *app)
 	app->onAppCmd = onAppCmd;
 
 	os_mutex_init(&state.egl_lock);
-	ALOGE("FRED: main: Trying to get the EGL lock");
+	ALOGI("FRED: main: Trying to get the EGL lock");
 	os_mutex_lock(&state.egl_lock);
 	initializeEGL(state);
 
@@ -782,20 +751,15 @@ android_main(struct android_app *app)
 
 	// FOR RYLIE: This call below is a remnant of xrt_fs usage. That CB is not even called.
 	//        in time, completely get rid of monado for that.
-	state.frame_sink.push_frame = sink_push_frame;
 	struct xrt_frame_context xfctx = {};
 
 	// FOR RYLIE: This is where everything gstreamer starts.
-	ALOGE("FRED: Creating gst pipeline");
+	ALOGI("FRED: Creating gst pipeline");
 	struct xrt_fs *client = em_fs_create_streaming_client(&xfctx, &state, state.display, state.context);
-	ALOGE("FRED: Done Creating gst pipeline");
-
-	ALOGE("FRED: Starting xrt_fs source. Not used, please remove eventually.\n");
-	// FIXME: Eventually completely remove XRT_FS dependency here for driving the gst pipeline look
-	xrt_fs_stream_start(client, &state.frame_sink, XRT_FS_CAPTURE_TYPE_TRACKING, 0);
+	ALOGI("FRED: Done Creating gst pipeline");
 
 	// OpenXR session
-	ALOGE("FRED: Creating OpenXR session...");
+	ALOGI("FRED: Creating OpenXR session...");
 	PFN_xrGetOpenGLESGraphicsRequirementsKHR xrGetOpenGLESGraphicsRequirementsKHR = NULL;
 	XR_LOAD(xrGetOpenGLESGraphicsRequirementsKHR);
 	XrGraphicsRequirementsOpenGLESKHR graphicsRequirements = {.type = XR_TYPE_GRAPHICS_REQUIREMENTS_OPENGL_ES_KHR};
@@ -815,7 +779,7 @@ android_main(struct android_app *app)
 		ALOGE("ERROR: Failed to create OpenXR session (%d)\n", result);
 	}
 
-	ALOGE("FRED: Creating OpenXR Swapchain...");
+	ALOGI("FRED: Creating OpenXR Swapchain...");
 	// OpenXR swapchain
 	XrSwapchainCreateInfo swapchainInfo = {};
 	swapchainInfo.type = XR_TYPE_SWAPCHAIN_CREATE_INFO;
@@ -847,7 +811,7 @@ android_main(struct android_app *app)
 
 	// FOR RYLIE: The below framebuffer creation and redering-related calls will have to get
 	// adapted to PlutosphereOXR's reality.
-	ALOGE("FRED: Gen and bind gl texture and framebuffers.");
+	ALOGI("FRED: Gen and bind gl texture and framebuffers.");
 	glGenFramebuffers(state.imageCount, state.framebuffers);
 
 	// FIXME: This if below is suspicious.. we're not using xf anymore....
@@ -870,18 +834,18 @@ android_main(struct android_app *app)
 		}
 	}
 
-	ALOGE("FRED: Create spaces\n");
+	ALOGI("FRED: Create spaces\n");
 	create_spaces(state);
 
-	ALOGE("FRED: Setup Render\n");
+	ALOGI("FRED: Setup Render\n");
 	setupRender();
 
 	eglMakeCurrent(state.display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
-	ALOGE("FRED: main: releasing the EGL lock");
+	ALOGI("FRED: main: releasing the EGL lock");
 	os_mutex_unlock(&state.egl_lock);
 
 	// Main rendering loop.
-	ALOGE("DEBUG: Starting main loop.\n");
+	ALOGI("DEBUG: Starting main loop.\n");
 	while (!app->destroyRequested) {
 		mainloop_one(client, state);
 	}
