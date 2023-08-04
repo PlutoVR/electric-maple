@@ -849,13 +849,15 @@ pluto_compositor_create_system(pluto_program &pp, struct xrt_system_compositor *
 	u_var_add_root(c, "Pluto compositor!", 0);
 	u_var_add_sink_debug(c, &c->hackers_debug_sink, "Meow!");
 
-	gstreamer_pipeline_webrtc_create(&c->xfctx, "Meow", pp.callbacks, &c->hackers_gstreamer_pipeline);
+	// gstreamer_pipeline_webrtc_create(&c->xfctx, "Meow", pp.callbacks, &c->hackers_gstreamer_pipeline);
+	c->hackers_gstreamer_pipeline = pp.pipeline;
+
 	gstreamer_sink_create_with_pipeline( //
-	    c->hackers_gstreamer_pipeline,   //
+	    pp.pipeline,                     //
 	    READBACK_W,                      //
 	    READBACK_H,                      //
 	    XRT_FORMAT_R8G8B8X8,             //
-	    "Meow",                          //
+	    GST_APPSINK_NAME,                //
 	    &c->hackers_gstreamer_sink,      //
 	    &c->hackers_xfs);                //
 

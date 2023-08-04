@@ -11,6 +11,8 @@
 #include "xrt/xrt_instance.h"
 #include "xrt/xrt_config_drivers.h"
 
+#include "gst/gst_webrtc_pipeline.h"
+
 #include "util/u_misc.h"
 #include "util/u_builders.h"
 #include "util/u_trace_marker.h"
@@ -132,8 +134,6 @@ pluto_instance_destroy(struct xrt_instance *xinst)
 void
 pluto_system_devices_init(struct pluto_program *sp)
 {
-	// needed before creating devices
-	sp->callbacks = pl_callbacks_create();
 
 	sp->xsysd_base.destroy = pluto_system_devices_destroy;
 
@@ -189,6 +189,9 @@ xrt_instance_create(struct xrt_instance_info *ii, struct xrt_instance **out_xins
 	u_trace_marker_init();
 
 	struct pluto_program *sp = new pluto_program();
+
+	sp->callbacks = pl_callbacks_create();
+	gstreamer_pipeline_webrtc_create(&sp->xfctx, GST_APPSINK_NAME, sp->callbacks, &sp->pipeline);
 
 	pluto_system_devices_init(sp);
 	pluto_instance_init(sp);
