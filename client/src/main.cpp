@@ -35,6 +35,7 @@
 #include <gst/gl/gstglbasememory.h>
 #include <gst/gl/gstglsyncmeta.h>
 
+#include <memory>
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
 
@@ -594,9 +595,8 @@ android_main(struct android_app *app)
 	(*app->activity->vm).AttachCurrentThread(&state.jni, NULL);
 	app->onAppCmd = onAppCmd;
 
-	initializeEGL(state);
+	auto initialEglData = std::make_unique<EglData>();
 
-	registerGlDebugCallback();
 
 	// Initialize OpenXR loader
 	PFN_xrInitializeLoaderKHR xrInitializeLoaderKHR = NULL;
@@ -680,10 +680,11 @@ android_main(struct android_app *app)
 	state.width = viewInfo[0].recommendedImageRectWidth;
 	state.height = viewInfo[0].recommendedImageRectHeight;
 
+	initialEglData->makeCurrent();
 	state.frame_texture_id = generateRandomTexture(state.width, state.height, 2);
 
 	// Un-make current
-	eglMakeCurrent(state.display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+	initialEglData->makeNotCurrent();
 
 	// Set up gstreamer
 	gst_init(0, NULL);
@@ -693,7 +694,8 @@ android_main(struct android_app *app)
 	EmStreamClient *stream_client = em_stream_client_new();
 
 	ALOGI("%s: telling stream client about EGL", __FUNCTION__);
-	em_stream_client_set_egl_context(stream_client, state.display, state.context, state.surface);
+	em_stream_client_set_egl_context(stream_client, initialEglData->display, initialEglData->context,
+	                                 initialEglData->surface);
 
 	ALOGI("%s: creating connection object", __FUNCTION__);
 	EmConnection *connection = em_connection_new_localhost();
@@ -713,10 +715,12 @@ android_main(struct android_app *app)
 	XrGraphicsRequirementsOpenGLESKHR graphicsRequirements = {.type = XR_TYPE_GRAPHICS_REQUIREMENTS_OPENGL_ES_KHR};
 	xrGetOpenGLESGraphicsRequirementsKHR(state.instance, state.system, &graphicsRequirements);
 
-	XrGraphicsBindingOpenGLESAndroidKHR graphicsBinding = {.type = XR_TYPE_GRAPHICS_BINDING_OPENGL_ES_ANDROID_KHR,
-	                                                       .display = state.display,
-	                                                       .config = state.config,
-	                                                       .context = state.context};
+	XrGraphicsBindingOpenGLESAndroidKHR graphicsBinding = {
+	    .type = XR_TYPE_GRAPHICS_BINDING_OPENGL_ES_ANDROID_KHR,
+	    .display = initialEglData->display,
+	    .config = initialEglData->config,
+	    .context = initialEglData->context,
+	};
 
 	XrSessionCreateInfo sessionInfo = {
 	    .type = XR_TYPE_SESSION_CREATE_INFO, .next = &graphicsBinding, .systemId = state.system};
@@ -748,6 +752,10 @@ android_main(struct android_app *app)
 		return;
 	}
 
+	ALOGI("FRED: Setup Render\n");
+	auto renderer = std::make_unique<RendererData>(std::move(initialEglData));
+
+	initialEglData->makeCurrent();
 	GLSwapchain glSwapchain;
 	if (!glSwapchain.enumerateAndGenerateFramebuffers(state.swapchain)) {
 		ALOGE("%s: Failed to enumerate swapchain images or associate them with framebuffer object names.",
@@ -756,12 +764,11 @@ android_main(struct android_app *app)
 	}
 	state.imageCount = glSwapchain.size();
 
+	initialEglData->makeNotCurrent();
+
 	ALOGI("FRED: Create spaces\n");
 	create_spaces(state);
 
-	ALOGI("FRED: Setup Render\n");
-	setupRender();
-	em_stream_client_egl_end(stream_client);
 
 
 	// Main rendering loop.
