@@ -57,13 +57,13 @@ struct em_state
 	// This mutex protects the EGL context below across main and gstgl threads
 	// struct os_mutex egl_lock;
 
-	EGLDisplay display;
+	// EGLDisplay display;
 	// context created in initializeEGL
-	EGLContext context;
+	// EGLContext context;
 	// config used to create context
-	EGLConfig config;
+	// EGLConfig config;
 	// 16x16 pbuffer surface
-	EGLSurface surface;
+	// EGLSurface surface;
 	XrInstance instance;
 	XrSystemId system;
 	XrSession session;
@@ -71,17 +71,12 @@ struct em_state
 	XrSpace worldSpace;
 	XrSpace viewSpace;
 	XrSwapchain swapchain;
-	XrSwapchainImageOpenGLESKHR images[4];
-	GLuint framebuffers[4];
-	GLuint shader_program;
+	// XrSwapchainImageOpenGLESKHR images[4];
+	// GLuint framebuffers[4];
+	// GLuint shader_program;
 	uint32_t imageCount;
 	uint32_t width;
 	uint32_t height;
-
-
-	// this is bad, we want an xrt_frame_node etc.
-
-	int way;
 
 	// this is the GL texture id used by the main renderer.
 	GLuint frame_texture_id;
