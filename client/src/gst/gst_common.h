@@ -29,15 +29,12 @@
 #include <string.h>
 #include <stdbool.h>
 
-struct em_fs;
-
-
 struct em_sample
 {
 	GLuint frame_texture_id;
 	GLenum frame_texture_target;
-	// bool frame_available;
 };
+
 struct em_state
 {
 #ifdef __ANDROID__
@@ -49,21 +46,6 @@ struct em_state
 
 	bool connected;
 
-	// struct em_fs *vid;
-
-	// EmConnection *connection;
-	// EmStreamClient *stream_client;
-
-	// This mutex protects the EGL context below across main and gstgl threads
-	// struct os_mutex egl_lock;
-
-	// EGLDisplay display;
-	// context created in initializeEGL
-	// EGLContext context;
-	// config used to create context
-	// EGLConfig config;
-	// 16x16 pbuffer surface
-	// EGLSurface surface;
 	XrInstance instance;
 	XrSystemId system;
 	XrSession session;
@@ -71,9 +53,6 @@ struct em_state
 	XrSpace worldSpace;
 	XrSpace viewSpace;
 	XrSwapchain swapchain;
-	// XrSwapchainImageOpenGLESKHR images[4];
-	// GLuint framebuffers[4];
-	// GLuint shader_program;
 	uint32_t imageCount;
 	uint32_t width;
 	uint32_t height;

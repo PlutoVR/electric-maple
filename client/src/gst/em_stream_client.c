@@ -442,7 +442,7 @@ em_stream_client_new()
 }
 
 void
-em_stream_client_clear(EmStreamClient **ptr_sc)
+em_stream_client_destroy(EmStreamClient **ptr_sc)
 {
 	if (ptr_sc == NULL) {
 		return;

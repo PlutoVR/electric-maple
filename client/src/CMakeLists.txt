@@ -12,9 +12,9 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror")
 
 add_library(
 	plutovr_webrtc_client SHARED
+	em_remote_experience.cpp
 	main.cpp
 	render.cpp
-	RemoteClient.cpp
 	GLDebug.cpp
 	GLError.cpp
 	GLSwapchain.cpp
