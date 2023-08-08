@@ -42,6 +42,7 @@
 #include <pthread.h>
 #include <jni.h>
 #include <errno.h>
+#include <stdbool.h>
 #include <unistd.h>
 
 #include <array>
@@ -273,7 +274,11 @@ create_spaces(struct em_state &st)
 }
 
 void
-poll_and_render_frame(struct em_state &state, EmStreamClient *stream_client, EmConnection *connection)
+poll_and_render_frame(struct em_state &state,
+                      Renderer &renderer,
+                      GLSwapchain &swapchainBuffers,
+                      EmStreamClient *stream_client,
+                      EmConnection *connection)
 {
 	XrResult result = XR_SUCCESS;
 
@@ -369,17 +374,14 @@ poll_and_render_frame(struct em_state &state, EmStreamClient *stream_client, EmC
 		}
 		state.frame_texture_id = sample->frame_texture_id;
 
-		// ALOGI("RYLIE: Frame texture id is %d", state.frame_texture_id);
-		glBindFramebuffer(GL_FRAMEBUFFER, state.framebuffers[imageIndex]);
+		glBindFramebuffer(GL_FRAMEBUFFER, swapchainBuffers.framebufferNameAtSwapchainIndex(imageIndex));
 
 		glViewport(0, 0, state.width * 2, state.height);
-
-
 		glClearColor(0.0f, 1.0f, 0.0f, 1.0f);
 
 		for (uint32_t eye = 0; eye < 2; eye++) {
 			glViewport(eye * state.width, 0, state.width, state.height);
-			draw(state.framebuffers[imageIndex], sample->frame_texture_id, sample->frame_texture_target);
+			renderer.draw(sample->frame_texture_id, sample->frame_texture_target);
 		}
 
 		// Release
@@ -393,12 +395,7 @@ poll_and_render_frame(struct em_state &state, EmStreamClient *stream_client, EmC
 			state.prev_sample = NULL;
 		}
 		state.prev_sample = sample;
-	} else {
-		// ALOGE("FRED: NO gst appsink sample...");
-	}
-
-	if (sample) {
-		// Submit frame (if we actually got one)
+		// Submit frame
 		XrFrameEndInfo endInfo = {};
 		endInfo.type = XR_TYPE_FRAME_END_INFO;
 		endInfo.displayTime = frameState.predictedDisplayTime;
@@ -423,8 +420,15 @@ poll_and_render_frame(struct em_state &state, EmStreamClient *stream_client, EmC
 // gst_gl_context_get_current_gl_context(...). Reason's simple... when gstgl initializes
 // it'll create a SHARED egl context with whatever's current and so pay careful attention
 // to the eglMakeCurrent here and there.
-void
-mainloop_one(struct em_state &state, EmStreamClient *stream_client, EmConnection *connection)
+/**
+ * Poll for Android and OpenXR events, and handle them
+ *
+ * @param state app state
+ *
+ * @return true if we should go to the render code
+ */
+bool
+poll_events(struct em_state &state)
 {
 
 	// Poll Android events
@@ -492,11 +496,10 @@ mainloop_one(struct em_state &state, EmStreamClient *stream_client, EmConnection
 	if (state.sessionState < XR_SESSION_STATE_READY) {
 		ALOGI("Waiting for session ready state!");
 		os_nanosleep(U_TIME_1MS_IN_NS * 100);
-		return;
+		return false;
 	}
 
-	// Begin frame
-	poll_and_render_frame(state, stream_client, connection);
+	return true;
 }
 
 #if 0
@@ -752,10 +755,7 @@ android_main(struct android_app *app)
 		return;
 	}
 
-	ALOGI("FRED: Setup Render\n");
-	auto renderer = std::make_unique<RendererData>(std::move(initialEglData));
-
-	initialEglData->makeCurrent();
+	em_stream_client_egl_begin_pbuffer(stream_client);
 	GLSwapchain glSwapchain;
 	if (!glSwapchain.enumerateAndGenerateFramebuffers(state.swapchain)) {
 		ALOGE("%s: Failed to enumerate swapchain images or associate them with framebuffer object names.",
@@ -763,18 +763,27 @@ android_main(struct android_app *app)
 		return;
 	}
 	state.imageCount = glSwapchain.size();
+	em_stream_client_egl_end(stream_client);
 
-	initialEglData->makeNotCurrent();
 
 	ALOGI("FRED: Create spaces\n");
 	create_spaces(state);
 
+	ALOGI("FRED: Setup Render\n");
+	Renderer renderer{};
+
+	em_stream_client_egl_begin_pbuffer(stream_client);
+	renderer.setupRender();
+	em_stream_client_egl_end(stream_client);
 
 
 	// Main rendering loop.
 	ALOGI("DEBUG: Starting main loop.\n");
 	while (!app->destroyRequested) {
-		mainloop_one(state, stream_client, connection);
+		if (poll_events(state)) {
+			// Begin frame
+			poll_and_render_frame(state, renderer, glSwapchain, stream_client, connection);
+		}
 	}
 
 	em_stream_client_stop(stream_client);

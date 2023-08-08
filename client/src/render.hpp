@@ -42,10 +42,10 @@ struct EglData
 	}
 
 	void
-	makeCurrent();
+	makeCurrent() const;
 
 	void
-	makeNotCurrent();
+	makeNotCurrent() const;
 
 	EGLDisplay display = EGL_NO_DISPLAY;
 	EGLContext context = EGL_NO_CONTEXT;
@@ -53,40 +53,38 @@ struct EglData
 	EGLConfig config = nullptr;
 };
 
-class RendererData
+class Renderer
 {
 public:
-	RendererData(std::unique_ptr<EglData> &&egl);
-	~RendererData();
+	Renderer() = default;
+	~Renderer();
 
-	RendererData(const RendererData &) = delete;
-	RendererData(RendererData &&) = delete;
+	Renderer(const Renderer &) = delete;
+	Renderer(Renderer &&) = delete;
 
-	RendererData &
-	operator=(const RendererData &) = delete;
-	RendererData &
-	operator=(RendererData &&) = delete;
+	Renderer &
+	operator=(const Renderer &) = delete;
+	Renderer &
+	operator=(Renderer &&) = delete;
 
-
-	void
-	draw(GLuint framebuffer, GLuint texture, GLenum texture_target) const;
-
-	const EglData &
-	getEGL() const noexcept
-	{
-		return *egl_;
-	}
-
-private:
+	/// Create resources. Must call with EGL Context current
 	void
 	setupRender();
 
+	/// Destroy resources. Must call with EGL context current.
+	void
+	reset();
+
+	/// Draw texture to framebuffer. Must call with EGL Context current.
+	void
+	draw(GLuint texture, GLenum texture_target) const;
+
+
+private:
 	void
 	setupShaders();
 	void
 	setupQuadVertexData();
-
-	std::unique_ptr<EglData> egl_;
 
 	GLuint program = 0;
 	GLuint quadVAO = 0;

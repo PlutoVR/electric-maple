@@ -20,15 +20,6 @@
 #include <openxr/openxr.h>
 #include <stdexcept>
 
-RendererData::RendererData(std::unique_ptr<EglData> &&egl) : egl_(std::move(egl))
-{
-	egl_->makeCurrent();
-	registerGlDebugCallback();
-	setupRender();
-	egl_->makeNotCurrent();
-}
-
-
 // Vertex shader source code
 static constexpr const GLchar *vertexShaderSource = R"(
     #version 300 es
@@ -85,7 +76,7 @@ checkProgramLinking(GLuint program)
 }
 
 void
-RendererData::setupShaders()
+Renderer::setupShaders()
 {
 	// Compile the vertex shader
 	GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
@@ -128,7 +119,7 @@ static constexpr size_t kVertexBufferStride = sizeof(Vertex);
 static_assert(kVertexBufferStride == 5 * sizeof(GLfloat), "3 position coordinates and u,v");
 
 void
-RendererData::setupQuadVertexData()
+Renderer::setupQuadVertexData()
 {
 	// Set up the quad vertex data
 	static constexpr Vertex quadVertices[] = {
@@ -156,15 +147,40 @@ RendererData::setupQuadVertexData()
 	glBindVertexArray(0);
 }
 
-void
-RendererData::setupRender()
+Renderer::~Renderer()
 {
+	reset();
+}
+
+void
+Renderer::setupRender()
+{
+
+
+	registerGlDebugCallback();
 	setupShaders();
 	setupQuadVertexData();
 }
 
 void
-RendererData::draw(GLuint framebuffer, GLuint texture, GLenum texture_target) const
+Renderer::reset()
+{
+	if (program != 0) {
+		glDeleteProgram(program);
+		program = 0;
+	}
+	if (quadVAO != 0) {
+		glDeleteVertexArrays(1, &quadVAO);
+		quadVAO = 0;
+	}
+	if (quadVBO != 0) {
+		glDeleteBuffers(1, &quadVBO);
+		quadVBO = 0;
+	}
+}
+
+void
+Renderer::draw(GLuint texture, GLenum texture_target) const
 {
 	//    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
 
@@ -182,6 +198,7 @@ RendererData::draw(GLuint framebuffer, GLuint texture, GLenum texture_target) co
 	glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 	glBindVertexArray(0);
 
+	CHECK_GL_ERROR();
 #if 0
 	GLenum err;
 	while ((err = glGetError()) != GL_NO_ERROR) {
@@ -197,9 +214,6 @@ RendererData::draw(GLuint framebuffer, GLuint texture, GLenum texture_target) co
 		ALOGE("error! %s", errorStr);
 	}
 #endif
-
-	// Unbind the framebuffer
-	//    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 EglData::EglData()
@@ -304,16 +318,9 @@ EglData::~EglData()
 	}
 }
 
-void
-EglData::init()
-{}
 
 void
-EglData::reset()
-{}
-
-void
-EglData::makeCurrent()
+EglData::makeCurrent() const
 {
 	if (eglMakeCurrent(display, surface, surface, context) == EGL_FALSE) {
 		ALOGE("Failed to make EGL context current");
@@ -321,4 +328,10 @@ EglData::makeCurrent()
 		throw std::runtime_error("Could not make EGL context current");
 	}
 	ALOGI("EGL: Made context current");
+}
+
+void
+EglData::makeNotCurrent() const
+{
+	eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
 }
