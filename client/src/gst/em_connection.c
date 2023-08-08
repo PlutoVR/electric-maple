@@ -70,6 +70,7 @@ enum
 };
 
 static guint signals[N_SIGNALS];
+
 typedef enum
 {
 	PROP_WEBSOCKET_URI = 1,
@@ -83,8 +84,6 @@ static GParamSpec *properties[N_PROPERTIES] = {
 
 #define DEFAULT_WEBSOCKET_URI "ws://127.0.0.1:8080/ws"
 
-static void
-em_connection_set_pipeline(EmConnection *emconn, GstPipeline *pipeline);
 
 /* GObject method implementations */
 
@@ -132,18 +131,26 @@ em_connection_dispose(GObject *object)
 
 	em_connection_disconnect(self);
 
-	g_free(self->websocket_uri);
-
 	g_clear_object(&self->soup_session);
 	g_clear_object(&self->ws_cancel);
 }
 
 static void
+em_connection_finalize(GObject *object)
+{
+	EmConnection *self = EM_CONNECTION(object);
+
+	g_free(self->websocket_uri);
+}
+
+static void
 em_connection_class_init(EmConnectionClass *klass)
 {
+	ALOGE("RYLIE: %s: Begin", __FUNCTION__);
 	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 
 	gobject_class->dispose = em_connection_dispose;
+	gobject_class->finalize = em_connection_finalize;
 
 	gobject_class->set_property = em_connection_set_property;
 	gobject_class->get_property = em_connection_get_property;
@@ -229,6 +236,7 @@ em_connection_class_init(EmConnectionClass *klass)
 	 */
 	signals[SIGNAL_ON_DROP_PIPELINE] = g_signal_new("on-drop-pipeline", G_OBJECT_CLASS_TYPE(klass),
 	                                                G_SIGNAL_RUN_LAST, 0, NULL, NULL, NULL, G_TYPE_NONE, 0);
+	ALOGE("RYLIE: %s: End", __FUNCTION__);
 }
 
 
@@ -282,10 +290,11 @@ emconn_update_status_from_peer_connection_state(EmConnection *emconn, GstWebRTCP
 static void
 emconn_disconnect_internal(EmConnection *emconn, enum em_status status)
 {
-	g_cancellable_cancel(emconn->ws_cancel);
-
+	if (emconn->ws_cancel != NULL) {
+		g_cancellable_cancel(emconn->ws_cancel);
+	}
 	// Stop the pipeline, if it exists
-	if (emconn->pipeline) {
+	if (emconn->pipeline != NULL) {
 		gst_element_set_state(GST_ELEMENT(emconn->pipeline), GST_STATE_NULL);
 		g_signal_emit(emconn, signals[SIGNAL_ON_DROP_PIPELINE], 0);
 	}
@@ -571,7 +580,7 @@ emconn_websocket_connected_cb(GObject *session, GAsyncResult *res, EmConnection 
 }
 
 
-static void
+void
 em_connection_set_pipeline(EmConnection *emconn, GstPipeline *pipeline)
 {
 	g_assert_nonnull(pipeline);
@@ -619,7 +628,7 @@ emconn_connect_internal(EmConnection *emconn, enum em_status status)
 	                                     NULL,                                                     // protocols
 	                                     0,                                                        // io_prority
 	                                     emconn->ws_cancel,                                        // cancellable
-	                                     emh_websocket_connected_cb,                               // callback
+	                                     (GAsyncReadyCallback)emconn_websocket_connected_cb,       // callback
 	                                     emconn);                                                  // user_data
 
 #endif
@@ -635,6 +644,11 @@ em_connection_new(gchar *websocket_uri)
 	return EM_CONNECTION(g_object_new(EM_TYPE_CONNECTION, "websocket-uri", websocket_uri, NULL));
 }
 
+EmConnection *
+em_connection_new_localhost()
+{
+	return EM_CONNECTION(g_object_new(EM_TYPE_CONNECTION, NULL));
+}
 
 void
 em_connection_connect(EmConnection *emconn)

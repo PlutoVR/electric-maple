@@ -10,18 +10,14 @@
 
 
 #include <glib-object.h>
-
+#include <gst/gstpipeline.h>
 #include <stdbool.h>
+
+G_BEGIN_DECLS
 
 #define EM_TYPE_CONNECTION em_connection_get_type()
 
 G_DECLARE_FINAL_TYPE(EmConnection, em_connection, EM, CONNECTION, GObject)
-
-/*
- * @param launch_callback Function pointer to call to create a pipeline
- * @param drop_callback Function pointer to call when dropping a connection - must be idempotent
- * @param data Optional userdata to include when calling @p launch_callback and @p drop_callback
- */
 
 /*!
  * Create a connection object
@@ -33,6 +29,8 @@ G_DECLARE_FINAL_TYPE(EmConnection, em_connection, EM, CONNECTION, GObject)
 EmConnection *
 em_connection_new(gchar *websocket_uri);
 
+EmConnection *
+em_connection_new_localhost();
 
 /*!
  * Actually start connecting to the server
@@ -60,7 +58,12 @@ em_connection_disconnect(EmConnection *emconn);
 bool
 em_connection_send_bytes(EmConnection *emconn, GBytes *bytes);
 
-// /// Clean up the handshake struct fields
-// /// @memberof em_handshake
-// void
-// em_connection_fini(struct em_connection *emconn);
+/*!
+ * Assign a pipeline for use.
+ *
+ * Will be started when the websocket connection comes up in order to negotiate using the webrtcbin.
+ */
+void
+em_connection_set_pipeline(EmConnection *emconn, GstPipeline *pipeline);
+
+G_END_DECLS
