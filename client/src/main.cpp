@@ -35,12 +35,14 @@
 #include <gst/gl/gstglbasememory.h>
 #include <gst/gl/gstglsyncmeta.h>
 
+#include <memory>
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
 
 #include <pthread.h>
 #include <jni.h>
 #include <errno.h>
+#include <stdbool.h>
 #include <unistd.h>
 
 #include <array>
@@ -272,7 +274,11 @@ create_spaces(struct em_state &st)
 }
 
 void
-poll_and_render_frame(struct em_state &state, EmStreamClient *stream_client, EmConnection *connection)
+poll_and_render_frame(struct em_state &state,
+                      Renderer &renderer,
+                      GLSwapchain &swapchainBuffers,
+                      EmStreamClient *stream_client,
+                      EmConnection *connection)
 {
 	XrResult result = XR_SUCCESS;
 
@@ -368,17 +374,14 @@ poll_and_render_frame(struct em_state &state, EmStreamClient *stream_client, EmC
 		}
 		state.frame_texture_id = sample->frame_texture_id;
 
-		// ALOGI("RYLIE: Frame texture id is %d", state.frame_texture_id);
-		glBindFramebuffer(GL_FRAMEBUFFER, state.framebuffers[imageIndex]);
+		glBindFramebuffer(GL_FRAMEBUFFER, swapchainBuffers.framebufferNameAtSwapchainIndex(imageIndex));
 
 		glViewport(0, 0, state.width * 2, state.height);
-
-
 		glClearColor(0.0f, 1.0f, 0.0f, 1.0f);
 
 		for (uint32_t eye = 0; eye < 2; eye++) {
 			glViewport(eye * state.width, 0, state.width, state.height);
-			draw(state.framebuffers[imageIndex], sample->frame_texture_id, sample->frame_texture_target);
+			renderer.draw(sample->frame_texture_id, sample->frame_texture_target);
 		}
 
 		// Release
@@ -392,12 +395,7 @@ poll_and_render_frame(struct em_state &state, EmStreamClient *stream_client, EmC
 			state.prev_sample = NULL;
 		}
 		state.prev_sample = sample;
-	} else {
-		// ALOGE("FRED: NO gst appsink sample...");
-	}
-
-	if (sample) {
-		// Submit frame (if we actually got one)
+		// Submit frame
 		XrFrameEndInfo endInfo = {};
 		endInfo.type = XR_TYPE_FRAME_END_INFO;
 		endInfo.displayTime = frameState.predictedDisplayTime;
@@ -422,8 +420,15 @@ poll_and_render_frame(struct em_state &state, EmStreamClient *stream_client, EmC
 // gst_gl_context_get_current_gl_context(...). Reason's simple... when gstgl initializes
 // it'll create a SHARED egl context with whatever's current and so pay careful attention
 // to the eglMakeCurrent here and there.
-void
-mainloop_one(struct em_state &state, EmStreamClient *stream_client, EmConnection *connection)
+/**
+ * Poll for Android and OpenXR events, and handle them
+ *
+ * @param state app state
+ *
+ * @return true if we should go to the render code
+ */
+bool
+poll_events(struct em_state &state)
 {
 
 	// Poll Android events
@@ -491,11 +496,10 @@ mainloop_one(struct em_state &state, EmStreamClient *stream_client, EmConnection
 	if (state.sessionState < XR_SESSION_STATE_READY) {
 		ALOGI("Waiting for session ready state!");
 		os_nanosleep(U_TIME_1MS_IN_NS * 100);
-		return;
+		return false;
 	}
 
-	// Begin frame
-	poll_and_render_frame(state, stream_client, connection);
+	return true;
 }
 
 #if 0
@@ -594,9 +598,8 @@ android_main(struct android_app *app)
 	(*app->activity->vm).AttachCurrentThread(&state.jni, NULL);
 	app->onAppCmd = onAppCmd;
 
-	initializeEGL(state);
+	auto initialEglData = std::make_unique<EglData>();
 
-	registerGlDebugCallback();
 
 	// Initialize OpenXR loader
 	PFN_xrInitializeLoaderKHR xrInitializeLoaderKHR = NULL;
@@ -680,10 +683,11 @@ android_main(struct android_app *app)
 	state.width = viewInfo[0].recommendedImageRectWidth;
 	state.height = viewInfo[0].recommendedImageRectHeight;
 
+	initialEglData->makeCurrent();
 	state.frame_texture_id = generateRandomTexture(state.width, state.height, 2);
 
 	// Un-make current
-	eglMakeCurrent(state.display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+	initialEglData->makeNotCurrent();
 
 	// Set up gstreamer
 	gst_init(0, NULL);
@@ -693,7 +697,8 @@ android_main(struct android_app *app)
 	EmStreamClient *stream_client = em_stream_client_new();
 
 	ALOGI("%s: telling stream client about EGL", __FUNCTION__);
-	em_stream_client_set_egl_context(stream_client, state.display, state.context, state.surface);
+	em_stream_client_set_egl_context(stream_client, initialEglData->display, initialEglData->context,
+	                                 initialEglData->surface);
 
 	ALOGI("%s: creating connection object", __FUNCTION__);
 	EmConnection *connection = em_connection_new_localhost();
@@ -713,10 +718,12 @@ android_main(struct android_app *app)
 	XrGraphicsRequirementsOpenGLESKHR graphicsRequirements = {.type = XR_TYPE_GRAPHICS_REQUIREMENTS_OPENGL_ES_KHR};
 	xrGetOpenGLESGraphicsRequirementsKHR(state.instance, state.system, &graphicsRequirements);
 
-	XrGraphicsBindingOpenGLESAndroidKHR graphicsBinding = {.type = XR_TYPE_GRAPHICS_BINDING_OPENGL_ES_ANDROID_KHR,
-	                                                       .display = state.display,
-	                                                       .config = state.config,
-	                                                       .context = state.context};
+	XrGraphicsBindingOpenGLESAndroidKHR graphicsBinding = {
+	    .type = XR_TYPE_GRAPHICS_BINDING_OPENGL_ES_ANDROID_KHR,
+	    .display = initialEglData->display,
+	    .config = initialEglData->config,
+	    .context = initialEglData->context,
+	};
 
 	XrSessionCreateInfo sessionInfo = {
 	    .type = XR_TYPE_SESSION_CREATE_INFO, .next = &graphicsBinding, .systemId = state.system};
@@ -748,6 +755,7 @@ android_main(struct android_app *app)
 		return;
 	}
 
+	em_stream_client_egl_begin_pbuffer(stream_client);
 	GLSwapchain glSwapchain;
 	if (!glSwapchain.enumerateAndGenerateFramebuffers(state.swapchain)) {
 		ALOGE("%s: Failed to enumerate swapchain images or associate them with framebuffer object names.",
@@ -755,19 +763,27 @@ android_main(struct android_app *app)
 		return;
 	}
 	state.imageCount = glSwapchain.size();
+	em_stream_client_egl_end(stream_client);
+
 
 	ALOGI("FRED: Create spaces\n");
 	create_spaces(state);
 
 	ALOGI("FRED: Setup Render\n");
-	setupRender();
+	Renderer renderer{};
+
+	em_stream_client_egl_begin_pbuffer(stream_client);
+	renderer.setupRender();
 	em_stream_client_egl_end(stream_client);
 
 
 	// Main rendering loop.
 	ALOGI("DEBUG: Starting main loop.\n");
 	while (!app->destroyRequested) {
-		mainloop_one(state, stream_client, connection);
+		if (poll_events(state)) {
+			// Begin frame
+			poll_and_render_frame(state, renderer, glSwapchain, stream_client, connection);
+		}
 	}
 
 	em_stream_client_stop(stream_client);
