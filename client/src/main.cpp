@@ -6,9 +6,9 @@
  * @author Moshi Turner <moses@collabora.com>
  */
 
+#include "em_remote_experience.h"
 #include "xr_platform_deps.h"
 
-#include "GLDebug.h"
 #include "GLSwapchain.h"
 
 #include "gst/app_log.h"
@@ -701,7 +701,7 @@ android_main(struct android_app *app)
 	                                 initialEglData->surface);
 
 	ALOGI("%s: creating connection object", __FUNCTION__);
-	EmConnection *connection = em_connection_new_localhost();
+	EmConnection *connection = g_object_ref_sink(em_connection_new_localhost());
 
 	g_signal_connect(connection, "connected", G_CALLBACK(connected_cb), &state);
 
@@ -735,62 +735,25 @@ android_main(struct android_app *app)
 		return;
 	}
 
-	ALOGI("FRED: Creating OpenXR Swapchain...");
-	// OpenXR swapchain
-	XrSwapchainCreateInfo swapchainInfo = {};
-	swapchainInfo.type = XR_TYPE_SWAPCHAIN_CREATE_INFO;
-	swapchainInfo.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT;
-	swapchainInfo.format = GL_SRGB8_ALPHA8;
-	swapchainInfo.width = state.width * 2;
-	swapchainInfo.height = state.height;
-	swapchainInfo.sampleCount = 1;
-	swapchainInfo.faceCount = 1;
-	swapchainInfo.arraySize = 1;
-	swapchainInfo.mipCount = 1;
-
-	result = xrCreateSwapchain(state.session, &swapchainInfo, &state.swapchain);
-
-	if (XR_FAILED(result)) {
-		ALOGE("Failed to create OpenXR swapchain (%d)\n", result);
+	XrExtent2Di eye_extents{static_cast<int32_t>(state.width), static_cast<int32_t>(state.height)};
+	EmRemoteExperience *remote_client =
+	    em_remote_experience_new(connection, stream_client, state.instance, state.session, &eye_extents);
+	if (!remote_client) {
+		ALOGE("%s: Failed during remote client init.", __FUNCTION__);
 		return;
 	}
-
-	em_stream_client_egl_begin_pbuffer(stream_client);
-	GLSwapchain glSwapchain;
-	if (!glSwapchain.enumerateAndGenerateFramebuffers(state.swapchain)) {
-		ALOGE("%s: Failed to enumerate swapchain images or associate them with framebuffer object names.",
-		      __FUNCTION__);
-		return;
-	}
-	state.imageCount = glSwapchain.size();
-	em_stream_client_egl_end(stream_client);
-
-
-	ALOGI("FRED: Create spaces\n");
-	create_spaces(state);
-
-	ALOGI("FRED: Setup Render\n");
-	Renderer renderer{};
-
-	em_stream_client_egl_begin_pbuffer(stream_client);
-	renderer.setupRender();
-	em_stream_client_egl_end(stream_client);
-
-
 	// Main rendering loop.
 	ALOGI("DEBUG: Starting main loop.\n");
 	while (!app->destroyRequested) {
 		if (poll_events(state)) {
-			// Begin frame
-			poll_and_render_frame(state, renderer, glSwapchain, stream_client, connection);
+			em_remote_experience_poll_and_render_frame(remote_client);
 		}
 	}
 
-	em_stream_client_stop(stream_client);
-	em_connection_disconnect(connection);
 	g_clear_object(&connection);
+	// without gobject for stream client, the EmRemoteExperience takes ownership
 	// g_clear_object(&stream_client);
-	em_stream_client_destroy(&stream_client);
+
 
 	(*app->activity->vm).DetachCurrentThread();
 }
