@@ -34,33 +34,3 @@ struct em_sample
 	GLuint frame_texture_id;
 	GLenum frame_texture_target;
 };
-
-struct em_state
-{
-#ifdef __ANDROID__
-	struct android_app *app;
-	JNIEnv *jni;
-	JavaVM *java_vm;
-#endif
-	bool hasPermissions;
-
-	bool connected;
-
-	XrInstance instance;
-	XrSystemId system;
-	XrSession session;
-	XrSessionState sessionState;
-	XrSpace worldSpace;
-	XrSpace viewSpace;
-	XrSwapchain swapchain;
-	uint32_t imageCount;
-	uint32_t width;
-	uint32_t height;
-
-	// this is the GL texture id used by the main renderer.
-	GLuint frame_texture_id;
-	GLenum frame_texture_target;
-	GLboolean frame_available;
-
-	struct em_sample *prev_sample;
-};
