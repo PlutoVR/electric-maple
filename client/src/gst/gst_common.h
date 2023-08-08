@@ -12,13 +12,10 @@
 
 #pragma once
 
-#define XR_USE_GRAPHICS_API_OPENGL_ES
-
 #include <GLES3/gl3.h>
 #include <GLES3/gl3ext.h>
 #include <EGL/egl.h>
 #ifdef __ANDROID__
-#define XR_USE_PLATFORM_ANDROID
 #include <jni.h>
 #endif
 

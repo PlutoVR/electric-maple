@@ -6,6 +6,11 @@
  * @author Moshi Turner <moses@collabora.com>
  */
 
+#include "xr_platform_deps.h"
+
+#include "GLDebug.h"
+#include "GLSwapchain.h"
+
 #include "gst/app_log.h"
 #include "gst/em_connection.h"
 #include "gst/em_stream_client.h"
@@ -15,7 +20,6 @@
 #include "pb_encode.h"
 
 #include "os/os_time.h"
-#include "os/os_threading.h"
 #include "util/u_time.h"
 
 #include <EGL/egl.h>
@@ -54,74 +58,6 @@ namespace {
 // merge state and vid into one single struct.
 static em_state state = {};
 
-#define MAKE_CASE(ENUM)                                                                                                \
-	case (ENUM): return #ENUM
-const char *
-glDebugSourceToString(GLenum e)
-{
-	switch (e) {
-
-		MAKE_CASE(GL_DEBUG_SOURCE_API);
-		MAKE_CASE(GL_DEBUG_SOURCE_WINDOW_SYSTEM);
-		MAKE_CASE(GL_DEBUG_SOURCE_SHADER_COMPILER);
-		MAKE_CASE(GL_DEBUG_SOURCE_THIRD_PARTY);
-		MAKE_CASE(GL_DEBUG_SOURCE_APPLICATION);
-		MAKE_CASE(GL_DEBUG_SOURCE_OTHER);
-
-	default: return "unknown-source";
-	}
-}
-const char *
-glDebugTypeToString(GLenum e)
-{
-	switch (e) {
-
-		MAKE_CASE(GL_DEBUG_TYPE_ERROR);
-		MAKE_CASE(GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR);
-		MAKE_CASE(GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR);
-		MAKE_CASE(GL_DEBUG_TYPE_PORTABILITY);
-		MAKE_CASE(GL_DEBUG_TYPE_PERFORMANCE);
-		MAKE_CASE(GL_DEBUG_TYPE_OTHER);
-		MAKE_CASE(GL_DEBUG_TYPE_MARKER);
-		MAKE_CASE(GL_DEBUG_TYPE_PUSH_GROUP);
-		MAKE_CASE(GL_DEBUG_TYPE_POP_GROUP);
-
-	default: return "unknown-type";
-	}
-}
-#undef MAKE_CASE
-android_LogPriority
-glDebugSeverityToAndroidLogPriority(GLenum e)
-{
-
-	switch (e) {
-	case GL_DEBUG_SEVERITY_HIGH: return ANDROID_LOG_ERROR;
-	case GL_DEBUG_SEVERITY_MEDIUM: return ANDROID_LOG_WARN;
-	case GL_DEBUG_SEVERITY_LOW: return ANDROID_LOG_INFO;
-	case GL_DEBUG_SEVERITY_NOTIFICATION: return ANDROID_LOG_DEBUG;
-	default: return ANDROID_LOG_VERBOSE;
-	}
-}
-
-void KHRONOS_APIENTRY
-gl_debug_callback(GLenum source,
-                  GLenum type,
-                  GLuint id,
-                  GLenum severity,
-                  GLsizei /* length */,
-                  const GLchar *message,
-                  const void *userParam)
-{
-	__android_log_print(glDebugSeverityToAndroidLogPriority(severity), LOG_TAG, "GL: %s: %s (id %d): %s",
-	                    glDebugSourceToString(source), glDebugTypeToString(type), id, message);
-}
-
-void
-registerGlDebugCallback()
-{
-	glDebugMessageCallback(&gl_debug_callback, nullptr);
-	glEnable(GL_DEBUG_OUTPUT);
-}
 } // namespace
 
 // FOR RYAN: THE APP_CMD_ START/RESUME will not fire if quest2 is NOT worn
@@ -812,37 +748,13 @@ android_main(struct android_app *app)
 		return;
 	}
 
-	for (uint32_t i = 0; i < 4; i++) {
-		state.images[i].type = XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_ES_KHR;
-	}
-
-	// TODO if the swapchain has more than 4 images this will error and we aren't checking it
-	xrEnumerateSwapchainImages(state.swapchain, 4, &state.imageCount, (XrSwapchainImageBaseHeader *)state.images);
-
-	if (XR_FAILED(result)) {
-		ALOGE("%s: Failed to get swapchain images (%d)\n", __FUNCTION__, result);
+	GLSwapchain glSwapchain;
+	if (!glSwapchain.enumerateAndGenerateFramebuffers(state.swapchain)) {
+		ALOGE("%s: Failed to enumerate swapchain images or associate them with framebuffer object names.",
+		      __FUNCTION__);
 		return;
 	}
-
-	if (!em_stream_client_egl_begin_pbuffer(stream_client)) {
-		ALOGE("%s: failed to make EGL context current", __FUNCTION__);
-		return;
-	}
-
-	// FOR RYAN: The below framebuffer creation and rendering-related calls will have to get
-	// adapted to PlutosphereOXR's reality.
-	ALOGI("FRED: Gen and bind gl texture and framebuffers.");
-	glGenFramebuffers(state.imageCount, state.framebuffers);
-
-	// This is important here. Make sure we're properly creating framebuffer.
-	for (uint32_t i = 0; i < state.imageCount; i++) {
-		glBindFramebuffer(GL_FRAMEBUFFER, state.framebuffers[i]);
-		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, state.images[i].image, 0);
-		GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
-		if (status != GL_FRAMEBUFFER_COMPLETE) {
-			ALOGE("Failed to create framebuffer (%d)\n", status);
-		}
-	}
+	state.imageCount = glSwapchain.size();
 
 	ALOGI("FRED: Create spaces\n");
 	create_spaces(state);
