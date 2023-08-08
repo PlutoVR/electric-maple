@@ -39,9 +39,11 @@ em_stream_client_new();
 
 /*!
  * Clear a pointer and free the associate stream client, if any.
+ *
+ * Handles null checking for you.
  */
 void
-em_stream_client_clear(EmStreamClient **ptr_sc);
+em_stream_client_destroy(EmStreamClient **ptr_sc);
 
 /*!
  * Initialize the EGL context and surface.

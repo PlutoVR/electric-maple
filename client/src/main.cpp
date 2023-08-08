@@ -790,7 +790,7 @@ android_main(struct android_app *app)
 	em_connection_disconnect(connection);
 	g_clear_object(&connection);
 	// g_clear_object(&stream_client);
-	em_stream_client_clear(&stream_client);
+	em_stream_client_destroy(&stream_client);
 
 	(*app->activity->vm).DetachCurrentThread();
 }
