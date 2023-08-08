@@ -290,7 +290,7 @@ compositor_init_sys_info(struct pluto_compositor *c, struct xrt_device *xdev)
 
 	// clang-format off
 
-	// These seem to control the
+	// These seem to control the 
 	sys_info->views[0].recommended.width_pixels  = APP_VIEW_W;
 	sys_info->views[0].recommended.height_pixels = APP_VIEW_H;
 	sys_info->views[0].recommended.sample_count  = 1;
@@ -859,14 +859,13 @@ pluto_compositor_create_system(pluto_program &pp, struct xrt_system_compositor *
 	u_var_add_root(c, "Pluto compositor!", 0);
 	u_var_add_sink_debug(c, &c->hackers_debug_sink, "Meow!");
 
-	// gstreamer_pipeline_webrtc_create(&c->xfctx, "Meow", &c->hackers_gstreamer_pipeline);
-
+	gstreamer_pipeline_webrtc_create(&c->xfctx, "Meow", &c->hackers_gstreamer_pipeline);
 	gstreamer_sink_create_with_pipeline( //
-	    pp.pipeline,                     //
+	    c->hackers_gstreamer_pipeline,   //
 	    READBACK_W,                      //
 	    READBACK_H,                      //
 	    XRT_FORMAT_R8G8B8X8,             //
-	    GST_APPSINK_NAME,                //
+	    "Meow",                          //
 	    &c->hackers_gstreamer_sink,      //
 	    &c->hackers_xfs);                //
 
