@@ -4,11 +4,15 @@
  * @file
  * @brief Very simple GLES3 renderer for WebRTC client.
  * @author Moshi Turner <moses@collabora.com>
+ * @author Rylie Pavlik <rpavlik@collabora.com>
  */
 
 #include "render.hpp"
+
+#include "GLError.h"
 #include "gst/app_log.h"
 #include <cstdio>
+#include <cstdlib>
 
 // Initialize EGL context. We'll need this going forward.
 void
@@ -28,50 +32,45 @@ initializeEGL(struct em_state &state)
 		return;
 	}
 
-	EGLint configCount;
-	EGLConfig configs[1024];
-	success = eglGetConfigs(state.display, configs, 1024, &configCount);
+#define MAX_CONFIGS 1024
+	EGLConfig configs[MAX_CONFIGS];
 
-	if (!success) {
-		ALOGE("Failed to get EGL configs");
-		return;
-	}
+	// RGBA8, multisample not required, ES3, pbuffer and window
+	const EGLint attributes[] = {
+	    EGL_RED_SIZE,
+	    8, //
 
-	const EGLint attributes[] = {EGL_RED_SIZE,   8, EGL_GREEN_SIZE,   8, EGL_BLUE_SIZE, 8, EGL_ALPHA_SIZE, 8,
-	                             EGL_DEPTH_SIZE, 0, EGL_STENCIL_SIZE, 0, EGL_SAMPLES,   0, EGL_NONE};
+	    EGL_GREEN_SIZE,
+	    8, //
 
-	for (EGLint i = 0; i < configCount && !state.config; i++) {
-		EGLint renderableType;
-		EGLint surfaceType;
+	    EGL_BLUE_SIZE,
+	    8, //
 
-		eglGetConfigAttrib(state.display, configs[i], EGL_RENDERABLE_TYPE, &renderableType);
-		eglGetConfigAttrib(state.display, configs[i], EGL_SURFACE_TYPE, &surfaceType);
+	    EGL_ALPHA_SIZE,
+	    8, //
 
-		if ((renderableType & EGL_OPENGL_ES3_BIT) == 0) {
-			continue;
-		}
+	    EGL_SAMPLES,
+	    1, //
 
-		if ((surfaceType & (EGL_PBUFFER_BIT | EGL_WINDOW_BIT)) != (EGL_PBUFFER_BIT | EGL_WINDOW_BIT)) {
-			continue;
-		}
+	    EGL_RENDERABLE_TYPE,
+	    EGL_OPENGL_ES3_BIT,
 
-		for (size_t a = 0; a < sizeof(attributes) / sizeof(attributes[0]); a += 2) {
-			if (attributes[a] == EGL_NONE) {
-				state.config = configs[i];
-				break;
-			}
+	    EGL_SURFACE_TYPE,
+	    (EGL_PBUFFER_BIT | EGL_WINDOW_BIT),
 
-			EGLint value;
-			eglGetConfigAttrib(state.display, configs[i], attributes[a], &value);
-			if (value != attributes[a + 1]) {
-				break;
-			}
-		}
-	}
+	    EGL_NONE,
+	};
 
-	if (!state.config) {
+	EGLint num_configs = 0;
+	CHK_EGL(eglChooseConfig(state.display, attributes, configs, MAX_CONFIGS, &num_configs));
+
+	if (num_configs == 0) {
 		ALOGE("Failed to find suitable EGL config");
+		abort();
 	}
+	ALOGI("Got %d egl configs, just taking the first one.", num_configs);
+
+	state.config = configs[0];
 
 	EGLint contextAttributes[] = {EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE};
 
