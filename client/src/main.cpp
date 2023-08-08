@@ -9,15 +9,12 @@
 #include "em_remote_experience.h"
 #include "xr_platform_deps.h"
 
-#include "GLSwapchain.h"
 
 #include "gst/app_log.h"
 #include "gst/em_connection.h"
 #include "gst/em_stream_client.h"
 #include "gst/gst_common.h"
 #include "render.hpp"
-#include "pluto.pb.h"
-#include "pb_encode.h"
 
 #include "os/os_time.h"
 #include "util/u_time.h"
@@ -31,9 +28,7 @@
 #include <android/native_activity.h>
 #include <android_native_app_glue.h>
 
-#include <gst/gstsample.h>
-#include <gst/gl/gstglbasememory.h>
-#include <gst/gl/gstglsyncmeta.h>
+#include <gst/gst.h>
 
 #include <memory>
 #include <openxr/openxr.h>
@@ -43,6 +38,7 @@
 #include <jni.h>
 #include <errno.h>
 #include <stdbool.h>
+#include <thread>
 #include <unistd.h>
 
 #include <array>
@@ -55,16 +51,26 @@
 #define XR_LOAD(fn) xrGetInstanceProcAddr(state.instance, #fn, (PFN_xrVoidFunction *)&fn);
 
 namespace {
-// FOR RYLIE: This is a general state var shared across both c++ and C sides
-// Take a look at gst_common.h...There's also 'vid' that's shared. eventually
-// merge state and vid into one single struct.
-static em_state state = {};
 
-} // namespace
+struct em_state
+{
+	bool connected;
+
+	XrInstance instance;
+	XrSystemId system;
+	XrSession session;
+	XrSessionState sessionState;
+
+	uint32_t width;
+	uint32_t height;
+};
+
+em_state state = {};
+
 
 // FOR RYLIE: THE APP_CMD_ START/RESUME will not fire if quest2 is NOT worn
 // unless the proper dev params on the headset have been set (haven't done that).
-static void
+void
 onAppCmd(struct android_app *app, int32_t cmd)
 {
 	switch (cmd) {
@@ -78,348 +84,6 @@ onAppCmd(struct android_app *app, int32_t cmd)
 	}
 }
 
-// FOR RYLIE : The function was use by Moshi to render "something" on app start.
-//            mainly for making sure the renderer (implemented in Render.cpp) was
-//            working. In your case, when integrating to PlutosphereOXR, you're
-//            probably going to have to rework the whole renderer part. You'll still
-//            get a gl texture id when calling gst_app_sink_try_pull_sample(...) below,
-//            but I will let you do the binding on that potentiual quad layer as you
-//            see fit. Just don't forget to check if hw decoder gave you a TEXTURE_EXTERNAL
-//            (and probably not a TEXTURE_2D), which then would require the appropriate
-//            shader-related parameters to sample texture-external :
-//
-//            #extension GL_OES_EGL_image_external : require
-//            precision mediump float;
-//            uniform samplerExternalOES sTextureName;
-//
-//
-void
-writeRandomTexture(GLsizei width, GLsizei height, int way, GLubyte *data)
-{
-
-	// Seed the random number generator
-	//    std::srand(std::time(0));
-	if (way == 0) {
-
-		// Fill the texture data with random values
-		for (GLsizei i = 0; i < width * height * 4; i++) {
-			data[i] = std::rand() % 256;
-		}
-	} else if (way == 1) {
-
-		int tileSize = 100;
-		for (GLsizei y = 0; y < height; y++) {
-			for (GLsizei x = 0; x < width; x++) {
-				GLsizei tileX = x / tileSize;
-				GLsizei tileY = y / tileSize;
-
-				GLubyte color = ((tileX + tileY) % 2 == 0) ? 255 : 0;
-				GLsizei index = (y * width + x) * 4;
-
-				data[index] = color;
-				data[index + 1] = color;
-				data[index + 2] = color;
-				data[index + 3] = 255;
-			}
-		}
-	} else {
-		// Define the colors for the rainbow checkerboard
-		std::array<GLubyte[4], 7> colors = {{
-		    {255, 0, 0, 255},   // Red
-		    {255, 127, 0, 255}, // Orange
-		    {255, 255, 0, 255}, // Yellow
-		    {0, 255, 0, 255},   // Green
-		    {0, 0, 255, 255},   // Blue
-		    {75, 0, 130, 255},  // Indigo
-		    {148, 0, 211, 255}  // Violet
-		}};
-		int tileSize = 100;
-		for (GLsizei y = 0; y < height; y++) {
-			for (GLsizei x = 0; x < width; x++) {
-				GLsizei tileX = x / tileSize;
-				GLsizei tileY = y / tileSize;
-
-				GLsizei tileIndex = (tileX + tileY) % colors.size();
-				GLsizei index = (y * width + x) * 4;
-
-				data[index] = colors[tileIndex][0];
-				data[index + 1] = colors[tileIndex][1];
-				data[index + 2] = colors[tileIndex][2];
-				data[index + 3] = colors[tileIndex][3];
-			}
-		}
-	}
-}
-
-// FOR RYLIE: You see that Moshi's initial renderer was assuming Texture 2D with RGBA color format
-//           because that's what monado's "Frameserver" was giving us (extra slow however, with
-//           copies...). In your case when integrating into PlutosphereOXR, you'll be using gstgl's
-//           ability to render decoded frames (YUV) directly onto underlying android::Surface (nested
-//           inside whenever the glsinkbin element's being given the memory:GLMemory CAPS), which will
-//           come out to you when pulling the sample as gl texture IDs that you'll be able to use as
-//           samplers into your glsl shaders for rendering onto a quad (Or ?? pass directly to OpenXR
-//           on a quad layer ?)... and so most of the rendering bits in here, you'll have to leave out
-//           when integrating to Pluto's client app.
-//
-GLuint
-generateRandomTexture(GLsizei width, GLsizei height, int way)
-{
-	// Allocate memory for the texture data
-	GLubyte *data = new GLubyte[width * height * 4];
-
-	writeRandomTexture(width, height, way, data);
-	// Create the texture
-	GLuint texture;
-	glGenTextures(1, &texture);
-	glBindTexture(GL_TEXTURE_2D, texture);
-
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
-
-	glBindTexture(GL_TEXTURE_2D, 0);
-
-	// Free the texture data
-	delete[] data;
-
-	return texture;
-}
-
-void
-die_errno()
-{
-	ALOGE("Something happened! %s", strerror(errno));
-}
-
-// FOR RYLIE: you'll see, the connexion scheme is a bit complex, in 2 phases since we're
-// dealing with webrtc. There's a "signalling" server, exposed by the server par on
-// 127.0.0.1:8080 to do the "ICE transaction", which basically send an "offer" of possible
-// network interfaces for server and client and finds a matching pair for the webrtc
-// connection/stream between server and client. (This has all been tested working on the
-// quest2 with the webrtc pipeline and ICE callback (mostly implemented in gst_driver.c
-
-
-static void
-hmd_pose(struct em_state &st, EmConnection *connection, XrTime predictedDisplayTime)
-{
-	XrResult result = XR_SUCCESS;
-
-
-	XrSpaceLocation hmdLocalLocation = {};
-	hmdLocalLocation.type = XR_TYPE_SPACE_LOCATION;
-	hmdLocalLocation.next = NULL;
-	result = xrLocateSpace(st.viewSpace, st.worldSpace, predictedDisplayTime, &hmdLocalLocation);
-	if (result != XR_SUCCESS) {
-		ALOGE("Bad!");
-		return;
-	}
-
-	XrPosef hmdLocalPose = hmdLocalLocation.pose;
-
-	pluto_TrackingMessage message = pluto_TrackingMessage_init_default;
-
-	message.has_P_localSpace_viewSpace = true;
-	message.P_localSpace_viewSpace.has_position = true;
-	message.P_localSpace_viewSpace.has_orientation = true;
-	message.P_localSpace_viewSpace.position.x = hmdLocalPose.position.x;
-	message.P_localSpace_viewSpace.position.y = hmdLocalPose.position.y;
-	message.P_localSpace_viewSpace.position.z = hmdLocalPose.position.z;
-
-	message.P_localSpace_viewSpace.orientation.w = hmdLocalPose.orientation.w;
-	message.P_localSpace_viewSpace.orientation.x = hmdLocalPose.orientation.x;
-	message.P_localSpace_viewSpace.orientation.y = hmdLocalPose.orientation.y;
-	message.P_localSpace_viewSpace.orientation.z = hmdLocalPose.orientation.z;
-
-	uint8_t buffer[8192];
-
-
-
-	pb_ostream_t os = pb_ostream_from_buffer(buffer, sizeof(buffer));
-
-	pb_encode(&os, pluto_TrackingMessage_fields, &message);
-	ALOGW("RYLIE: Sending HMD pose message");
-	GBytes *bytes = g_bytes_new(buffer, os.bytes_written);
-	bool bResult = em_connection_send_bytes(connection, bytes);
-	g_bytes_unref(bytes);
-	if (!bResult) {
-		ALOGE("RYLIE: Could not queue HMD pose message!");
-	}
-}
-
-void
-create_spaces(struct em_state &st)
-{
-
-	XrResult result = XR_SUCCESS;
-
-	XrReferenceSpaceCreateInfo spaceInfo = {.type = XR_TYPE_REFERENCE_SPACE_CREATE_INFO,
-	                                        .referenceSpaceType = XR_REFERENCE_SPACE_TYPE_STAGE,
-	                                        .poseInReferenceSpace = {{0.f, 0.f, 0.f, 1.f}, {0.f, 0.f, 0.f}}};
-
-
-	result = xrCreateReferenceSpace(state.session, &spaceInfo, &state.worldSpace);
-
-	if (XR_FAILED(result)) {
-		ALOGE("Failed to create reference space (%d)", result);
-	}
-	spaceInfo.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_VIEW;
-
-	result = xrCreateReferenceSpace(state.session, &spaceInfo, &state.viewSpace);
-
-	if (XR_FAILED(result)) {
-		ALOGE("Failed to create reference space (%d)", result);
-	}
-}
-
-void
-poll_and_render_frame(struct em_state &state,
-                      Renderer &renderer,
-                      GLSwapchain &swapchainBuffers,
-                      EmStreamClient *stream_client,
-                      EmConnection *connection)
-{
-	XrResult result = XR_SUCCESS;
-
-	XrFrameState frameState = {.type = XR_TYPE_FRAME_STATE};
-
-	result = xrWaitFrame(state.session, NULL, &frameState);
-
-	if (XR_FAILED(result)) {
-		ALOGE("xrWaitFrame failed");
-		return;
-	}
-
-	XrFrameBeginInfo beginfo = {.type = XR_TYPE_FRAME_BEGIN_INFO};
-
-	result = xrBeginFrame(state.session, &beginfo);
-
-	if (XR_FAILED(result)) {
-		ALOGE("xrBeginFrame failed");
-		std::abort();
-	}
-
-	// Locate views, set up layers
-	XrView views[2] = {};
-	views[0].type = XR_TYPE_VIEW;
-	views[1].type = XR_TYPE_VIEW;
-
-
-	XrViewLocateInfo locateInfo = {.type = XR_TYPE_VIEW_LOCATE_INFO,
-	                               .viewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO,
-	                               .displayTime = frameState.predictedDisplayTime,
-	                               .space = state.worldSpace};
-
-	XrViewState viewState = {.type = XR_TYPE_VIEW_STATE};
-
-	uint32_t viewCount = 2;
-	result = xrLocateViews(state.session, &locateInfo, &viewState, 2, &viewCount, views);
-
-	if (XR_FAILED(result)) {
-		ALOGE("Failed to locate views");
-	}
-
-	uint32_t width = state.width;
-	uint32_t height = state.height;
-	XrCompositionLayerProjection layer = {};
-	layer.type = XR_TYPE_COMPOSITION_LAYER_PROJECTION;
-	layer.space = state.worldSpace;
-	layer.viewCount = 2;
-
-	XrCompositionLayerProjectionView projectionViews[2] = {};
-	projectionViews[0].type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW;
-	projectionViews[0].subImage.swapchain = state.swapchain;
-	projectionViews[0].subImage.imageRect.offset = {0, 0};
-	projectionViews[0].subImage.imageRect.extent = {static_cast<int32_t>(width), static_cast<int32_t>(height)};
-	projectionViews[0].pose = views[0].pose;
-	projectionViews[0].fov = views[0].fov;
-
-	projectionViews[1].type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW;
-	projectionViews[1].subImage.swapchain = state.swapchain;
-	projectionViews[1].subImage.imageRect.offset = {static_cast<int32_t>(width), 0};
-	projectionViews[1].subImage.imageRect.extent = {static_cast<int32_t>(width), static_cast<int32_t>(height)};
-	projectionViews[1].pose = views[1].pose;
-	projectionViews[1].fov = views[1].fov;
-
-	layer.views = projectionViews;
-
-	// Render
-
-	if (!em_stream_client_egl_begin_pbuffer(stream_client)) {
-		ALOGE("FRED: mainloop_one: Failed make egl context current");
-		return;
-	}
-
-	struct em_sample *sample = em_stream_client_try_pull_sample(stream_client);
-
-	if (sample) {
-
-		uint32_t imageIndex;
-		result = xrAcquireSwapchainImage(state.swapchain, NULL, &imageIndex);
-
-		if (XR_FAILED(result)) {
-			ALOGE("Failed to acquire swapchain image (%d)", result);
-			std::abort();
-		}
-
-		XrSwapchainImageWaitInfo waitInfo = {.type = XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO,
-		                                     .timeout = XR_INFINITE_DURATION};
-
-		result = xrWaitSwapchainImage(state.swapchain, &waitInfo);
-
-		if (XR_FAILED(result)) {
-			ALOGE("Failed to wait for swapchain image (%d)", result);
-			std::abort();
-		}
-		state.frame_texture_id = sample->frame_texture_id;
-
-		glBindFramebuffer(GL_FRAMEBUFFER, swapchainBuffers.framebufferNameAtSwapchainIndex(imageIndex));
-
-		glViewport(0, 0, state.width * 2, state.height);
-		glClearColor(0.0f, 1.0f, 0.0f, 1.0f);
-
-		for (uint32_t eye = 0; eye < 2; eye++) {
-			glViewport(eye * state.width, 0, state.width, state.height);
-			renderer.draw(sample->frame_texture_id, sample->frame_texture_target);
-		}
-
-		// Release
-
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-		xrReleaseSwapchainImage(state.swapchain, NULL);
-
-		if (state.prev_sample != NULL) {
-			em_stream_client_release_sample(stream_client, state.prev_sample);
-			state.prev_sample = NULL;
-		}
-		state.prev_sample = sample;
-		// Submit frame
-		XrFrameEndInfo endInfo = {};
-		endInfo.type = XR_TYPE_FRAME_END_INFO;
-		endInfo.displayTime = frameState.predictedDisplayTime;
-		endInfo.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
-		endInfo.layerCount = frameState.shouldRender ? 1 : 0;
-		endInfo.layers = (const XrCompositionLayerBaseHeader *[1]){(XrCompositionLayerBaseHeader *)&layer};
-
-		hmd_pose(state, connection, frameState.predictedDisplayTime);
-		xrEndFrame(state.session, &endInfo);
-	}
-
-	em_stream_client_egl_end(stream_client);
-}
-
-// FOR RYLIE: Our main loop on the main app thread. Very important stuff. Also note the
-// very important call to gst_app_sink_try_pull_sample(...) that retrieves the newest
-// sample from the appsink (connected to our glsinkbin end in gst_driver.c). Those are
-// then interpreted as gl texture ids to be bound to egl context.
-//
-// Important note about EGL contexts here. Note that gstgl (glsinkbin) HAS to get created
-// with RENDERING EGL CONTEXT current (that's happening in gst_driver.c when calling
-// gst_gl_context_get_current_gl_context(...). Reason's simple... when gstgl initializes
-// it'll create a SHARED egl context with whatever's current and so pay careful attention
-// to the eglMakeCurrent here and there.
 /**
  * Poll for Android and OpenXR events, and handle them
  *
@@ -428,21 +92,21 @@ poll_and_render_frame(struct em_state &state,
  * @return true if we should go to the render code
  */
 bool
-poll_events(struct em_state &state)
+poll_events(struct android_app *app, struct em_state &state)
 {
 
 	// Poll Android events
 	for (;;) {
 		int events;
 		struct android_poll_source *source;
-		bool wait = !state.app->window || state.app->activityState != APP_CMD_RESUME;
+		bool wait = !app->window || app->activityState != APP_CMD_RESUME;
 		int timeout = wait ? -1 : 0;
 		if (ALooper_pollAll(timeout, NULL, &events, (void **)&source) >= 0) {
 			if (source) {
-				source->process(state.app, source);
+				source->process(app, source);
 			}
 
-			if (timeout == 0 && (!state.app->window || state.app->activityState != APP_CMD_RESUME)) {
+			if (timeout == 0 && (!app->window || app->activityState != APP_CMD_RESUME)) {
 				break;
 			}
 		} else {
@@ -495,72 +159,23 @@ poll_events(struct em_state &state)
 	// If session isn't ready, return. We'll be called again and will poll events again.
 	if (state.sessionState < XR_SESSION_STATE_READY) {
 		ALOGI("Waiting for session ready state!");
-		os_nanosleep(U_TIME_1MS_IN_NS * 100);
+		using namespace std::chrono_literals;
+		std::this_thread::sleep_for(100ms);
 		return false;
 	}
 
 	return true;
 }
 
-#if 0
-const char *
-getFilePath(JNIEnv *env, jobject activity)
-{
-	jclass contextClass = env->GetObjectClass(activity);
-	jmethodID getExternalFilesDirMethod =
-	    env->GetMethodID(contextClass, "getExternalFilesDir", "(Ljava/lang/String;)Ljava/io/File;");
-	jstring directoryName = env->NewStringUTF("debug");
-	jobject directory = env->CallObjectMethod(activity, getExternalFilesDirMethod, directoryName);
-	env->DeleteLocalRef(directoryName);
-	env->DeleteLocalRef(contextClass);
-	if (directory == nullptr) {
-		return env->NewStringUTF("Failed to obtain external files directory");
-	}
-	jmethodID getPathMethod = env->GetMethodID(env->FindClass("java/io/File"), "getPath", "()Ljava/lang/String;");
-	jstring path = static_cast<jstring>(env->CallObjectMethod(directory, getPathMethod));
-	env->DeleteLocalRef(directory);
-	if (path == nullptr) {
-		return env->NewStringUTF("Failed to obtain path to external files directory");
-	}
-	std::string filePath = env->GetStringUTFChars(path, nullptr);
-	filePath += "/meow.dot";
-	jstring result = env->NewStringUTF(filePath.c_str());
-	env->ReleaseStringUTFChars(path, filePath.c_str());
-	return result;
-}
-#else
-extern "C" const char *
-getFilePath(JNIEnv *env, jobject activity)
-{
-	jclass contextClass = env->GetObjectClass(activity);
-	jmethodID getExternalFilesDirMethod =
-	    env->GetMethodID(contextClass, "getExternalFilesDir", "(Ljava/lang/String;)Ljava/io/File;");
-	jstring directoryName = env->NewStringUTF("debug");
-	jobject directory = env->CallObjectMethod(activity, getExternalFilesDirMethod, directoryName);
-	env->DeleteLocalRef(directoryName);
-	env->DeleteLocalRef(contextClass);
-	if (directory == nullptr) {
-		return strdup("Failed to obtain external files directory");
-	}
-	jmethodID getPathMethod = env->GetMethodID(env->FindClass("java/io/File"), "getPath", "()Ljava/lang/String;");
-	jstring path = static_cast<jstring>(env->CallObjectMethod(directory, getPathMethod));
-	env->DeleteLocalRef(directory);
-	if (path == nullptr) {
-		return strdup("Failed to obtain path to external files directory");
-	}
-	const char *filePath = env->GetStringUTFChars(path, nullptr);
-	env->DeleteLocalRef(path);
-	return filePath;
-}
-#endif
-
-static void
+void
 connected_cb(EmConnection *connection, struct em_state *state)
 {
 	ALOGI("%s: Got signal that we are connected!", __FUNCTION__);
 
 	state->connected = true;
 }
+
+} // namespace
 
 // FOR RYLIE : This is our main android app entry point. please note that there is
 // a PROFOUND difference between our webrtc/gstreamer-pipeline test application here
@@ -592,14 +207,15 @@ android_main(struct android_app *app)
 	// do not do ansi color codes
 	setenv("GST_DEBUG_NO_COLOR", "1", 1);
 
-	state.app = app;
-	state.java_vm = app->activity->vm;
-
-	(*app->activity->vm).AttachCurrentThread(&state.jni, NULL);
+	JNIEnv *env = nullptr;
+	(*app->activity->vm).AttachCurrentThread(&env, NULL);
 	app->onAppCmd = onAppCmd;
 
 	auto initialEglData = std::make_unique<EglData>();
 
+	//
+	// Normal OpenXR app startup
+	//
 
 	// Initialize OpenXR loader
 	PFN_xrInitializeLoaderKHR xrInitializeLoaderKHR = NULL;
@@ -646,6 +262,7 @@ android_main(struct android_app *app)
 
 	if (XR_FAILED(result)) {
 		ALOGE("Failed to initialize OpenXR instance\n");
+		return;
 	}
 
 	// OpenXR system
@@ -662,8 +279,8 @@ android_main(struct android_app *app)
 
 	if (XR_FAILED(result)) {
 		ALOGE("Failed to enumerate view configurations\n");
+		return;
 	}
-
 
 	XrViewConfigurationView viewInfo[2] = {};
 	viewInfo[0].type = XR_TYPE_VIEW_CONFIGURATION_VIEW;
@@ -682,34 +299,6 @@ android_main(struct android_app *app)
 
 	state.width = viewInfo[0].recommendedImageRectWidth;
 	state.height = viewInfo[0].recommendedImageRectHeight;
-
-	initialEglData->makeCurrent();
-	state.frame_texture_id = generateRandomTexture(state.width, state.height, 2);
-
-	// Un-make current
-	initialEglData->makeNotCurrent();
-
-	// Set up gstreamer
-	gst_init(0, NULL);
-
-	// Set up our own objects
-	ALOGI("%s: creating stream client object", __FUNCTION__);
-	EmStreamClient *stream_client = em_stream_client_new();
-
-	ALOGI("%s: telling stream client about EGL", __FUNCTION__);
-	em_stream_client_set_egl_context(stream_client, initialEglData->display, initialEglData->context,
-	                                 initialEglData->surface);
-
-	ALOGI("%s: creating connection object", __FUNCTION__);
-	EmConnection *connection = g_object_ref_sink(em_connection_new_localhost());
-
-	g_signal_connect(connection, "connected", G_CALLBACK(connected_cb), &state);
-
-	ALOGI("%s: starting connection", __FUNCTION__);
-	em_connection_connect(connection);
-
-	ALOGI("%s: starting stream client mainloop thread", __FUNCTION__);
-	em_stream_client_spawn_thread(stream_client, connection);
 
 	// OpenXR session
 	ALOGI("FRED: Creating OpenXR session...");
@@ -735,25 +324,70 @@ android_main(struct android_app *app)
 		return;
 	}
 
+	//
+	// End of normal OpenXR app startup
+	//
+
+	//
+	// Start of remote-rendering-specific code
+	//
+
+	// Set up gstreamer
+	gst_init(0, NULL);
+
+	// Set up our own objects
+	ALOGI("%s: creating stream client object", __FUNCTION__);
+	EmStreamClient *stream_client = em_stream_client_new();
+
+	ALOGI("%s: telling stream client about EGL", __FUNCTION__);
+	em_stream_client_set_egl_context(stream_client, initialEglData->display, initialEglData->context,
+	                                 initialEglData->surface);
+
+	ALOGI("%s: creating connection object", __FUNCTION__);
+	EmConnection *connection = g_object_ref_sink(em_connection_new_localhost());
+
+	g_signal_connect(connection, "connected", G_CALLBACK(connected_cb), &state);
+
+	ALOGI("%s: starting connection", __FUNCTION__);
+	em_connection_connect(connection);
+
+	ALOGI("%s: starting stream client mainloop thread", __FUNCTION__);
+	em_stream_client_spawn_thread(stream_client, connection);
+
 	XrExtent2Di eye_extents{static_cast<int32_t>(state.width), static_cast<int32_t>(state.height)};
-	EmRemoteExperience *remote_client =
+	EmRemoteExperience *remote_experience =
 	    em_remote_experience_new(connection, stream_client, state.instance, state.session, &eye_extents);
-	if (!remote_client) {
-		ALOGE("%s: Failed during remote client init.", __FUNCTION__);
+	if (!remote_experience) {
+		ALOGE("%s: Failed during remote experience init.", __FUNCTION__);
 		return;
 	}
+	//
+	// End of remote-rendering-specific setup, into main loop
+	//
+
 	// Main rendering loop.
 	ALOGI("DEBUG: Starting main loop.\n");
 	while (!app->destroyRequested) {
-		if (poll_events(state)) {
-			em_remote_experience_poll_and_render_frame(remote_client);
+		if (poll_events(app, state)) {
+			em_remote_experience_poll_and_render_frame(remote_experience);
 		}
 	}
+
+	//
+	// Clean up RR structures
+	//
 
 	g_clear_object(&connection);
 	// without gobject for stream client, the EmRemoteExperience takes ownership
 	// g_clear_object(&stream_client);
 
+	em_remote_experience_destroy(&remote_experience);
+
+	//
+	// End RR cleanup
+	//
+
+	initialEglData = nullptr;
 
 	(*app->activity->vm).DetachCurrentThread();
 }
