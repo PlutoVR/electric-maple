@@ -7,6 +7,8 @@
  */
 
 #include "gst/app_log.h"
+#include "gst/em_connection.h"
+#include "gst/em_stream_client.h"
 #include "gst/gst_common.h"
 #include "render.hpp"
 #include "pluto.pb.h"
@@ -262,7 +264,7 @@ die_errno()
 
 
 static void
-hmd_pose(struct em_state &st, struct xrt_fs *client)
+hmd_pose(struct em_state &st, EmConnection *connection, XrTime predictedDisplayTime)
 {
 	XrResult result = XR_SUCCESS;
 
@@ -270,8 +272,7 @@ hmd_pose(struct em_state &st, struct xrt_fs *client)
 	XrSpaceLocation hmdLocalLocation = {};
 	hmdLocalLocation.type = XR_TYPE_SPACE_LOCATION;
 	hmdLocalLocation.next = NULL;
-	// TODO os_monotonic_get_ns is wrong here
-	result = xrLocateSpace(st.viewSpace, st.worldSpace, os_monotonic_get_ns(), &hmdLocalLocation);
+	result = xrLocateSpace(st.viewSpace, st.worldSpace, predictedDisplayTime, &hmdLocalLocation);
 	if (result != XR_SUCCESS) {
 		ALOGE("Bad!");
 		return;
@@ -300,11 +301,10 @@ hmd_pose(struct em_state &st, struct xrt_fs *client)
 	pb_ostream_t os = pb_ostream_from_buffer(buffer, sizeof(buffer));
 
 	pb_encode(&os, pluto_TrackingMessage_fields, &message);
-	// ALOGW("RYLIE: Sending HMD pose message");
-
-	bool bResult = em_fs_send_bytes(client, buffer, os.bytes_written);
-
-
+	ALOGW("RYLIE: Sending HMD pose message");
+	GBytes *bytes = g_bytes_new(buffer, os.bytes_written);
+	bool bResult = em_connection_send_bytes(connection, bytes);
+	g_bytes_unref(bytes);
 	if (!bResult) {
 		ALOGE("RYLIE: Could not queue HMD pose message!");
 	}
@@ -335,6 +335,147 @@ create_spaces(struct em_state &st)
 	}
 }
 
+void
+poll_and_render_frame(struct em_state &state, EmStreamClient *stream_client, EmConnection *connection)
+{
+	XrResult result = XR_SUCCESS;
+
+	XrFrameState frameState = {.type = XR_TYPE_FRAME_STATE};
+
+	result = xrWaitFrame(state.session, NULL, &frameState);
+
+	if (XR_FAILED(result)) {
+		ALOGE("xrWaitFrame failed");
+		return;
+	}
+
+	XrFrameBeginInfo beginfo = {.type = XR_TYPE_FRAME_BEGIN_INFO};
+
+	result = xrBeginFrame(state.session, &beginfo);
+
+	if (XR_FAILED(result)) {
+		ALOGE("xrBeginFrame failed");
+		std::abort();
+	}
+
+	// Locate views, set up layers
+	XrView views[2] = {};
+	views[0].type = XR_TYPE_VIEW;
+	views[1].type = XR_TYPE_VIEW;
+
+
+	XrViewLocateInfo locateInfo = {.type = XR_TYPE_VIEW_LOCATE_INFO,
+	                               .viewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO,
+	                               .displayTime = frameState.predictedDisplayTime,
+	                               .space = state.worldSpace};
+
+	XrViewState viewState = {.type = XR_TYPE_VIEW_STATE};
+
+	uint32_t viewCount = 2;
+	result = xrLocateViews(state.session, &locateInfo, &viewState, 2, &viewCount, views);
+
+	if (XR_FAILED(result)) {
+		ALOGE("Failed to locate views");
+	}
+
+	uint32_t width = state.width;
+	uint32_t height = state.height;
+	XrCompositionLayerProjection layer = {};
+	layer.type = XR_TYPE_COMPOSITION_LAYER_PROJECTION;
+	layer.space = state.worldSpace;
+	layer.viewCount = 2;
+
+	XrCompositionLayerProjectionView projectionViews[2] = {};
+	projectionViews[0].type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW;
+	projectionViews[0].subImage.swapchain = state.swapchain;
+	projectionViews[0].subImage.imageRect.offset = {0, 0};
+	projectionViews[0].subImage.imageRect.extent = {static_cast<int32_t>(width), static_cast<int32_t>(height)};
+	projectionViews[0].pose = views[0].pose;
+	projectionViews[0].fov = views[0].fov;
+
+	projectionViews[1].type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW;
+	projectionViews[1].subImage.swapchain = state.swapchain;
+	projectionViews[1].subImage.imageRect.offset = {static_cast<int32_t>(width), 0};
+	projectionViews[1].subImage.imageRect.extent = {static_cast<int32_t>(width), static_cast<int32_t>(height)};
+	projectionViews[1].pose = views[1].pose;
+	projectionViews[1].fov = views[1].fov;
+
+	layer.views = projectionViews;
+
+	// Render
+
+	if (!em_stream_client_egl_begin_pbuffer(stream_client)) {
+		ALOGE("FRED: mainloop_one: Failed make egl context current");
+		return;
+	}
+
+	struct em_sample *sample = em_stream_client_try_pull_sample(stream_client);
+
+	if (sample) {
+
+		uint32_t imageIndex;
+		result = xrAcquireSwapchainImage(state.swapchain, NULL, &imageIndex);
+
+		if (XR_FAILED(result)) {
+			ALOGE("Failed to acquire swapchain image (%d)", result);
+			std::abort();
+		}
+
+		XrSwapchainImageWaitInfo waitInfo = {.type = XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO,
+		                                     .timeout = XR_INFINITE_DURATION};
+
+		result = xrWaitSwapchainImage(state.swapchain, &waitInfo);
+
+		if (XR_FAILED(result)) {
+			ALOGE("Failed to wait for swapchain image (%d)", result);
+			std::abort();
+		}
+		state.frame_texture_id = sample->frame_texture_id;
+
+		// ALOGI("RYLIE: Frame texture id is %d", state.frame_texture_id);
+		glBindFramebuffer(GL_FRAMEBUFFER, state.framebuffers[imageIndex]);
+
+		glViewport(0, 0, state.width * 2, state.height);
+
+
+		glClearColor(0.0f, 1.0f, 0.0f, 1.0f);
+
+		for (uint32_t eye = 0; eye < 2; eye++) {
+			glViewport(eye * state.width, 0, state.width, state.height);
+			draw(state.framebuffers[imageIndex], sample->frame_texture_id, sample->frame_texture_target);
+		}
+
+		// Release
+
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+		xrReleaseSwapchainImage(state.swapchain, NULL);
+
+		if (state.prev_sample != NULL) {
+			em_stream_client_release_sample(stream_client, state.prev_sample);
+			state.prev_sample = NULL;
+		}
+		state.prev_sample = sample;
+	} else {
+		// ALOGE("FRED: NO gst appsink sample...");
+	}
+
+	if (sample) {
+		// Submit frame (if we actually got one)
+		XrFrameEndInfo endInfo = {};
+		endInfo.type = XR_TYPE_FRAME_END_INFO;
+		endInfo.displayTime = frameState.predictedDisplayTime;
+		endInfo.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
+		endInfo.layerCount = frameState.shouldRender ? 1 : 0;
+		endInfo.layers = (const XrCompositionLayerBaseHeader *[1]){(XrCompositionLayerBaseHeader *)&layer};
+
+		hmd_pose(state, connection, frameState.predictedDisplayTime);
+		xrEndFrame(state.session, &endInfo);
+	}
+
+	em_stream_client_egl_end(stream_client);
+}
+
 // FOR RYLIE: Our main loop on the main app thread. Very important stuff. Also note the
 // very important call to gst_app_sink_try_pull_sample(...) that retrieves the newest
 // sample from the appsink (connected to our glsinkbin end in gst_driver.c). Those are
@@ -343,10 +484,10 @@ create_spaces(struct em_state &st)
 // Important note about EGL contexts here. Note that gstgl (glsinkbin) HAS to get created
 // with RENDERING EGL CONTEXT current (that's happening in gst_driver.c when calling
 // gst_gl_context_get_current_gl_context(...). Reason's simple... when gstgl initializes
-// it'll create a SHARED egl context with whatever's current and so pay carefull attention
+// it'll create a SHARED egl context with whatever's current and so pay careful attention
 // to the eglMakeCurrent here and there.
 void
-mainloop_one(struct xrt_fs *client, struct em_state &state)
+mainloop_one(struct em_state &state, EmStreamClient *stream_client, EmConnection *connection)
 {
 
 	// Poll Android events
@@ -418,154 +559,7 @@ mainloop_one(struct xrt_fs *client, struct em_state &state)
 	}
 
 	// Begin frame
-
-	XrFrameState frameState = {.type = XR_TYPE_FRAME_STATE};
-
-	result = xrWaitFrame(state.session, NULL, &frameState);
-
-	if (XR_FAILED(result)) {
-		ALOGE("xrWaitFrame failed");
-	}
-
-	XrFrameBeginInfo beginfo = {.type = XR_TYPE_FRAME_BEGIN_INFO};
-
-	result = xrBeginFrame(state.session, &beginfo);
-
-	if (XR_FAILED(result)) {
-		ALOGE("xrBeginFrame failed");
-	}
-
-	// Locate views, set up layers
-	XrView views[2] = {};
-	views[0].type = XR_TYPE_VIEW;
-	views[1].type = XR_TYPE_VIEW;
-
-
-	XrViewLocateInfo locateInfo = {.type = XR_TYPE_VIEW_LOCATE_INFO,
-	                               .viewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO,
-	                               .displayTime = frameState.predictedDisplayTime,
-	                               .space = state.worldSpace};
-
-	XrViewState viewState = {.type = XR_TYPE_VIEW_STATE};
-
-	uint32_t viewCount = 2;
-	result = xrLocateViews(state.session, &locateInfo, &viewState, 2, &viewCount, views);
-
-	if (XR_FAILED(result)) {
-		ALOGE("Failed to locate views");
-	}
-
-	uint32_t width = state.width;
-	uint32_t height = state.height;
-	XrCompositionLayerProjection layer = {};
-	layer.type = XR_TYPE_COMPOSITION_LAYER_PROJECTION;
-	layer.space = state.worldSpace;
-	layer.viewCount = 2;
-
-	XrCompositionLayerProjectionView projectionViews[2] = {};
-	projectionViews[0].type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW;
-	projectionViews[0].subImage.swapchain = state.swapchain;
-	projectionViews[0].subImage.imageRect.offset = {0, 0};
-	projectionViews[0].subImage.imageRect.extent = {static_cast<int32_t>(width), static_cast<int32_t>(height)};
-	projectionViews[0].pose = views[0].pose;
-	projectionViews[0].fov = views[0].fov;
-
-	projectionViews[1].type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW;
-	projectionViews[1].subImage.swapchain = state.swapchain;
-	projectionViews[1].subImage.imageRect.offset = {static_cast<int32_t>(width), 0};
-	projectionViews[1].subImage.imageRect.extent = {static_cast<int32_t>(width), static_cast<int32_t>(height)};
-	projectionViews[1].pose = views[1].pose;
-	projectionViews[1].fov = views[1].fov;
-
-	layer.views = projectionViews;
-
-	// Render
-
-
-	// FOR RYLIE: we're not asking xrt_fs for a frame, we're checking ourselves what appsink
-	// may have for us. That's why the state.xf logic's been disabled (not needed anymore)
-	// if (state.xf) {
-	// ALOGI("FRED: mainloop_one: Trying to get the EGL lock");
-	os_mutex_lock(&state.egl_lock);
-	if (eglMakeCurrent(state.display, state.surface, state.surface, state.context) == EGL_FALSE) {
-		ALOGE("FRED: mainloop_one: Failed make egl context current");
-		return;
-	}
-
-	struct em_sample *sample = em_fs_try_pull_sample(client);
-
-	if (sample) {
-
-		uint32_t imageIndex;
-		result = xrAcquireSwapchainImage(state.swapchain, NULL, &imageIndex);
-
-		if (XR_FAILED(result)) {
-			ALOGE("Failed to acquire swapchain image (%d)", result);
-			std::abort();
-		}
-
-		XrSwapchainImageWaitInfo waitInfo = {.type = XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO,
-		                                     .timeout = XR_INFINITE_DURATION};
-
-		result = xrWaitSwapchainImage(state.swapchain, &waitInfo);
-
-		if (XR_FAILED(result)) {
-			ALOGE("Failed to wait for swapchain image (%d)", result);
-			std::abort();
-		}
-		state.frame_texture_id = sample->frame_texture_id;
-
-		// ALOGI("RYLIE: Frame texture id is %d", state.frame_texture_id);
-		glBindFramebuffer(GL_FRAMEBUFFER, state.framebuffers[imageIndex]);
-
-		glViewport(0, 0, state.width * 2, state.height);
-
-
-		glClearColor(0.0f, 1.0f, 0.0f, 1.0f);
-
-		for (uint32_t eye = 0; eye < 2; eye++) {
-			glViewport(eye * state.width, 0, state.width, state.height);
-			draw(state.framebuffers[imageIndex], sample->frame_texture_id, sample->frame_texture_target);
-		}
-
-		// Release
-
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-		xrReleaseSwapchainImage(state.swapchain, NULL);
-
-		if (state.prev_sample != NULL) {
-			em_fs_release_sample(client, state.prev_sample);
-			state.prev_sample = NULL;
-		}
-		state.prev_sample = sample;
-	} else {
-		// ALOGE("FRED: NO gst appsink sample...");
-	}
-
-	if (sample) {
-		// Submit frame (if we actually got one)
-		XrFrameEndInfo endInfo = {};
-		endInfo.type = XR_TYPE_FRAME_END_INFO;
-		endInfo.displayTime = frameState.predictedDisplayTime;
-		endInfo.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
-		endInfo.layerCount = frameState.shouldRender ? 1 : 0;
-		endInfo.layers = (const XrCompositionLayerBaseHeader *[1]){(XrCompositionLayerBaseHeader *)&layer};
-
-		hmd_pose(state, client);
-		xrEndFrame(state.session, &endInfo);
-	}
-
-	EGLBoolean bret = eglMakeCurrent( //
-	    state.display,                //
-	    EGL_NO_SURFACE,               //
-	    EGL_NO_SURFACE,               //
-	    EGL_NO_CONTEXT);              //
-	if (bret != EGL_TRUE) {
-		ALOGE("eglMakeCurrent(Un-make): false, %u", eglGetError());
-	}
-	// ALOGE("FRED: mainloop_one: releasing the EGL lock");
-	os_mutex_unlock(&state.egl_lock);
+	poll_and_render_frame(state, stream_client, connection);
 }
 
 #if 0
@@ -620,6 +614,14 @@ getFilePath(JNIEnv *env, jobject activity)
 }
 #endif
 
+static void
+connected_cb(EmConnection *connection, struct em_state *state)
+{
+	ALOGI("%s: Got signal that we are connected!", __FUNCTION__);
+
+	state->connected = true;
+}
+
 // FOR RYLIE : This is our main android app entry point. please note that there is
 // a PROFOUND difference between our webrtc/gstreamer-pipeline test application here
 // and PlutosphereOXR on which you'll have to integrate... The current test app
@@ -656,15 +658,9 @@ android_main(struct android_app *app)
 	(*app->activity->vm).AttachCurrentThread(&state.jni, NULL);
 	app->onAppCmd = onAppCmd;
 
-	os_mutex_init(&state.egl_lock);
-	ALOGI("FRED: main: Trying to get the EGL lock");
-	os_mutex_lock(&state.egl_lock);
 	initializeEGL(state);
 
 	registerGlDebugCallback();
-
-	// FOR RYLIE : This is a monado's frameserver remnant.
-	state.xf = nullptr;
 
 	// Initialize OpenXR loader
 	PFN_xrInitializeLoaderKHR xrInitializeLoaderKHR = NULL;
@@ -679,6 +675,7 @@ android_main(struct android_app *app)
 
 	if (XR_FAILED(result)) {
 		ALOGE("Failed to initialize OpenXR loader\n");
+		return;
 	}
 
 	// Create OpenXR instance
@@ -749,14 +746,29 @@ android_main(struct android_app *app)
 
 	state.frame_texture_id = generateRandomTexture(state.width, state.height, 2);
 
-	// FOR RYLIE: This call below is a remnant of xrt_fs usage. That CB is not even called.
-	//        in time, completely get rid of monado for that.
-	struct xrt_frame_context xfctx = {};
+	// Un-make current
+	eglMakeCurrent(state.display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
 
-	// FOR RYLIE: This is where everything gstreamer starts.
-	ALOGI("FRED: Creating gst pipeline");
-	struct xrt_fs *client = em_fs_create_streaming_client(&xfctx, &state, state.display, state.context);
-	ALOGI("FRED: Done Creating gst pipeline");
+	// Set up gstreamer
+	gst_init(0, NULL);
+
+	// Set up our own objects
+	ALOGI("%s: creating stream client object", __FUNCTION__);
+	EmStreamClient *stream_client = em_stream_client_new();
+
+	ALOGI("%s: telling stream client about EGL", __FUNCTION__);
+	em_stream_client_set_egl_context(stream_client, state.display, state.context, state.surface);
+
+	ALOGI("%s: creating connection object", __FUNCTION__);
+	EmConnection *connection = em_connection_new_localhost();
+
+	g_signal_connect(connection, "connected", G_CALLBACK(connected_cb), &state);
+
+	ALOGI("%s: starting connection", __FUNCTION__);
+	em_connection_connect(connection);
+
+	ALOGI("%s: starting stream client mainloop thread", __FUNCTION__);
+	em_stream_client_spawn_thread(stream_client, connection);
 
 	// OpenXR session
 	ALOGI("FRED: Creating OpenXR session...");
@@ -777,6 +789,7 @@ android_main(struct android_app *app)
 
 	if (XR_FAILED(result)) {
 		ALOGE("ERROR: Failed to create OpenXR session (%d)\n", result);
+		return;
 	}
 
 	ALOGI("FRED: Creating OpenXR Swapchain...");
@@ -796,6 +809,7 @@ android_main(struct android_app *app)
 
 	if (XR_FAILED(result)) {
 		ALOGE("Failed to create OpenXR swapchain (%d)\n", result);
+		return;
 	}
 
 	for (uint32_t i = 0; i < 4; i++) {
@@ -806,23 +820,19 @@ android_main(struct android_app *app)
 	xrEnumerateSwapchainImages(state.swapchain, 4, &state.imageCount, (XrSwapchainImageBaseHeader *)state.images);
 
 	if (XR_FAILED(result)) {
-		ALOGE("ERROR: Failed to get swapchain images (%d)\n", result);
+		ALOGE("%s: Failed to get swapchain images (%d)\n", __FUNCTION__, result);
+		return;
 	}
 
-	// FOR RYLIE: The below framebuffer creation and redering-related calls will have to get
+	if (!em_stream_client_egl_begin_pbuffer(stream_client)) {
+		ALOGE("%s: failed to make EGL context current", __FUNCTION__);
+		return;
+	}
+
+	// FOR RYLIE: The below framebuffer creation and rendering-related calls will have to get
 	// adapted to PlutosphereOXR's reality.
 	ALOGI("FRED: Gen and bind gl texture and framebuffers.");
 	glGenFramebuffers(state.imageCount, state.framebuffers);
-
-	// FIXME: This if below is suspicious.. we're not using xf anymore....
-	if (state.xf) {
-		ALOGI("state.xf is non-null");
-		glBindTexture(GL_TEXTURE_2D, state.frame_texture_id);
-		glPixelStorei(GL_UNPACK_ROW_LENGTH, state.xf->stride / 4);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, state.xf->width, state.xf->height, 0, GL_RGBA, GL_UNSIGNED_BYTE,
-		             state.xf->data);
-		glBindTexture(GL_TEXTURE_2D, 0);
-	}
 
 	// This is important here. Make sure we're properly creating framebuffer.
 	for (uint32_t i = 0; i < state.imageCount; i++) {
@@ -839,17 +849,20 @@ android_main(struct android_app *app)
 
 	ALOGI("FRED: Setup Render\n");
 	setupRender();
+	em_stream_client_egl_end(stream_client);
 
-	eglMakeCurrent(state.display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
-	ALOGI("FRED: main: releasing the EGL lock");
-	os_mutex_unlock(&state.egl_lock);
 
 	// Main rendering loop.
 	ALOGI("DEBUG: Starting main loop.\n");
 	while (!app->destroyRequested) {
-		mainloop_one(client, state);
+		mainloop_one(state, stream_client, connection);
 	}
 
-	os_mutex_destroy(&state.egl_lock);
+	em_stream_client_stop(stream_client);
+	em_connection_disconnect(connection);
+	g_clear_object(&connection);
+	// g_clear_object(&stream_client);
+	em_stream_client_clear(&stream_client);
+
 	(*app->activity->vm).DetachCurrentThread();
 }
