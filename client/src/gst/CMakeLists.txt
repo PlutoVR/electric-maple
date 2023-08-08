@@ -16,7 +16,7 @@ target_link_libraries(
 		xrt-interfaces
 		aux_os
 	)
-# target_compile_definitions(pluto_vf PUBLIC XR_USE_PLATFORM_ANDROID XR_USE_GRAPHICS_API_OPENGL_ES)
+target_compile_definitions(pluto_vf PUBLIC XR_USE_PLATFORM_ANDROID XR_USE_GRAPHICS_API_OPENGL_ES)
 target_include_directories(
 	pluto_vf
 	PRIVATE

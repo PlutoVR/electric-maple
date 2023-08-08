@@ -10,14 +10,19 @@ target_include_directories(native_app_glue PUBLIC ${ANDROID_NDK}/sources/android
 # now build app's shared lib
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror")
 
-add_library(plutovr_webrtc_client SHARED main.cpp render.cpp)
+add_library(
+	plutovr_webrtc_client SHARED
+	main.cpp
+	render.cpp
+	RemoteClient.cpp
+	GLDebug.cpp
+	GLError.cpp
+	GLSwapchain.cpp
+	)
 
 target_include_directories(
-	plutovr_webrtc_client
-	PRIVATE
-		${CMAKE_CURRENT_BINARY_DIR}/shaders/
-		"${PROJECT_SOURCE_DIR}/../monado/external/include" ${GLIB_INCLUDE_DIRS}
-		${GST_INCLUDE_DIRS}
+	plutovr_webrtc_client PRIVATE "${PROJECT_SOURCE_DIR}/../monado/external/include"
+				      ${GLIB_INCLUDE_DIRS} ${GST_INCLUDE_DIRS}
 	)
 
 # add lib dependencies
