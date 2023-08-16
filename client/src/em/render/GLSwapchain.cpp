@@ -8,7 +8,7 @@
  */
 
 #include "GLSwapchain.h"
-#include "gst/app_log.h"
+#include "../em_app_log.h"
 #include <GLES3/gl3.h>
 #include <openxr/openxr.h>
 

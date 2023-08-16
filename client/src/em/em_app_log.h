@@ -5,6 +5,8 @@
 
 #define LOG_TAG "ElectricMaple"
 
+#ifndef ALOGV
+
 #ifdef __ANDROID__
 #include <android/log.h>
 
@@ -19,4 +21,6 @@
 #define ALOGI(...)
 #define ALOGW(...)
 #define ALOGE(...)
+#endif
+
 #endif

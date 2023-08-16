@@ -9,7 +9,7 @@
 
 #include "GLDebug.h"
 
-#include "gst/app_log.h"
+#include "../em_app_log.h"
 
 #include "GLES3/gl3.h"
 #include <GLES3/gl32.h>

@@ -8,8 +8,8 @@
  */
 #include "EglData.hpp"
 
-#include "gst/app_log.h"
-#include "GLError.h"
+#include "em/em_app_log.h"
+#include "em/render/GLError.h"
 
 #include <EGL/egl.h>
 

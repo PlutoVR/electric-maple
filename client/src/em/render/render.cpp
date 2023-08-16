@@ -11,7 +11,7 @@
 
 #include "GLDebug.h"
 #include "GLError.h"
-#include "gst/app_log.h"
+#include "../em_app_log.h"
 #include <EGL/egl.h>
 #include <GLES3/gl3.h>
 #include <cstddef>

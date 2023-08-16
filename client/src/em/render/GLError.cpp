@@ -9,7 +9,7 @@
 
 #include "GLError.h"
 
-#include "gst/app_log.h"
+#include "../em_app_log.h"
 
 #include <GLES3/gl3.h>
 #include <EGL/egl.h>

@@ -15,7 +15,7 @@
 #include "em_connection.h"
 
 #include "em_status.h"
-#include "app_log.h"
+#include "em_app_log.h"
 
 #include <gst/gstelement.h>
 #include <gst/gstobject.h>

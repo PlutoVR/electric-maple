@@ -1,8 +1,18 @@
-add_library(pluto_vf SHARED em_connection.c em_stream_client.c)
+add_library(
+	pluto_electricmaple SHARED
+	em_remote_experience.cpp
+	em_connection.c
+	em_stream_client.c
+	render/GLDebug.cpp
+	render/GLError.cpp
+	render/GLSwapchain.cpp
+	render/render.cpp
+	)
 target_link_libraries(
-	pluto_vf
+	pluto_electricmaple
 	PRIVATE
 		gstreamer_android
+		pluto_proto
 		aux_util
 		${JSONGLIB_LIBRARIES}
 		${LIBSOUP_LIBRARIES}
@@ -16,14 +26,16 @@ target_link_libraries(
 		xrt-interfaces
 		aux_os
 	)
-target_compile_definitions(pluto_vf PUBLIC XR_USE_PLATFORM_ANDROID XR_USE_GRAPHICS_API_OPENGL_ES)
+target_compile_definitions(
+	pluto_electricmaple PUBLIC XR_USE_PLATFORM_ANDROID XR_USE_GRAPHICS_API_OPENGL_ES
+	)
 target_include_directories(
-	pluto_vf
+	pluto_electricmaple
 	PRIVATE
 		${GST_INCLUDE_DIRS}
 		${GLIB_INCLUDE_DIRS}
 		${LIBSOUP_INCLUDE_DIRS}
 		${JSONGLIB_INCLUDE_DIRS}
 		${GIO_INCLUDE_DIRS}
-	PUBLIC ${PROJECT_SOURCE_DIR}/gstreamer-util
+	PUBLIC ..
 	)

@@ -6,15 +6,16 @@
  * @author Moshi Turner <moses@collabora.com>
  */
 
-#include "em_remote_experience.h"
-#include "xr_platform_deps.h"
+#include "EglData.hpp"
+#include "em/em_remote_experience.h"
+#include "em/render/xr_platform_deps.h"
 
 
-#include "gst/app_log.h"
-#include "gst/em_connection.h"
-#include "gst/em_stream_client.h"
-#include "gst/gst_common.h"
-#include "render.hpp"
+#include "em/em_app_log.h"
+#include "em/em_connection.h"
+#include "em/em_stream_client.h"
+#include "em/gst_common.h"
+#include "em/render/render.hpp"
 
 #include "os/os_time.h"
 #include "util/u_time.h"

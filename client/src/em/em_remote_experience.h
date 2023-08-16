@@ -9,11 +9,12 @@
 
 #pragma once
 
-#include "gst/em_connection.h"
-#include "gst/em_stream_client.h"
+#include "em_connection.h"
+#include "em_stream_client.h"
 #include <openxr/openxr.h>
 
 typedef struct _EmRemoteExperience EmRemoteExperience;
+typedef struct _EmConnection EmConnection;
 
 #ifdef __cplusplus
 extern "C" {

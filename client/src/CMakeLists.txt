@@ -1,4 +1,4 @@
-add_subdirectory(gst)
+add_subdirectory(em)
 
 # build native_app_glue as a static lib
 add_library(
@@ -12,12 +12,8 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror")
 
 add_library(
 	plutovr_webrtc_client SHARED
-	em_remote_experience.cpp
 	main.cpp
-	render.cpp
-	GLDebug.cpp
-	GLError.cpp
-	GLSwapchain.cpp
+	EglData.cpp
 	)
 
 target_include_directories(
@@ -31,7 +27,7 @@ target_link_libraries(
 	PRIVATE
 		pluto_proto
 		aux_util
-		pluto_vf
+		pluto_electricmaple
 		gstreamer_android
 		native_app_glue
 		OpenXR::openxr_loader
