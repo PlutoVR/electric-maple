@@ -48,6 +48,8 @@ pluto_system_devices_destroy(struct xrt_system_devices *xsysd)
 {
 	struct pluto_program *sp = from_xsysd(xsysd);
 
+	pl_callbacks_reset(sp->callbacks);
+
 	for (size_t i = 0; i < xsysd->xdev_count; i++) {
 		xrt_device_destroy(&xsysd->xdevs[i]);
 	}
@@ -113,6 +115,8 @@ pluto_instance_destroy(struct xrt_instance *xinst)
 {
 	struct pluto_program *sp = from_xinst(xinst);
 
+	pl_callbacks_reset(sp->callbacks);
+
 	pl_callbacks_destroy(&sp->callbacks);
 
 	delete sp;
@@ -128,6 +132,9 @@ pluto_instance_destroy(struct xrt_instance *xinst)
 void
 pluto_system_devices_init(struct pluto_program *sp)
 {
+	// needed before creating devices
+	sp->callbacks = pl_callbacks_create();
+
 	sp->xsysd_base.destroy = pluto_system_devices_destroy;
 
 
@@ -172,7 +179,6 @@ pluto_instance_init(struct pluto_program *sp)
 	sp->xinst_base.create_system = pluto_instance_create_system;
 	sp->xinst_base.get_prober = pluto_instance_get_prober;
 	sp->xinst_base.destroy = pluto_instance_destroy;
-	sp->callbacks = pl_callbacks_create();
 }
 
 } // namespace

@@ -30,7 +30,7 @@ target_include_directories(comp_pluto PUBLIC .)
 
 add_library(drv_pluto STATIC pl_driver.cpp pl_device_controller.cpp)
 
-target_link_libraries(drv_pluto PRIVATE xrt-interfaces aux_util pluto_proto)
+target_link_libraries(drv_pluto PRIVATE xrt-interfaces aux_util pluto_proto pl_callbacks)
 
 add_executable(pluto_streaming_server pl_instance.cpp pl_server_internal.h pl_server_main.cpp)
 

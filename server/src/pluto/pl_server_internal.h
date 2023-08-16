@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "os/os_threading.h"
 #include "xrt/xrt_system.h"
 #include "xrt/xrt_device.h"
 #include "xrt/xrt_instance.h"
@@ -19,6 +20,8 @@
 // #include "pl_comp.h"
 // #include "pl_driver.h"
 
+#include <memory>
+#include <mutex>
 #include <stdio.h>
 
 #include <sys/socket.h>
@@ -27,6 +30,8 @@
 #include <unistd.h>
 
 #include <thread>
+#include <atomic>
+#include <mutex>
 
 
 struct pl_callbacks;
@@ -34,6 +39,13 @@ struct pl_callbacks;
 struct pluto_program;
 struct pluto_hmd;
 
+struct pluto_hmd_recvbuf
+{
+
+	std::atomic_bool updated;
+	std::mutex mutex;
+	struct xrt_pose pose;
+};
 struct pluto_hmd
 {
 	//! Has to come first.
@@ -44,6 +56,8 @@ struct pluto_hmd
 	// Should outlive us
 	struct pluto_program *program;
 
+	// struct os_mutex mutex;
+	std::unique_ptr<pluto_hmd_recvbuf> received;
 	enum u_logging_level log_level;
 };
 
