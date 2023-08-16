@@ -63,6 +63,16 @@ pl_callbacks_add(struct pl_callbacks *callbacks, uint32_t event_mask, pl_callbac
 void
 pl_callbacks_call(struct pl_callbacks *callbacks, enum pl_callbacks_event event, GBytes *bytes);
 
+/// Clear all callbacks.
+///
+/// For use prior to starting to destroy things that may have registered callbacks.
+///
+/// @param callbacks self
+///
+/// @public @memberof pl_callbacks
+void
+pl_callbacks_reset(struct pl_callbacks *callbacks);
+
 #ifdef __cplusplus
 } // extern "C"
 #endif

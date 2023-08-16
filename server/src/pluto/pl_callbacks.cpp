@@ -49,6 +49,11 @@ pl_callbacks_add(struct pl_callbacks *callbacks, uint32_t event_mask, pl_callbac
 }
 
 void
+pl_callbacks_reset(struct pl_callbacks *callbacks) {
+	callbacks->callbacks_collection = {};
+}
+
+void
 pl_callbacks_call(struct pl_callbacks *callbacks, enum pl_callbacks_event event, GBytes *bytes)
 {
 	auto invoker = [=](enum pl_callbacks_event ev, pl_callbacks_func_t callback, void *userdata) {
