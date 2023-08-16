@@ -6,6 +6,7 @@
  */
 
 #pragma once
+
 #include "xrt/xrt_system.h"
 #include "xrt/xrt_device.h"
 #include "xrt/xrt_instance.h"
@@ -27,6 +28,8 @@
 
 #include <thread>
 
+
+struct pl_callbacks;
 
 struct pluto_program;
 struct pluto_hmd;
@@ -75,6 +78,9 @@ struct pluto_program
 
 	//! Space overseer, implemented for now using helper code.
 	struct xrt_space_overseer *xso;
+
+	//! Callbacks collection
+	struct pl_callbacks *callbacks;
 };
 
 

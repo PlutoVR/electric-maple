@@ -13,10 +13,13 @@
 
 #include "gstreamer/gst_pipeline.h"
 
-struct gstreamer_pipeline;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
+struct gstreamer_pipeline;
+
+struct pl_callbacks;
 
 void
 gstreamer_webrtc_pipeline_play(struct gstreamer_pipeline *gp);
@@ -27,6 +30,7 @@ gstreamer_webrtc_pipeline_stop(struct gstreamer_pipeline *gp);
 void
 gstreamer_pipeline_webrtc_create(struct xrt_frame_context *xfctx,
                                  const char *appsrc_name,
+                                 struct pl_callbacks *callbacks_collection,
                                  struct gstreamer_pipeline **out_gp);
 
 #ifdef __cplusplus
