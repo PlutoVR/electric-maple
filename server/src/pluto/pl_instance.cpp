@@ -97,9 +97,6 @@ pluto_instance_create_system(struct xrt_instance *xinst,
 		return XRT_SUCCESS;
 	}
 
-	//! @todo We're creating the regular compositor here, which is good for testing, but we need to make a
-	// Pluto-compositor :)
-
 	if (xret == XRT_SUCCESS && xsysc == NULL) {
 		// xret = comp_main_create_system_compositor(sp->xsysd_base.roles.head, NULL, &xsysc);
 		// xret = pluto_compositor_create_system(*sp, sp->xsysd_base.roles.head, &xsysc);
