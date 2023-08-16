@@ -10,7 +10,6 @@ target_link_libraries(
 		EGL::EGL
 	PUBLIC ${ANDROID_LOG_LIBRARY} z
 	)
-# target_compile_definitions(pluto_vf PUBLIC XR_USE_PLATFORM_ANDROID XR_USE_GRAPHICS_API_OPENGL_ES)
 target_include_directories(
 	gstreamer_android PRIVATE ${GST_INCLUDE_DIRS} ${GLIB_INCLUDE_DIRS} ${JSONGLIB_INCLUDE_DIRS}
 				  ${GIO_INCLUDE_DIRS}

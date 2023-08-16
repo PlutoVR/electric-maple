@@ -9,17 +9,17 @@
 
 #include "em_remote_experience.h"
 
-#include "GLSwapchain.h"
-#include "gst/app_log.h"
-#include "gst/em_connection.h"
-#include "gst/em_stream_client.h"
-#include "gst/gst_common.h"
-#include "render.hpp"
+#include "em_app_log.h"
+#include "em_connection.h"
+#include "em_stream_client.h"
+#include "gst_common.h"
+#include "render/GLSwapchain.h"
+#include "render/render.hpp"
 
 #include "pb_encode.h"
 #include "pluto.pb.h"
 
-#include "xr_platform_deps.h"
+#include "render/xr_platform_deps.h"
 
 #include <GLES3/gl3.h>
 #include <cassert>

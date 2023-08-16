@@ -9,7 +9,7 @@
  */
 
 #include "em_stream_client.h"
-#include "app_log.h"
+#include "em_app_log.h"
 #include "em_connection.h"
 #include "gst_common.h" // for em_sample
 

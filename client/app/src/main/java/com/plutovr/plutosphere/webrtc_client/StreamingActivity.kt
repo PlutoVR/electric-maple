@@ -10,8 +10,8 @@ import android.util.Log
 class StreamingActivity : NativeActivity() {
     override fun onCreate(savedInstanceState: Bundle?, persistentState: PersistableBundle?) {
 
-        System.loadLibrary("pluto_vf")
-        Log.i("ElectricMaple", "StreamingActivity: loaded pluto_vf")
+        System.loadLibrary("pluto_electricmaple")
+        Log.i("ElectricMaple", "StreamingActivity: loaded pluto_electricmaple")
         System.loadLibrary("plutovr_webrtc_client")
         Log.i("ElectricMaple", "StreamingActivity: loaded")
         super.onCreate(savedInstanceState, persistentState)
