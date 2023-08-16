@@ -22,17 +22,14 @@
 
 #include <assert.h>
 
-
-extern "C" {
-
-
-static inline struct pluto_program *
+namespace {
+inline struct pluto_program *
 from_xinst(struct xrt_instance *xinst)
 {
 	return container_of(xinst, struct pluto_program, xinst_base);
 }
 
-static inline struct pluto_program *
+inline struct pluto_program *
 from_xsysd(struct xrt_system_devices *xsysd)
 {
 	return container_of(xsysd, struct pluto_program, xsysd_base);
@@ -46,7 +43,7 @@ from_xsysd(struct xrt_system_devices *xsysd)
  *
  */
 
-static void
+void
 pluto_system_devices_destroy(struct xrt_system_devices *xsysd)
 {
 	struct pluto_program *sp = from_xsysd(xsysd);
@@ -55,7 +52,7 @@ pluto_system_devices_destroy(struct xrt_system_devices *xsysd)
 		xrt_device_destroy(&xsysd->xdevs[i]);
 	}
 
-	(void)sp; // We are apart of pluto_program, do not free.
+	(void)sp; // We are a part of pluto_program, do not free.
 }
 
 
@@ -66,14 +63,13 @@ pluto_system_devices_destroy(struct xrt_system_devices *xsysd)
  *
  */
 
-static xrt_result_t
+xrt_result_t
 pluto_instance_get_prober(struct xrt_instance *xinst, struct xrt_prober **out_xp)
 {
 	return XRT_ERROR_PROBER_NOT_SUPPORTED;
 }
 
-// This is where
-static xrt_result_t
+xrt_result_t
 pluto_instance_create_system(struct xrt_instance *xinst,
                              struct xrt_system_devices **out_xsysd,
                              struct xrt_space_overseer **out_xso,
@@ -86,7 +82,7 @@ pluto_instance_create_system(struct xrt_instance *xinst,
 	assert(out_xsysc == NULL || *out_xsysc == NULL);
 
 	struct xrt_system_compositor *xsysc = NULL;
-	struct xrt_space_overseer *xso = NULL;
+	// struct xrt_space_overseer *xso = NULL;
 
 	xrt_result_t xret = XRT_SUCCESS;
 
@@ -115,7 +111,7 @@ pluto_instance_create_system(struct xrt_instance *xinst,
 	return XRT_SUCCESS;
 }
 
-static void
+void
 pluto_instance_destroy(struct xrt_instance *xinst)
 {
 	struct pluto_program *sp = from_xinst(xinst);
@@ -182,6 +178,8 @@ pluto_instance_init(struct pluto_program *sp)
 	sp->callbacks = pl_callbacks_create();
 }
 
+} // namespace
+
 xrt_result_t
 xrt_instance_create(struct xrt_instance_info *ii, struct xrt_instance **out_xinst)
 {
@@ -196,4 +194,3 @@ xrt_instance_create(struct xrt_instance_info *ii, struct xrt_instance **out_xins
 
 	return XRT_SUCCESS;
 }
-} // extern "C"
