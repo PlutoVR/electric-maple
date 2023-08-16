@@ -1,7 +1,17 @@
-# Copyright 2019-2022, Collabora, Ltd.
+# Copyright 2019-2023, Collabora, Ltd.
 # SPDX-License-Identifier: BSL-1.0
 
 add_subdirectory(include)
+
+add_library(pl_callbacks STATIC pl_callbacks.cpp)
+target_link_libraries(
+	pl_callbacks
+	PUBLIC xrt-interfaces
+	PRIVATE aux_util
+	)
+
+target_include_directories(pl_callbacks PUBLIC . ${GLIB_INCLUDE_DIRS})
+
 add_subdirectory(gst)
 
 add_library(comp_pluto STATIC pl_comp.cpp pl_comp.h)
@@ -16,16 +26,13 @@ target_link_libraries(
 		comp_multi
 		pl_gst
 	)
-target_include_directories(comp_pluto PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_include_directories(comp_pluto INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(comp_pluto PUBLIC .)
 
 add_library(drv_pluto STATIC pl_driver.cpp pl_device_controller.cpp)
 
 target_link_libraries(drv_pluto PRIVATE xrt-interfaces aux_util pluto_proto)
 
-add_executable(
-	pluto_streaming_server pl_instance.cpp pl_server_internal.h pl_server_main.cpp
-	)
+add_executable(pluto_streaming_server pl_instance.cpp pl_server_internal.h pl_server_main.cpp)
 
 target_link_libraries(
 	pluto_streaming_server
@@ -38,6 +45,7 @@ target_link_libraries(
 		drv_pluto
 		pluto_proto
 		comp_pluto
+		pl_callbacks
 	)
 
 target_link_libraries(pluto_streaming_server PRIVATE st_gui xrt-external-imgui-sdl2 aux_ogl)

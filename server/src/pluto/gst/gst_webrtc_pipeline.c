@@ -16,6 +16,9 @@
 
 #include "gst_webrtc_pipeline.h"
 
+#include "pl_callbacks.h"
+
+#include "os/os_threading.h"
 #include "util/u_misc.h"
 #include "util/u_debug.h"
 
@@ -64,6 +67,9 @@ struct gstreamer_webrtc_pipeline
 
 	GObject *data_channel;
 	guint timeout_src_id;
+
+
+	struct pl_callbacks *callbacks;
 };
 
 
@@ -218,6 +224,8 @@ static void
 data_channel_message_data_cb(GstWebRTCDataChannel *datachannel, GBytes *data, struct gstreamer_webrtc_pipeline *gwp)
 {
 	// U_LOG_E("Received data channel binary message: %d\n", g_bytes_get_size(data));
+	// (*gwp->callback)(data, gwp->userdata);
+	pl_callbacks_call(gwp->callbacks, PL_CALLBACKS_EVENT_TRACKING, data);
 }
 
 static void
@@ -563,6 +571,7 @@ gstreamer_webrtc_pipeline_stop(struct gstreamer_pipeline *gp)
 void
 gstreamer_pipeline_webrtc_create(struct xrt_frame_context *xfctx,
                                  const char *appsrc_name,
+                                 struct pl_callbacks *callbacks_collection,
                                  struct gstreamer_pipeline **out_gp)
 {
 
@@ -601,6 +610,7 @@ gstreamer_pipeline_webrtc_create(struct xrt_frame_context *xfctx,
 	gwp->base.node.break_apart = break_apart;
 	gwp->base.node.destroy = destroy;
 	gwp->base.xfctx = xfctx;
+	gwp->callbacks = callbacks_collection;
 
 
 	gst_init(NULL, NULL);

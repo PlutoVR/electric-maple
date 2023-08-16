@@ -4,6 +4,7 @@ target_link_libraries(
 	pl_gst
 	PRIVATE
 		pl_build_defines
+		pl_callbacks
 		aux_util
 		aux_gstreamer
 		${GST_LIBRARIES}
