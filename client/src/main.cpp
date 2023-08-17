@@ -202,7 +202,7 @@ android_main(struct android_app *app)
 	// setenv("GST_DEBUG", "*:3", 1);
 	// setenv("GST_DEBUG", "*ssl*:9,*tls*:9,*webrtc*:9", 1);
 	// setenv("GST_DEBUG", "GST_CAPS:5", 1);
-	setenv("GST_DEBUG", "*:2,webrtc*:9,sctp*:9,dtls*:9,amcvideodec:9", 1);
+	setenv("GST_DEBUG", "*:2,*webrtc*:9,sctp*:9,dtls*:9,amcvideodec:9", 1);
 
 	// do not do ansi color codes
 	setenv("GST_DEBUG_NO_COLOR", "1", 1);

@@ -257,6 +257,32 @@ peer_connection_state_to_string(GstWebRTCPeerConnectionState state)
 	default: return "!Unknown!";
 	}
 }
+static const char *
+signaling_state_to_string(GstWebRTCSignalingState state)
+{
+	switch (state) {
+	case GST_WEBRTC_SIGNALING_STATE_STABLE: return "stable";
+	case GST_WEBRTC_SIGNALING_STATE_CLOSED: return "closed";
+	case GST_WEBRTC_SIGNALING_STATE_HAVE_LOCAL_OFFER: return "have-local-offer";
+	case GST_WEBRTC_SIGNALING_STATE_HAVE_REMOTE_OFFER: return "have-remote-offer";
+	case GST_WEBRTC_SIGNALING_STATE_HAVE_LOCAL_PRANSWER: return "have-local-pranswer";
+	case GST_WEBRTC_SIGNALING_STATE_HAVE_REMOTE_PRANSWER: return "have-remote-pranswer";
+	default: return "!Unknown!";
+	}
+}
+
+
+static const char *
+data_channel_state_to_string(GstWebRTCDataChannelState state)
+{
+	switch (state) {
+	case GST_WEBRTC_DATA_CHANNEL_STATE_CONNECTING: return "connecting";
+	case GST_WEBRTC_DATA_CHANNEL_STATE_OPEN: return "open";
+	case GST_WEBRTC_DATA_CHANNEL_STATE_CLOSING: return "closing";
+	case GST_WEBRTC_DATA_CHANNEL_STATE_CLOSED: return "closed";
+	default: return "!Unknown!";
+	}
+}
 #undef MAKE_CASE
 
 static void
@@ -332,12 +358,47 @@ static void
 emconn_connect_internal(EmConnection *emconn, enum em_status status);
 
 static void
-emconn_webrtc_deep_notify_callback(GstObject *self, GstObject *prop_object, GParamSpec *prop, EmConnection *emconn)
+emconn_webrtc_deep_notify_conn_state_callback(GstObject *self,
+                                              GstObject *prop_object,
+                                              GParamSpec *prop,
+                                              EmConnection *emconn)
 {
 	GstWebRTCPeerConnectionState state;
 	g_object_get(prop_object, "connection-state", &state, NULL);
 	ALOGI("RYLIE: deep-notify callback says peer connection state is %s", peer_connection_state_to_string(state));
 	emconn_update_status_from_peer_connection_state(emconn, state);
+}
+
+static void
+emconn_webrtc_deep_notify_sig_state_callback(GstObject *self,
+                                             GstObject *prop_object,
+                                             GParamSpec *prop,
+                                             EmConnection *emconn)
+{
+	GstWebRTCSignalingState state;
+	g_object_get(prop_object, "signaling-state", &state, NULL);
+	ALOGI("RYLIE: deep-notify callback says signaling state is %s", signaling_state_to_string(state));
+}
+
+static void
+emconn_webrtc_deep_notify_data_chan_state_callback(GstObject *self,
+                                                   GstObject *prop_object,
+                                                   GParamSpec *prop,
+                                                   EmConnection *emconn)
+{
+	GstWebRTCDataChannelState state;
+	g_object_get(prop_object, "ready-state", &state, NULL);
+	ALOGI("RYLIE: deep-notify callback says data channel ready state is %s", data_channel_state_to_string(state));
+}
+static void
+emconn_webrtc_deep_notify_ice_state_callback(GstObject *self,
+                                             GstObject *prop_object,
+                                             GParamSpec *prop,
+                                             EmConnection *emconn)
+{
+	GstWebRTCICEConnectionState state;
+	g_object_get(prop_object, "ice-connection-state", &state, NULL);
+	ALOGI("RYLIE: deep-notify callback says ICE state is %d", (int)state);
 }
 
 static void
@@ -365,6 +426,9 @@ emconn_webrtc_on_data_channel_cb(GstElement *webrtcbin, GstWebRTCDataChannel *da
 
 	emconn_update_status(emconn, EM_STATUS_CONNECTED);
 	g_signal_emit(emconn, signals[SIGNAL_CONNECTED], 0);
+
+	g_signal_connect(emconn->datachannel, "deep-notify::ready-state",
+	                 G_CALLBACK(emconn_webrtc_deep_notify_data_chan_state_callback), emconn);
 }
 
 void
@@ -602,7 +666,11 @@ em_connection_set_pipeline(EmConnection *emconn, GstPipeline *pipeline)
 	                 emconn);
 	g_signal_connect(emconn->webrtcbin, "on-data-channel", G_CALLBACK(emconn_webrtc_on_data_channel_cb), emconn);
 	g_signal_connect(emconn->webrtcbin, "deep-notify::connection-state",
-	                 G_CALLBACK(emconn_webrtc_deep_notify_callback), emconn);
+	                 G_CALLBACK(emconn_webrtc_deep_notify_conn_state_callback), emconn);
+	g_signal_connect(emconn->webrtcbin, "deep-notify::signaling-state",
+	                 G_CALLBACK(emconn_webrtc_deep_notify_sig_state_callback), emconn);
+	g_signal_connect(emconn->webrtcbin, "deep-notify::ice-connection-state",
+	                 G_CALLBACK(emconn_webrtc_deep_notify_ice_state_callback), emconn);
 }
 
 static void
