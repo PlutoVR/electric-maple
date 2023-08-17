@@ -18,6 +18,7 @@ add_library(
 	GLDebug.cpp
 	GLError.cpp
 	GLSwapchain.cpp
+	EglData.cpp
 	)
 
 target_include_directories(
