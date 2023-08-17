@@ -3,12 +3,7 @@ buildscript {
     ext {
         kotlin_version = '1.9.0'
     }
-    repositories {
-        google()
-        mavenCentral()
-    }
     dependencies {
-        classpath 'com.android.tools.build:gradle:7.4.2'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
 
         // NOTE: Do not place your application dependencies here; they belong
@@ -17,16 +12,10 @@ buildscript {
 }
 
 plugins {
+    id 'com.android.application' version '7.4.2' apply false
     // Used for getting the eigen dir, explicit python binary, etc. from local.properties
     id 'com.github.b3er.local.properties' version '1.1'
-    id 'org.jetbrains.kotlin.android' version '1.9.0' apply false
-}
-
-allprojects {
-    repositories {
-        google()
-        mavenCentral()
-    }
+    id 'org.jetbrains.kotlin.android' version "$kotlin_version" apply false
 }
 
 task clean(type: Delete) {
