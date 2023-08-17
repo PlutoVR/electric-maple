@@ -376,7 +376,15 @@ on_need_pipeline_cb(EmConnection *emconn, EmStreamClient *sc)
 	//       as glsinkbin (a sink) cannot link to anything upstream (appsink being 'another' sink). So we
 	//       manually link them below using glsinkbin's 'sink' pad -> appsink.
 	sc->appsink = gst_element_factory_make("appsink", NULL);
-	g_object_set(sc->appsink, "caps", caps, NULL);
+	g_object_set(sc->appsink,
+	             // Set caps
+	             "caps", caps,
+	             // Fixed size buffer
+	             "max-buffers", 1,
+	             // drop old buffers when queue is filled
+	             "drop", true,
+	             // terminator
+	             NULL);
 	g_autoptr(GstElement) glsinkbin = gst_bin_get_by_name(GST_BIN(sc->pipeline), "glsink");
 	g_object_set(glsinkbin, "sink", sc->appsink, NULL);
 
