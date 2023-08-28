@@ -174,6 +174,8 @@ em_remote_experience_new(EmConnection *connection,
 	self->xr_not_owned.instance = instance;
 	self->xr_not_owned.session = session;
 
+	// Quest requires the EGL context to be current when calling xrCreateSwapchain
+	em_stream_client_egl_begin_pbuffer(stream_client);
 
 	{
 		ALOGI("%s: Creating OpenXR Swapchain...", __FUNCTION__);
@@ -193,38 +195,36 @@ em_remote_experience_new(EmConnection *connection,
 
 		if (XR_FAILED(result)) {
 			ALOGE("%s: Failed to create OpenXR swapchain (%d)\n", __FUNCTION__, result);
+			em_stream_client_egl_end(stream_client);
 			em_remote_experience_destroy(&self);
 			return nullptr;
 		}
 	}
-	{
-		em_stream_client_egl_begin_pbuffer(stream_client);
 
-		if (!self->swapchainBuffers.enumerateAndGenerateFramebuffers(self->xr_owned.swapchain)) {
-			ALOGE(
-			    "%s: Failed to enumerate swapchain images or associate them with framebuffer object names.",
-			    __FUNCTION__);
-			em_stream_client_egl_end(stream_client);
-			em_remote_experience_destroy(&self);
-			return nullptr;
-		}
-
-
-		try {
-			ALOGI("%s: Setup renderer...", __FUNCTION__);
-			self->renderer = std::make_unique<Renderer>();
-			self->renderer->setupRender();
-		} catch (std::exception const &e) {
-			ALOGE("%s: Caught exception setting up renderer: %s", __FUNCTION__, e.what());
-			self->renderer->reset();
-			em_stream_client_egl_end(stream_client);
-			em_remote_experience_destroy(&self);
-			return nullptr;
-		}
-
-
+	if (!self->swapchainBuffers.enumerateAndGenerateFramebuffers(self->xr_owned.swapchain)) {
+		ALOGE("%s: Failed to enumerate swapchain images or associate them with framebuffer object names.",
+		      __FUNCTION__);
 		em_stream_client_egl_end(stream_client);
+		em_remote_experience_destroy(&self);
+		return nullptr;
 	}
+
+
+	try {
+		ALOGI("%s: Setup renderer...", __FUNCTION__);
+		self->renderer = std::make_unique<Renderer>();
+		self->renderer->setupRender();
+	} catch (std::exception const &e) {
+		ALOGE("%s: Caught exception setting up renderer: %s", __FUNCTION__, e.what());
+		self->renderer->reset();
+		em_stream_client_egl_end(stream_client);
+		em_remote_experience_destroy(&self);
+		return nullptr;
+	}
+
+
+	em_stream_client_egl_end(stream_client);
+
 	{
 		ALOGI("%s: Creating OpenXR Spaces...", __FUNCTION__);
 
