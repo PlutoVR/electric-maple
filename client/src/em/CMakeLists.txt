@@ -24,7 +24,7 @@ target_link_libraries(
 		EGL::EGL
 		OpenGLES::OpenGLESv3
 		xrt-interfaces
-		aux_os
+		aux-includes
 	)
 target_compile_definitions(
 	pluto_electricmaple PUBLIC XR_USE_PLATFORM_ANDROID XR_USE_GRAPHICS_API_OPENGL_ES
