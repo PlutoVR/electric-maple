@@ -50,9 +50,28 @@ em_remote_experience_destroy(EmRemoteExperience **ptr_exp);
 
 /*!
  * Check for a delivered frame, rendering it if available.
+ *
+ * Calls xrWaitFrame and xrBeginFrame, as well as xrEndFrame. See @ref em_remote_experience_inner_poll_and_render_frame
+ * if you are doing this yourself in your app.
  */
 void
 em_remote_experience_poll_and_render_frame(EmRemoteExperience *exp);
+
+/*!
+ * Check for a delivered frame, rendering it if available.
+ *
+ * @pre xrWaitFrame and xrBeginFrame have been called, as well as em_stream_client_egl_begin_pbuffer
+ *
+ * @param exp Self
+ * @param views an array of 2 XrView structures, populated.
+ * @param projectionLayer a projection layer containing two views, partially populated. Will be populated further.
+ * @param projectionViews an array of 2 projection view structures, initialized. Will be populated.
+ */
+void
+em_remote_experience_inner_poll_and_render_frame(EmRemoteExperience *exp,
+                                                 XrView *views,
+                                                 XrCompositionLayerProjection *projectionLayer,
+                                                 XrCompositionLayerProjectionView *projectionViews);
 
 #ifdef __cplusplus
 } // extern "C"

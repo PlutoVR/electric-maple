@@ -317,29 +317,15 @@ em_remote_experience_poll_and_render_frame(EmRemoteExperience *exp)
 		ALOGE("Failed to locate views");
 	}
 
-	// TODO these may not be the extents of the frame we receive, thus introducing repeated scaling!
-	uint32_t width = exp->eye_extents.width;
-	uint32_t height = exp->eye_extents.height;
 	XrCompositionLayerProjection layer = {};
 	layer.type = XR_TYPE_COMPOSITION_LAYER_PROJECTION;
-	layer.space = exp->xr_owned.worldSpace;
 	layer.viewCount = 2;
 
 	// TODO use multiview/array swapchain instead of two draw calls for side by side?
 	XrCompositionLayerProjectionView projectionViews[2] = {};
 	projectionViews[0].type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW;
-	projectionViews[0].subImage.swapchain = exp->xr_owned.swapchain;
-	projectionViews[0].subImage.imageRect.offset = {0, 0};
-	projectionViews[0].subImage.imageRect.extent = {static_cast<int32_t>(width), static_cast<int32_t>(height)};
-	projectionViews[0].pose = views[0].pose;
-	projectionViews[0].fov = views[0].fov;
 
 	projectionViews[1].type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW;
-	projectionViews[1].subImage.swapchain = exp->xr_owned.swapchain;
-	projectionViews[1].subImage.imageRect.offset = {static_cast<int32_t>(width), 0};
-	projectionViews[1].subImage.imageRect.extent = {static_cast<int32_t>(width), static_cast<int32_t>(height)};
-	projectionViews[1].pose = views[1].pose;
-	projectionViews[1].fov = views[1].fov;
 
 	layer.views = projectionViews;
 
@@ -349,6 +335,48 @@ em_remote_experience_poll_and_render_frame(EmRemoteExperience *exp)
 		ALOGE("FRED: mainloop_one: Failed make egl context current");
 		return;
 	}
+	em_remote_experience_inner_poll_and_render_frame(exp, views, &layer, projectionViews);
+
+	// Submit frame
+	XrFrameEndInfo endInfo = {};
+	endInfo.type = XR_TYPE_FRAME_END_INFO;
+	endInfo.displayTime = frameState.predictedDisplayTime;
+	endInfo.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
+	endInfo.layerCount = frameState.shouldRender ? 1 : 0;
+	endInfo.layers = (const XrCompositionLayerBaseHeader *[1]){(XrCompositionLayerBaseHeader *)&layer};
+
+	xrEndFrame(session, &endInfo);
+
+	em_stream_client_egl_end(exp->stream_client);
+
+	em_remote_experience_report_pose(exp, frameState.predictedDisplayTime);
+}
+
+void
+em_remote_experience_inner_poll_and_render_frame(EmRemoteExperience *exp,
+                                                 XrView *views,
+                                                 XrCompositionLayerProjection *projectionLayer,
+                                                 XrCompositionLayerProjectionView *projectionViews)
+{
+	XrSession session = exp->xr_not_owned.session;
+	XrResult result;
+
+	// TODO these may not be the extents of the frame we receive, thus introducing repeated scaling!
+	uint32_t width = exp->eye_extents.width;
+	uint32_t height = exp->eye_extents.height;
+
+	projectionLayer->space = exp->xr_owned.worldSpace;
+
+	projectionViews[0].subImage.swapchain = exp->xr_owned.swapchain;
+	projectionViews[0].pose = views[0].pose;
+	projectionViews[0].fov = views[0].fov;
+	projectionViews[0].subImage.imageRect.offset = {0, 0};
+	projectionViews[0].subImage.imageRect.extent = {static_cast<int32_t>(width), static_cast<int32_t>(height)};
+	projectionViews[1].subImage.swapchain = exp->xr_owned.swapchain;
+	projectionViews[1].pose = views[1].pose;
+	projectionViews[1].fov = views[1].fov;
+	projectionViews[1].subImage.imageRect.offset = {static_cast<int32_t>(width), 0};
+	projectionViews[1].subImage.imageRect.extent = {static_cast<int32_t>(width), static_cast<int32_t>(height)};
 
 	struct em_sample *sample = em_stream_client_try_pull_sample(exp->stream_client);
 
@@ -392,17 +420,5 @@ em_remote_experience_poll_and_render_frame(EmRemoteExperience *exp)
 			exp->prev_sample = NULL;
 		}
 		exp->prev_sample = sample;
-		// Submit frame
-		XrFrameEndInfo endInfo = {};
-		endInfo.type = XR_TYPE_FRAME_END_INFO;
-		endInfo.displayTime = frameState.predictedDisplayTime;
-		endInfo.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
-		endInfo.layerCount = frameState.shouldRender ? 1 : 0;
-		endInfo.layers = (const XrCompositionLayerBaseHeader *[1]){(XrCompositionLayerBaseHeader *)&layer};
-
-		xrEndFrame(session, &endInfo);
 	}
-	em_remote_experience_report_pose(exp, frameState.predictedDisplayTime);
-
-	em_stream_client_egl_end(exp->stream_client);
 }
