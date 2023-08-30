@@ -11,13 +11,11 @@ add_library(
 target_link_libraries(
 	pluto_electricmaple
 	PRIVATE
-		gstreamer_android
 		pluto_proto
 		aux_util
 		${JSONGLIB_LIBRARIES}
 		${LIBSOUP_LIBRARIES}
 		${GIO_LIBRARIES}
-		${GLIB_LIBRARIES}
 		${ANDROID_LOG_LIBRARY}
 	PUBLIC
 		OpenXR::openxr_loader # actually only need headers but prefab doesn't expose that
@@ -25,6 +23,8 @@ target_link_libraries(
 		OpenGLES::OpenGLESv3
 		xrt-interfaces
 		aux-includes
+		gstreamer_android
+		${GLIB_LIBRARIES}
 	)
 target_compile_definitions(
 	pluto_electricmaple PUBLIC XR_USE_PLATFORM_ANDROID XR_USE_GRAPHICS_API_OPENGL_ES
@@ -32,10 +32,11 @@ target_compile_definitions(
 target_include_directories(
 	pluto_electricmaple
 	PRIVATE
-		${GST_INCLUDE_DIRS}
-		${GLIB_INCLUDE_DIRS}
 		${LIBSOUP_INCLUDE_DIRS}
 		${JSONGLIB_INCLUDE_DIRS}
 		${GIO_INCLUDE_DIRS}
-	PUBLIC ..
+	PUBLIC
+		..
+		${GST_INCLUDE_DIRS}
+		${GLIB_INCLUDE_DIRS}
 	)
