@@ -344,8 +344,8 @@ android_main(struct android_app *app)
 	EmStreamClient *stream_client = em_stream_client_new();
 
 	ALOGI("%s: telling stream client about EGL", __FUNCTION__);
-	// passing ownership to the stream client
-	em_stream_client_set_egl_context(stream_client, egl_mutex, true, initialEglData->surface);
+	// retaining ownership
+	em_stream_client_set_egl_context(stream_client, egl_mutex, false, initialEglData->surface);
 
 	ALOGI("%s: creating connection object", __FUNCTION__);
 	EmConnection *connection = g_object_ref_sink(em_connection_new_localhost());
@@ -386,6 +386,8 @@ android_main(struct android_app *app)
 	// g_clear_object(&stream_client);
 
 	em_remote_experience_destroy(&remote_experience);
+
+	em_egl_mutex_destroy(&egl_mutex);
 
 	//
 	// End RR cleanup
