@@ -7,6 +7,7 @@
  */
 
 #include "EglData.hpp"
+#include "em/em_egl.h"
 #include "em/em_remote_experience.h"
 #include "em/render/xr_platform_deps.h"
 
@@ -325,6 +326,8 @@ android_main(struct android_app *app)
 		return;
 	}
 
+	EmEglMutexIface *egl_mutex = em_egl_mutex_create(initialEglData->display, initialEglData->context);
+
 	//
 	// End of normal OpenXR app startup
 	//
@@ -341,8 +344,8 @@ android_main(struct android_app *app)
 	EmStreamClient *stream_client = em_stream_client_new();
 
 	ALOGI("%s: telling stream client about EGL", __FUNCTION__);
-	em_stream_client_set_egl_context(stream_client, initialEglData->display, initialEglData->context,
-	                                 initialEglData->surface);
+	// passing ownership to the stream client
+	em_stream_client_set_egl_context(stream_client, egl_mutex, true, initialEglData->surface);
 
 	ALOGI("%s: creating connection object", __FUNCTION__);
 	EmConnection *connection = g_object_ref_sink(em_connection_new_localhost());

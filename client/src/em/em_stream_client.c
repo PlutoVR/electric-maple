@@ -11,6 +11,7 @@
 #include "em_stream_client.h"
 #include "em_app_log.h"
 #include "em_connection.h"
+#include "em_egl.h"
 #include "gst_common.h" // for em_sample
 
 #include "os/os_threading.h"
@@ -74,17 +75,10 @@ struct _EmStreamClient
 		EGLSurface surface;
 	} egl;
 
-	struct
-	{
-		EGLContext context;
-		EGLSurface read_surface;
-		EGLSurface draw_surface;
-	} old_egl;
+	bool own_egl_mutex;
+	EmEglMutexIface *egl_mutex;
 
 	struct os_thread_helper play_thread;
-
-	// This mutex protects the EGL context below across main and gstgl threads
-	struct os_mutex egl_lock;
 
 	bool pipeline_is_running;
 };
@@ -149,13 +143,10 @@ em_stream_client_thread_func(void *ptr);
  */
 
 static void
-em_stream_client_egl_save(EmStreamClient *sc);
-
-static void
-em_stream_client_egl_restore(EmStreamClient *sc, EGLDisplay display);
-
-static void
 em_stream_client_set_connection(EmStreamClient *sc, EmConnection *connection);
+
+static void
+em_stream_client_free_egl_mutex(EmStreamClient *sc);
 
 /* GObject method implementations */
 
@@ -194,7 +185,6 @@ em_stream_client_init(EmStreamClient *sc)
 
 	memset(sc, 0, sizeof(EmStreamClient));
 	sc->loop = g_main_loop_new(NULL, FALSE);
-	os_mutex_init(&sc->egl_lock);
 	g_assert(os_thread_helper_init(&sc->play_thread) >= 0);
 	ALOGI("%s: done creating stuff", __FUNCTION__);
 }
@@ -222,7 +212,7 @@ em_stream_client_finalize(EmStreamClient *self)
 	// only called once, after dispose
 	// EmStreamClient *self = EM_STREAM_CLIENT(object);
 	os_thread_helper_destroy(&self->play_thread);
-	os_mutex_destroy(&self->egl_lock);
+	em_stream_client_free_egl_mutex(self);
 }
 
 #if 0
@@ -466,20 +456,23 @@ em_stream_client_destroy(EmStreamClient **ptr_sc)
 }
 
 void
-em_stream_client_set_egl_context(EmStreamClient *sc, EGLDisplay display, EGLContext context, EGLSurface pbuffer_surface)
+em_stream_client_set_egl_context(EmStreamClient *sc,
+                                 EmEglMutexIface *egl_mutex,
+                                 bool adopt_mutex_interface,
+                                 EGLSurface pbuffer_surface)
 {
+	em_stream_client_free_egl_mutex(sc);
+	sc->own_egl_mutex = adopt_mutex_interface;
+	sc->egl_mutex = egl_mutex;
 
-	ALOGI("RYLIE: wrapping egl context");
-	em_stream_client_egl_save(sc);
-
-	ALOGV("RYLIE: eglMakeCurrent make-current");
-
-	if (eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, context) == EGL_FALSE) {
+	if (!em_egl_mutex_begin(sc->egl_mutex, EGL_NO_SURFACE, EGL_NO_SURFACE)) {
 		ALOGV("RYLIE: em_stream_client_set_egl_context: Failed to make egl context current");
 		return;
 	}
-	sc->egl.display = display;
-	sc->egl.android_main_context = context;
+	ALOGI("RYLIE: wrapping egl context");
+
+	sc->egl.display = egl_mutex->display;
+	sc->egl.android_main_context = egl_mutex->context;
 	sc->egl.surface = pbuffer_surface;
 
 	const GstGLPlatform egl_platform = GST_GL_PLATFORM_EGL;
@@ -490,48 +483,26 @@ em_stream_client_set_egl_context(EmStreamClient *sc, EGLDisplay display, EGLCont
 	    gst_gl_context_new_wrapped(sc->gst_gl_display, android_main_egl_context_handle, egl_platform, gl_api));
 
 	ALOGV("RYLIE: eglMakeCurrent un-make-current");
-	em_stream_client_egl_restore(sc, display);
-}
-
-void
-em_stream_client_egl_mutex_lock(EmStreamClient *sc)
-{
-	os_mutex_lock(&sc->egl_lock);
-}
-
-void
-em_stream_client_egl_mutex_unlock(EmStreamClient *sc)
-{
-	os_mutex_unlock(&sc->egl_lock);
+	em_egl_mutex_end(sc->egl_mutex);
 }
 
 bool
 em_stream_client_egl_begin(EmStreamClient *sc, EGLSurface draw, EGLSurface read)
 {
-	em_stream_client_egl_mutex_lock(sc);
-	em_stream_client_egl_save(sc);
-	ALOGE("%s : make current display=%p, draw surface=%p, read surface=%p, context=%p", __FUNCTION__,
-	      sc->egl.display, draw, read, sc->egl.android_main_context);
-	if (eglMakeCurrent(sc->egl.display, draw, read, sc->egl.android_main_context) == EGL_FALSE) {
-		ALOGE("%s: Failed make egl context current", __FUNCTION__);
-		em_stream_client_egl_mutex_unlock(sc);
-		return false;
-	}
-	return true;
+	return em_egl_mutex_begin(sc->egl_mutex, draw, read);
 }
 
 bool
 em_stream_client_egl_begin_pbuffer(EmStreamClient *sc)
 {
-	return em_stream_client_egl_begin(sc, sc->egl.surface, sc->egl.surface);
+	return em_egl_mutex_begin(sc->egl_mutex, sc->egl.surface, sc->egl.surface);
 }
 
 void
 em_stream_client_egl_end(EmStreamClient *sc)
 {
 	ALOGI("%s: Make egl context un-current", __FUNCTION__);
-	em_stream_client_egl_restore(sc, sc->egl.display);
-	em_stream_client_egl_mutex_unlock(sc);
+	em_egl_mutex_end(sc->egl_mutex);
 }
 
 void
@@ -648,21 +619,6 @@ em_stream_client_release_sample(EmStreamClient *sc, struct em_sample *ems)
  * Helper functions
  */
 
-
-static void
-em_stream_client_egl_save(EmStreamClient *sc)
-{
-	sc->old_egl.context = eglGetCurrentContext();
-	sc->old_egl.read_surface = eglGetCurrentSurface(EGL_READ);
-	sc->old_egl.draw_surface = eglGetCurrentSurface(EGL_DRAW);
-}
-
-static void
-em_stream_client_egl_restore(EmStreamClient *sc, EGLDisplay display)
-{
-	eglMakeCurrent(display, sc->old_egl.draw_surface, sc->old_egl.read_surface, sc->old_egl.context);
-}
-
 static void
 em_stream_client_set_connection(EmStreamClient *sc, EmConnection *connection)
 {
@@ -673,4 +629,14 @@ em_stream_client_set_connection(EmStreamClient *sc, EmConnection *connection)
 		g_signal_connect(sc->connection, "on-drop-pipeline", G_CALLBACK(on_drop_pipeline_cb), sc);
 		ALOGI("%s: EmConnection assigned", __FUNCTION__);
 	}
+}
+
+static void
+em_stream_client_free_egl_mutex(EmStreamClient *sc)
+{
+
+	if (sc->own_egl_mutex) {
+		em_egl_mutex_destroy(&sc->egl_mutex);
+	}
+	sc->egl_mutex = NULL;
 }

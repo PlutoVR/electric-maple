@@ -22,6 +22,7 @@ extern "C" {
 
 struct em_sample;
 
+typedef struct EmEglMutexIface EmEglMutexIface;
 
 // #define EM_TYPE_STREAM_CLIENT em_stream_client_get_type()
 
@@ -53,33 +54,16 @@ em_stream_client_destroy(EmStreamClient **ptr_sc);
  * @ref em_stream_client_egl_begin and @ref em_stream_client_egl_end
  *
  * @param sc self
- * @param display EGL display
- * @param context An EGL context created for use in the Android main loop.
+ * @param egl_mutex An implementation of the EGL mutex interface, which carries an EGLDisplay and EGLContext
+ * @param adopt_mutex_interface True if the stream client takes ownership of the EGL mutex interface.
  * @param pbuffer_surface An EGL pbuffer surface created for the @p context
  * TODO not sure what the surface is actually used for...
  */
 void
 em_stream_client_set_egl_context(EmStreamClient *sc,
-                                 EGLDisplay display,
-                                 EGLContext context,
+                                 EmEglMutexIface *egl_mutex,
+                                 bool adopt_mutex_interface,
                                  EGLSurface pbuffer_surface);
-
-/*!
- * Lock the mutex for the "main" EGL context supplied via @ref em_stream_client_set_egl_context
- *
- * Typically you will want to use @ref em_stream_client_egl_begin instead.
- */
-void
-em_stream_client_egl_mutex_lock(EmStreamClient *sc);
-
-
-/*!
- * Unlock the mutex for the "main" EGL context supplied via @ref em_stream_client_set_egl_context
- *
- * Typically you will want to use @ref em_stream_client_egl_end instead.
- */
-void
-em_stream_client_egl_mutex_unlock(EmStreamClient *sc);
 
 /*!
  * Lock the mutex for the "main" EGL context supplied via @ref em_stream_client_set_egl_context and set it as current,
