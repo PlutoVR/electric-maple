@@ -1,7 +1,8 @@
 add_library(
 	pluto_electricmaple SHARED
-	em_remote_experience.cpp
 	em_connection.c
+	em_egl.cpp
+	em_remote_experience.cpp
 	em_stream_client.c
 	render/GLDebug.cpp
 	render/GLError.cpp
