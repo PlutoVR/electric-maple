@@ -65,6 +65,8 @@ struct em_state
 
 	uint32_t width;
 	uint32_t height;
+
+	EmConnection *connection;
 };
 
 em_state state = {};
@@ -79,10 +81,18 @@ onAppCmd(struct android_app *app, int32_t cmd)
 	case APP_CMD_START: ALOGE("APP_CMD_START"); break;
 	case APP_CMD_RESUME: ALOGE("APP_CMD_RESUME"); break;
 	case APP_CMD_PAUSE: ALOGE("APP_CMD_PAUSE"); break;
-	case APP_CMD_STOP: ALOGE("APP_CMD_STOP"); break;
+	case APP_CMD_STOP:
+		ALOGE("APP_CMD_STOP - shutting down connection");
+		em_connection_disconnect(state.connection);
+		state.connected = false;
+		break;
 	case APP_CMD_DESTROY: ALOGE("APP_CMD_DESTROY"); break;
 	case APP_CMD_INIT_WINDOW: ALOGE("APP_CMD_INIT_WINDOW"); break;
-	case APP_CMD_TERM_WINDOW: ALOGE("APP_CMD_TERM_WINDOW"); break;
+	case APP_CMD_TERM_WINDOW:
+		ALOGE("APP_CMD_TERM_WINDOW - shutting down connection");
+		em_connection_disconnect(state.connection);
+		state.connected = false;
+		break;
 	}
 }
 
@@ -348,19 +358,19 @@ android_main(struct android_app *app)
 	em_stream_client_set_egl_context(stream_client, egl_mutex, false, initialEglData->surface);
 
 	ALOGI("%s: creating connection object", __FUNCTION__);
-	EmConnection *connection = g_object_ref_sink(em_connection_new_localhost());
+	state.connection = g_object_ref_sink(em_connection_new_localhost());
 
-	g_signal_connect(connection, "connected", G_CALLBACK(connected_cb), &state);
+	g_signal_connect(state.connection, "connected", G_CALLBACK(connected_cb), &state);
 
 	ALOGI("%s: starting connection", __FUNCTION__);
-	em_connection_connect(connection);
+	em_connection_connect(state.connection);
 
 	ALOGI("%s: starting stream client mainloop thread", __FUNCTION__);
-	em_stream_client_spawn_thread(stream_client, connection);
+	em_stream_client_spawn_thread(stream_client, state.connection);
 
 	XrExtent2Di eye_extents{static_cast<int32_t>(state.width), static_cast<int32_t>(state.height)};
 	EmRemoteExperience *remote_experience =
-	    em_remote_experience_new(connection, stream_client, state.instance, state.session, &eye_extents);
+	    em_remote_experience_new(state.connection, stream_client, state.instance, state.session, &eye_extents);
 	if (!remote_experience) {
 		ALOGE("%s: Failed during remote experience init.", __FUNCTION__);
 		return;
@@ -377,11 +387,12 @@ android_main(struct android_app *app)
 		}
 	}
 
+	ALOGI("DEBUG: Exited main loop, cleaning up.\n");
 	//
 	// Clean up RR structures
 	//
 
-	g_clear_object(&connection);
+	g_clear_object(&state.connection);
 	// without gobject for stream client, the EmRemoteExperience takes ownership
 	// g_clear_object(&stream_client);
 
