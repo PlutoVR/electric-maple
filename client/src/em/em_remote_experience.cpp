@@ -254,7 +254,7 @@ em_remote_experience_new(EmConnection *connection,
 		}
 	}
 
-
+	ALOGI("%s: done", __FUNCTION__);
 	return self;
 }
 
