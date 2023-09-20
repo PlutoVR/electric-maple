@@ -25,15 +25,15 @@ em_egl_state_save(EmEglState *ees)
 	ees->read_surface = eglGetCurrentSurface(EGL_READ);
 	ees->draw_surface = eglGetCurrentSurface(EGL_DRAW);
 
-	ALOGI("%s : save current draw surface=%p, read surface=%p, context=%p", __FUNCTION__, ees->draw_surface,
-	      ees->read_surface, ees->context);
+	// ALOGI("%s : save current draw surface=%p, read surface=%p, context=%p", __FUNCTION__, ees->draw_surface,
+	//       ees->read_surface, ees->context);
 }
 
 void
 em_egl_state_restore(const EmEglState *ees, EGLDisplay display)
 {
-	ALOGI("%s : restore display=%p, draw surface=%p, read surface=%p, context=%p", __FUNCTION__, display,
-	      ees->draw_surface, ees->read_surface, ees->context);
+	// ALOGI("%s : restore display=%p, draw surface=%p, read surface=%p, context=%p", __FUNCTION__, display,
+	//       ees->draw_surface, ees->read_surface, ees->context);
 	eglMakeCurrent(display, ees->draw_surface, ees->read_surface, ees->context);
 }
 
@@ -55,8 +55,8 @@ egl_mutex_begin(EmEglMutexIface *eemi, EGLSurface draw, EGLSurface read)
 	auto *eem = reinterpret_cast<EmEglMutex *>(eemi);
 	std::unique_lock<std::mutex> lock(eem->mutex);
 	em_egl_state_save(&eem->old_state);
-	ALOGI("%s : make current display=%p, draw surface=%p, read surface=%p, context=%p", __FUNCTION__,
-	      eem->base.display, draw, read, eem->base.context);
+	// ALOGI("%s : make current display=%p, draw surface=%p, read surface=%p, context=%p", __FUNCTION__,
+	//       eem->base.display, draw, read, eem->base.context);
 	if (eglMakeCurrent(eem->base.display, draw, read, eem->base.context) == EGL_FALSE) {
 		ALOGE("%s: Failed make egl context current", __FUNCTION__);
 		lock.unlock();
@@ -71,7 +71,7 @@ egl_mutex_end(EmEglMutexIface *eemi)
 {
 	auto *eem = reinterpret_cast<EmEglMutex *>(eemi);
 	std::unique_lock<std::mutex> lock(eem->mutex, std::adopt_lock);
-	ALOGI("%s: Make egl context un-current", __FUNCTION__);
+	// ALOGI("%s: Make egl context un-current", __FUNCTION__);
 	em_egl_state_restore(&eem->old_state, eem->base.display);
 }
 
