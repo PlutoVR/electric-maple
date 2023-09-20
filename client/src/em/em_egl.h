@@ -116,4 +116,69 @@ em_egl_mutex_create(EGLDisplay display, EGLContext context);
 
 #ifdef __cplusplus
 } // extern "C"
+
+#include <utility> // for std::swap
+
+namespace em {
+
+/// RAII lock class for the EGL mutex interface
+class EglLock
+{
+public:
+	explicit EglLock(EmEglMutexIface *mutex, EGLSurface draw, EGLSurface read) : m_mutex(mutex)
+	{
+		if (m_mutex) {
+			m_result = em_egl_mutex_begin(m_mutex, draw, read);
+		}
+	}
+	explicit EglLock(EmEglMutexIface *mutex, EGLSurface surface) : EglLock(mutex, surface, surface) {}
+
+	~EglLock()
+	{
+		Unlock();
+	}
+
+	explicit operator bool() const noexcept
+	{
+		return m_result;
+	}
+
+	void
+	Unlock()
+	{
+		if (m_mutex && m_result) {
+			em_egl_mutex_end(m_mutex);
+		}
+		m_mutex = nullptr;
+	}
+	// movable
+	EglLock(EglLock &&other) : EglLock()
+	{
+		std::swap(m_mutex, other.m_mutex);
+	}
+	// move assignable
+	EglLock &
+	operator=(EglLock &&other)
+	{
+		if (&other == this) {
+			return *this;
+		}
+		Unlock();
+		std::swap(m_mutex, other.m_mutex);
+		return *this;
+	}
+
+	// no copy
+	EglLock(EglLock const &) = delete;
+	EglLock &
+	operator=(EglLock const &) = delete;
+
+
+private:
+	EglLock() = default;
+	EmEglMutexIface *m_mutex = nullptr;
+	bool m_result = false;
+};
+
+} // namespace em
 #endif // __cplusplus

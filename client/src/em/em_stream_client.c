@@ -11,8 +11,8 @@
 #include "em_stream_client.h"
 #include "em_app_log.h"
 #include "em_connection.h"
-#include "em_egl.h"
 #include "gst_common.h" // for em_sample
+#include "em/em_egl.h"
 
 #include "os/os_threading.h"
 

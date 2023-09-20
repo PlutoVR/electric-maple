@@ -6,7 +6,7 @@
  * @author Ryan Pavlik <rpavlik@collabora.com>
  * @ingroup em_client
  */
-#include "em_egl.h"
+#include "em/em_egl.h"
 
 #include "em_app_log.h"
 
