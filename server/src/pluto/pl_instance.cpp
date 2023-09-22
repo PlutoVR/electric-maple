@@ -119,10 +119,6 @@ pluto_instance_destroy(struct xrt_instance *xinst)
 {
 	struct pluto_program *sp = from_xinst(xinst);
 
-	sp->comms_thread_should_stop = true;
-
-	sp->comms_thread.join();
-
 	delete sp;
 }
 
@@ -191,10 +187,6 @@ xrt_instance_create(struct xrt_instance_info *ii, struct xrt_instance **out_xins
 
 	pluto_system_devices_init(sp);
 	pluto_instance_init(sp);
-
-	make_connect_socket(*sp);
-
-	sp->comms_thread = std::thread(run_comms_thread, sp);
 
 	*out_xinst = &sp->xinst_base;
 
