@@ -219,8 +219,6 @@ data_channel_close_cb(GstWebRTCDataChannel *datachannel, struct gstreamer_webrtc
 static void
 data_channel_message_data_cb(GstWebRTCDataChannel *datachannel, GBytes *data, struct gstreamer_webrtc_pipeline *gwp)
 {
-	// U_LOG_E("Received data channel binary message: %d\n", g_bytes_get_size(data));
-	// (*gwp->callback)(data, gwp->userdata);
 	pl_callbacks_call(gwp->callbacks, PL_CALLBACKS_EVENT_TRACKING, data);
 }
 
