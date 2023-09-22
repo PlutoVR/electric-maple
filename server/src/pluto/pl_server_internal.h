@@ -73,23 +73,8 @@ struct pluto_program
 	struct pluto_controller *left;
 	struct pluto_controller *right;
 
-
-
 	//! Space overseer, implemented for now using helper code.
 	struct xrt_space_overseer *xso;
-
-
-
-	// renameto: bind_sockfd
-	int server_socket_fd;
-	struct sockaddr_in server_socket_address;
-
-	// renameto: client_sockfd
-	int client_socket_fd;
-	struct sockaddr_in client_socket_address;
-
-	bool comms_thread_should_stop = false;
-	std::thread comms_thread = {};
 };
 
 
@@ -112,16 +97,3 @@ pluto_hmd_create(pluto_program &pp);
 
 struct pluto_controller *
 pluto_controller_create(pluto_program &pp, enum xrt_device_name device_name, enum xrt_device_type device_type);
-
-
-
-// communications interface functions
-
-
-
-void
-make_connect_socket(struct pluto_program &ph);
-
-
-void
-run_comms_thread(struct pluto_program *ph_ptr);

@@ -212,10 +212,5 @@ pluto_hmd_create(pluto_program &pp)
 	u_var_add_pose(ph, &ph->pose, "pose");
 	u_var_add_log_level(ph, &ph->log_level, "log_level");
 
-	// make_connect_socket(*ph);
-
-	// ph->aaaaa = std::thread(run_comms_thread, ph);
-
-
 	return ph;
 }
