@@ -141,11 +141,6 @@ pluto_hmd_handle_data(enum pl_callbacks_event event, GBytes *bytes, void *userda
 	size_t n = 0;
 
 	const unsigned char *data = (const unsigned char *)g_bytes_get_data(bytes, &n);
-	if (n != pluto_TrackingMessage_size) {
-		U_LOG_E("Message of wrong size %d! Expected %d! You probably have bad network conditions.", n,
-		        pluto_TrackingMessage_size);
-		return;
-	}
 	pb_istream_t our_istream = pb_istream_from_buffer(data, n);
 
 	bool result = pb_decode_ex(&our_istream, pluto_TrackingMessage_fields, &message, PB_DECODE_NULLTERMINATED);
