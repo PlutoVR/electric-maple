@@ -40,17 +40,13 @@
 #include <stdio.h>
 #include <assert.h>
 
-#define DEFAULT_SRT_URI "srt://:7001"
-#define DEFAULT_RIST_ADDRESSES "224.0.0.1:5004"
+#define WEBRTC_TEE_NAME "webrtctee"
 
 #ifdef __aarch64__
 #define DEFAULT_VIDEOSINK " queue max-size-bytes=0 ! kmssink bus-id=a0070000.v_mix"
 #else
 #define DEFAULT_VIDEOSINK " videoconvert ! autovideosink "
 #endif
-
-static gchar *srt_uri = NULL;
-static gchar *rist_addresses = NULL;
 
 
 
@@ -138,7 +134,7 @@ connect_webrtc_to_tee(GstElement *webrtcbin)
 	pipeline = GST_ELEMENT(gst_element_get_parent(webrtcbin));
 	if (pipeline == NULL)
 		return;
-	tee = gst_bin_get_by_name(GST_BIN(pipeline), "webrtctee");
+	tee = gst_bin_get_by_name(GST_BIN(pipeline), WEBRTC_TEE_NAME);
 	srcpad = gst_element_request_pad_simple(tee, "src_%u");
 	sinkpad = gst_element_request_pad_simple(webrtcbin, "sink_0");
 	ret = gst_pad_link(srcpad, sinkpad);
@@ -574,35 +570,30 @@ gstreamer_pipeline_webrtc_create(struct xrt_frame_context *xfctx,
                                  struct pl_callbacks *callbacks_collection,
                                  struct gstreamer_pipeline **out_gp)
 {
-
-
-	GOptionContext *option_context;
-	GMainLoop *loop;
 	gchar *pipeline_str;
 	GstElement *pipeline;
 	GError *error = NULL;
 	GstBus *bus;
-	GstElement *src;
-	GstPad *srcpad;
-	GstStateChangeReturn ret;
 
-
-	srt_uri = g_strdup(DEFAULT_SRT_URI);
-
-	rist_addresses = g_strdup(DEFAULT_RIST_ADDRESSES);
 
 	http_server = mss_http_server_new();
 
 	pipeline_str = g_strdup_printf(
-	    "appsrc name=%s ! "
-	    "queue ! "
-	    "videoconvert ! "
-	    "video/x-raw,format=NV12 ! "
-	    " queue !"
-	    "x264enc tune=zerolatency ! video/x-h264,profile=baseline ! queue !"
-	    " h264parse ! rtph264pay config-interval=1 ! application/x-rtp,payload=96 ! tee name=webrtctee "
-	    "allow-not-linked=true",
-	    appsrc_name);
+	    "appsrc name=%s ! "                //
+	    "queue ! "                         //
+	    "videoconvert ! "                  //
+	    "video/x-raw,format=NV12 ! "       //
+	    "queue !"                          //
+	    "x264enc tune=zerolatency ! "      //
+	    "video/x-h264,profile=baseline ! " //
+	    "queue !"                          //
+	    "h264parse ! "                     //
+	    "rtph264pay config-interval=1 ! "  //
+	    "application/x-rtp,payload=96 ! "  //
+	    "tee name=%s allow-not-linked=true",
+	    appsrc_name, WEBRTC_TEE_NAME);
+
+	// no webrtc bin yet until later!
 
 	printf("%s\n\n\n\n", pipeline_str);
 
@@ -631,14 +622,8 @@ gstreamer_pipeline_webrtc_create(struct xrt_frame_context *xfctx,
 	// g_unix_signal_add (SIGINT, sigint_handler, loop);
 
 	g_print(
-	    "Input SRT URI is %s\n"
-	    "\nOutput streams:\n"
-	    "\tHLS & WebRTC web player: http://127.0.0.1:8080\n"
-	    "\tRIST: %s\n"
-	    "\tSRT: srt://127.0.0.1:7002\n",
-	    srt_uri, rist_addresses);
-
-
+	    "Output streams:\n"
+	    "\tWebRTC: http://127.0.0.1:8080\n");
 
 	// Setup pipeline.
 	gwp->base.pipeline = pipeline;
