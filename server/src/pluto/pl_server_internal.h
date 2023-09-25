@@ -104,7 +104,7 @@ struct pluto_program
 /*!
  * Creates a @ref pluto_compositor.
  *
- * @ingroup comp_null
+ * @ingroup comp_pl
  */
 xrt_result_t
 pluto_compositor_create_system(pluto_program &pp, struct xrt_system_compositor **out_xsysc);

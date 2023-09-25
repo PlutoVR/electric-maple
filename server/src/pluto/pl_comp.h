@@ -1,15 +1,16 @@
-// Copyright 2019-2022, Collabora, Ltd.
+// Copyright 2019-2023, Collabora, Ltd.
+// Copyright 2023, PlutoVR, Inc.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
- * @brief  Header for null compositor.
+ * @brief  Header for remote rendering compositor.
  *
- * Based on src/xrt/compositor/main/comp_compositor.h
+ * Based on the null compositor
  *
  * @author Jakob Bornecrantz <jakob@collabora.com>
  * @author Lubosz Sarnecki <lubosz.sarnecki@collabora.com>
  * @author Rylie Pavlik <rylie.pavlik@collabora.com>
- * @ingroup comp_null
+ * @ingroup comp_pl
  */
 
 #pragma once
@@ -39,20 +40,9 @@ extern "C" {
 #endif
 
 /*!
- * @defgroup comp_null Null compositor
+ * @defgroup comp_pl Remote rendering compositor
  * @ingroup xrt
- * @brief A non-rendering alternate for the main compositor that still can
- * support applications fully.
- *
- * Monado's design is highly modular, including allowing alternate compositors to
- * be used. If you are looking to write an additional or alternate compositor to
- * the one in `src/xrt/compositor/main`, this code is your starting point. It is
- * the basic implementation of @ref xrt_compositor_native extracted from there,
- * renamed, and with most implementations removed. Compare with similarly-named
- * files there to see what was removed, and what helper functionality has been
- * factored out and may be reusable. For example, you may be able to use @ref
- * comp_renderer, @ref comp_resources, @ref comp_shaders, and @ref comp_target,
- * among others.
+ * @brief A small compositor that outputs to a video encoding/streaming pipeline.
  */
 
 
@@ -65,9 +55,9 @@ extern "C" {
 /*!
  * State to emulate state transitions correctly.
  *
- * @ingroup comp_null
+ * @ingroup comp_pl
  */
-enum null_comp_state
+enum pl_comp_state
 {
 	PLUTO_COMP_COMP_STATE_UNINITIALIZED = 0,
 	PLUTO_COMP_COMP_STATE_READY = 1,
@@ -79,9 +69,9 @@ enum null_comp_state
 /*!
  * Tracking frame state.
  *
- * @ingroup comp_null
+ * @ingroup comp_pl
  */
-struct null_comp_frame
+struct pl_comp_frame
 {
 	int64_t id;
 	uint64_t predicted_display_time_ns;
@@ -93,7 +83,7 @@ struct null_comp_frame
  * Main compositor struct tying everything in the compositor together.
  *
  * @implements xrt_compositor_native, comp_base.
- * @ingroup comp_null
+ * @ingroup comp_pl
  */
 struct pluto_compositor
 {
@@ -120,14 +110,14 @@ struct pluto_compositor
 	struct xrt_system_compositor_info sys_info;
 
 	//! State for generating the correct set of events.
-	enum null_comp_state state;
+	enum pl_comp_state state;
 
 	//! @todo Insert your own required members here
 
 	struct
 	{
-		struct null_comp_frame waited;
-		struct null_comp_frame rendering;
+		struct pl_comp_frame waited;
+		struct pl_comp_frame rendering;
 	} frame;
 
 
@@ -163,7 +153,7 @@ struct pluto_compositor
  * (Down-cast helper.)
  *
  * @private @memberof pluto_compositor
- * @ingroup comp_null
+ * @ingroup comp_pl
  */
 static inline struct pluto_compositor *
 pluto_compositor(struct xrt_compositor *xc)
@@ -175,7 +165,7 @@ pluto_compositor(struct xrt_compositor *xc)
  * Spew level logging.
  *
  * @relates pluto_compositor
- * @ingroup comp_null
+ * @ingroup comp_pl
  */
 #define PLUTO_COMP_TRACE(c, ...) U_LOG_IFL_T(c->settings.log_level, __VA_ARGS__);
 
@@ -190,7 +180,7 @@ pluto_compositor(struct xrt_compositor *xc)
  * Info level logging.
  *
  * @relates pluto_compositor
- * @ingroup comp_null
+ * @ingroup comp_pl
  */
 #define PLUTO_COMP_INFO(c, ...) U_LOG_IFL_I(c->settings.log_level, __VA_ARGS__);
 
@@ -198,7 +188,7 @@ pluto_compositor(struct xrt_compositor *xc)
  * Warn level logging.
  *
  * @relates pluto_compositor
- * @ingroup comp_null
+ * @ingroup comp_pl
  */
 #define PLUTO_COMP_WARN(c, ...) U_LOG_IFL_W(c->settings.log_level, __VA_ARGS__);
 
@@ -206,7 +196,7 @@ pluto_compositor(struct xrt_compositor *xc)
  * Error level logging.
  *
  * @relates pluto_compositor
- * @ingroup comp_null
+ * @ingroup comp_pl
  */
 #define PLUTO_COMP_ERROR(c, ...) U_LOG_IFL_E(c->settings.log_level, __VA_ARGS__);
 
