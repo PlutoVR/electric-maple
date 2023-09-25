@@ -14,6 +14,8 @@ find_package(OpenXR REQUIRED)
 find_package(EGL REQUIRED)
 find_package(OpenGLES REQUIRED COMPONENTS V3)
 
+include(CTest)
+
 # Default to PIC code
 set(CMAKE_POSITION_INDEPENDENT_CODE OFF)
 
@@ -88,56 +90,55 @@ setforce(XRT_FEATURE_SERVICE OFF)
 
 add_subdirectory(../monado ${CMAKE_CURRENT_BINARY_DIR}/monado)
 add_subdirectory(../proto ${CMAKE_CURRENT_BINARY_DIR}/proto)
+add_subdirectory(../external/Catch2 catch2)
 
-if(ANDROID_ABI STREQUAL "arm64-v8a")
-	set(GST_ARCH arm64)
-elseif(ANDROID_ABI STREQUAL "armeabi-v7a")
-	set(GST_ARCH armv7)
-elseif(ANDROID_ABI STREQUAL "x86")
-	set(GST_ARCH x86)
-elseif(ANDROID_ABI STREQUAL "x86_64")
-	set(GST_ARCH x86_64)
-else()
-	message(FATAL_ERROR "What is this ABI? ${ANDROID_ABI}")
-endif()
-
-if(GST_ARCH_DIR)
-	message(STATUS "Using gstreamer from ${GST_ARCH_DIR}")
-else()
-	if(GST_BASE_DIR)
-		message(STATUS "GST_ARCH_DIR not set, computing from arch and GST_BASE_DIR")
+if(ANDROID)
+	if(ANDROID_ABI STREQUAL "arm64-v8a")
+		set(GST_ARCH arm64)
+	elseif(ANDROID_ABI STREQUAL "armeabi-v7a")
+		set(GST_ARCH armv7)
+	elseif(ANDROID_ABI STREQUAL "x86")
+		set(GST_ARCH x86)
+	elseif(ANDROID_ABI STREQUAL "x86_64")
+		set(GST_ARCH x86_64)
 	else()
-		message(STATUS "GST_ARCH_DIR and GST_BASE_DIR not set, assuming default location")
-		set(GST_BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/gstreamer_android")
+		message(FATAL_ERROR "What is this ABI? ${ANDROID_ABI}")
 	endif()
-	set(GST_ARCH_DIR ${GST_BASE_DIR}/${GST_ARCH})
+
+	if(GST_ARCH_DIR)
+		message(STATUS "Using gstreamer from ${GST_ARCH_DIR}")
+	else()
+		if(GST_BASE_DIR)
+			message(STATUS "GST_ARCH_DIR not set, computing from arch and GST_BASE_DIR")
+		else()
+			message(
+				STATUS
+					"GST_ARCH_DIR and GST_BASE_DIR not set, assuming default location"
+				)
+			set(GST_BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/gstreamer_android")
+		endif()
+		set(GST_ARCH_DIR ${GST_BASE_DIR}/${GST_ARCH})
+	endif()
+
+	set(USE_GST_SHARED OFF)
+	if(USE_GST_SHARED)
+		include(libraries_shared.cmake)
+	else()
+		include(libraries_static.cmake)
+	endif()
+
+	set(GST_INCLUDE_DIRS ${GST_ARCH_DIR}/include/gstreamer-1.0/
+			     ${GST_ARCH_DIR}/lib/gstreamer-1.0/include/
+		)
+	set(GLIB_INCLUDE_DIRS ${GST_ARCH_DIR}/include/glib-2.0
+			      ${GST_ARCH_DIR}/lib/glib-2.0/include/
+		)
+	set(LIBSOUP_INCLUDE_DIRS ${GST_ARCH_DIR}/include/libsoup-2.4/)
+	set(JSONGLIB_INCLUDE_DIRS ${GST_ARCH_DIR}/include/json-glib-1.0)
+	set(GIO_INCLUDE_DIRS ${GST_ARCH_DIR}/include/glib-2.0/ ${GST_ARCH_DIR}/lib/gio-unix-2.0/)
+
+	add_subdirectory(gstreamer_android)
+	add_subdirectory(src)
 endif()
 
-set(USE_GST_SHARED OFF)
-if(USE_GST_SHARED)
-	include(libraries_shared.cmake)
-else()
-	include(libraries_static.cmake)
-endif()
-
-# find_package(PkgConfig)
-# include(gstreamer.cmake)
-
-# add_gstreamer_android_target(
-# 	gstreamer_android
-# 	${GSTREAMER_PLUGINS_CORE}
-# 	${GSTREAMER_PLUGINS_CODECS}
-# 	${GSTREAMER_PLUGINS_NET}
-# 	${GSTREAMER_PLUGINS_SYS}
-# 	)
-
-set(GST_INCLUDE_DIRS ${GST_ARCH_DIR}/include/gstreamer-1.0/
-		     ${GST_ARCH_DIR}/lib/gstreamer-1.0/include/
-	)
-set(GLIB_INCLUDE_DIRS ${GST_ARCH_DIR}/include/glib-2.0 ${GST_ARCH_DIR}/lib/glib-2.0/include/)
-set(LIBSOUP_INCLUDE_DIRS ${GST_ARCH_DIR}/include/libsoup-2.4/)
-set(JSONGLIB_INCLUDE_DIRS ${GST_ARCH_DIR}/include/json-glib-1.0)
-set(GIO_INCLUDE_DIRS ${GST_ARCH_DIR}/include/glib-2.0/ ${GST_ARCH_DIR}/lib/gio-unix-2.0/)
-
-add_subdirectory(gstreamer_android)
-add_subdirectory(src)
+add_subdirectory(tests)
