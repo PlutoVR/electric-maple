@@ -151,8 +151,6 @@ pluto_hmd_handle_data(enum pl_callbacks_event event, const pluto_UpMessage *mess
 
 	// TODO handle timestamp, etc
 
-	U_LOG_E("RYLIE GOT POSE");
-
 	{
 		std::lock_guard<std::mutex> lock(ph->received->mutex);
 		ph->received->pose = pose;

@@ -550,7 +550,7 @@ em_stream_client_try_pull_sample(EmStreamClient *sc)
 		return NULL;
 	}
 
-	ALOGE("FRED: GOT A SAMPLE !!!");
+	// ALOGE("FRED: GOT A SAMPLE !!!");
 	GstBuffer *buffer = gst_sample_get_buffer(sample);
 	GstCaps *caps = gst_sample_get_caps(sample);
 

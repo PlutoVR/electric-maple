@@ -318,14 +318,14 @@ emconn_data_channel_error_cb(GstWebRTCDataChannel *datachannel, EmConnection *em
 static void
 emconn_data_channel_close_cb(GstWebRTCDataChannel *datachannel, EmConnection *emconn)
 {
-	ALOGE("RYLIE: %s: Data channel closed", __FUNCTION__);
+	ALOGI("RYLIE: %s: Data channel closed", __FUNCTION__);
 	emconn_disconnect_internal(emconn, EM_STATUS_DISCONNECTED_REMOTE_CLOSE);
 }
 
 static void
 emconn_data_channel_message_string_cb(GstWebRTCDataChannel *datachannel, gchar *str, EmConnection *emconn)
 {
-	ALOGE("RYLIE: %s: Received data channel message: %s", __FUNCTION__, str);
+	ALOGI("RYLIE: %s: Received data channel message: %s", __FUNCTION__, str);
 }
 
 static void
@@ -346,7 +346,7 @@ emconn_webrtc_prepare_data_channel_cb(GstElement *webrtc,
                                       gboolean is_local,
                                       EmConnection *emconn)
 {
-	ALOGE("preparing data channel");
+	ALOGI("preparing data channel");
 
 	g_signal_connect(data_channel, "on-close", G_CALLBACK(emconn_data_channel_close_cb), emconn);
 	g_signal_connect(data_channel, "on-error", G_CALLBACK(emconn_data_channel_error_cb), emconn);
@@ -357,7 +357,7 @@ static void
 emconn_webrtc_on_data_channel_cb(GstElement *webrtcbin, GstWebRTCDataChannel *data_channel, EmConnection *emconn)
 {
 
-	ALOGE("Successfully created datachannel");
+	ALOGI("Successfully created datachannel");
 
 	g_assert_null(emconn->datachannel);
 
@@ -374,7 +374,7 @@ emconn_send_sdp_answer(EmConnection *emconn, const gchar *sdp)
 	JsonNode *root;
 	gchar *msg_str;
 
-	ALOGE("Send answer: %s", sdp);
+	ALOGI("Send answer: %s", sdp);
 
 	builder = json_builder_new();
 	json_builder_begin_object(builder);
@@ -402,7 +402,7 @@ emconn_webrtc_on_ice_candidate_cb(GstElement *webrtcbin, guint mlineindex, gchar
 	JsonNode *root;
 	gchar *msg_str;
 
-	ALOGE("Send candidate: line %u: %s", mlineindex, candidate);
+	ALOGI("Send candidate: line %u: %s", mlineindex, candidate);
 
 	builder = json_builder_new();
 	json_builder_begin_object(builder);
@@ -461,7 +461,7 @@ emconn_webrtc_process_sdp_offer(EmConnection *emconn, const gchar *sdp)
 	GstWebRTCSessionDescription *desc = NULL;
 
 
-	ALOGE("Received offer: %s\n", sdp);
+	ALOGI("Received offer: %s\n", sdp);
 
 	if (gst_sdp_message_new_from_text(sdp, &sdp_msg) != GST_SDP_OK) {
 		g_debug("Error parsing SDP description");
@@ -611,7 +611,7 @@ emconn_connect_internal(EmConnection *emconn, enum em_status status)
 	em_connection_disconnect(emconn);
 
 	g_cancellable_reset(emconn->ws_cancel);
-	ALOGE("RYLIE: calling soup_session_websocket_connect_async. websocket_uri = %s", emconn->websocket_uri);
+	ALOGI("RYLIE: calling soup_session_websocket_connect_async. websocket_uri = %s", emconn->websocket_uri);
 #if SOUP_MAJOR_VERSION == 2
 	soup_session_websocket_connect_async(emconn->soup_session,                                     // session
 	                                     soup_message_new(SOUP_METHOD_GET, emconn->websocket_uri), // message
