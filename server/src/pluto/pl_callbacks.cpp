@@ -13,12 +13,13 @@
 
 #include "util/u_generic_callbacks.hpp"
 
-
 #include <memory>
+#include <mutex>
 #include <stdint.h>
 
 struct pl_callbacks
 {
+	std::mutex mutex;
 	xrt::auxiliary::util::GenericCallbacks<pl_callbacks_func_t, enum pl_callbacks_event> callbacks_collection;
 };
 
@@ -38,6 +39,10 @@ pl_callbacks_destroy(struct pl_callbacks **ptr_callbacks)
 		return;
 	}
 	std::unique_ptr<pl_callbacks> callbacks(*ptr_callbacks);
+	// take the lock to wait for anybody else who might be in the lock.
+	std::unique_lock<std::mutex> lock(callbacks->mutex);
+	lock.unlock();
+
 	*ptr_callbacks = nullptr;
 	callbacks.reset();
 }
@@ -45,17 +50,21 @@ pl_callbacks_destroy(struct pl_callbacks **ptr_callbacks)
 void
 pl_callbacks_add(struct pl_callbacks *callbacks, uint32_t event_mask, pl_callbacks_func_t func, void *userdata)
 {
+	std::unique_lock<std::mutex> lock(callbacks->mutex);
 	callbacks->callbacks_collection.addCallback(func, event_mask, userdata);
 }
 
 void
-pl_callbacks_reset(struct pl_callbacks *callbacks) {
+pl_callbacks_reset(struct pl_callbacks *callbacks)
+{
+	std::unique_lock<std::mutex> lock(callbacks->mutex);
 	callbacks->callbacks_collection = {};
 }
 
 void
 pl_callbacks_call(struct pl_callbacks *callbacks, enum pl_callbacks_event event, GBytes *bytes)
 {
+	std::unique_lock<std::mutex> lock(callbacks->mutex);
 	auto invoker = [=](enum pl_callbacks_event ev, pl_callbacks_func_t callback, void *userdata) {
 		callback(ev, bytes, userdata);
 		return false; // do not remove
