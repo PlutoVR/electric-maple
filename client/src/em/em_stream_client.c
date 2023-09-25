@@ -315,6 +315,15 @@ gst_bus_cb(GstBus *bus, GstMessage *message, gpointer data)
 	return TRUE;
 }
 
+static GstFlowReturn
+on_new_sample_cb(GstElement *appsink, EmStreamClient *sc)
+{
+	ALOGE("RYLIE: %s", __FUNCTION__);
+	// TODO either pull the sample and buffer the ref locally, recording the timestamp,
+	// or log the timestamp to be picked up by the main thread.
+	return GST_FLOW_OK;
+}
+
 static void
 on_need_pipeline_cb(EmConnection *emconn, EmStreamClient *sc)
 {
@@ -373,8 +382,13 @@ on_need_pipeline_cb(EmConnection *emconn, EmStreamClient *sc)
 	             "max-buffers", 1,
 	             // drop old buffers when queue is filled
 	             "drop", true,
+	             // trigger new-sample signals, etc
+	             "emit-signals", true,
 	             // terminator
 	             NULL);
+	g_signal_connect(sc->appsink, "new-sample", G_CALLBACK(on_new_sample_cb), sc);
+
+
 	g_autoptr(GstElement) glsinkbin = gst_bin_get_by_name(GST_BIN(sc->pipeline), "glsink");
 	g_object_set(glsinkbin, "sink", sc->appsink, NULL);
 
@@ -501,7 +515,7 @@ em_stream_client_egl_begin_pbuffer(EmStreamClient *sc)
 void
 em_stream_client_egl_end(EmStreamClient *sc)
 {
-	ALOGI("%s: Make egl context un-current", __FUNCTION__);
+	// ALOGI("%s: Make egl context un-current", __FUNCTION__);
 	em_egl_mutex_end(sc->egl_mutex);
 }
 
@@ -547,6 +561,10 @@ em_stream_client_try_pull_sample(EmStreamClient *sc)
 	GstSample *sample = gst_app_sink_try_pull_sample(GST_APP_SINK(sc->appsink), (GstClockTime)(1000 * GST_USECOND));
 
 	if (sample == NULL) {
+		if (gst_app_sink_is_eos(GST_APP_SINK(sc->appsink))) {
+			ALOGW("%s: EOS", __FUNCTION__);
+			// TODO trigger teardown?
+		}
 		return NULL;
 	}
 
