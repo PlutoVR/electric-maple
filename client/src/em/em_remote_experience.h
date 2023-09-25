@@ -16,6 +16,8 @@
 typedef struct _EmRemoteExperience EmRemoteExperience;
 typedef struct _EmConnection EmConnection;
 
+typedef struct _pluto_UpMessage pluto_UpMessage;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -72,6 +74,19 @@ em_remote_experience_inner_poll_and_render_frame(EmRemoteExperience *exp,
                                                  XrView *views,
                                                  XrCompositionLayerProjection *projectionLayer,
                                                  XrCompositionLayerProjectionView *projectionViews);
+
+/*!
+ * Set message ID, then serialize and send the upstream message given.
+ *
+ * Message ID is incremented atomically.
+ *
+ * @param exp Self
+ * @param upMessage The upstream message, fully populated except for up_message_id.
+ *
+ * @return true on success
+ */
+bool
+em_remote_experience_emit_upmessage(EmRemoteExperience *exp, pluto_UpMessage *upMessage);
 
 #ifdef __cplusplus
 } // extern "C"

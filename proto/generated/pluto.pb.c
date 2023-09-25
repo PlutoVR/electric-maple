@@ -12,10 +12,43 @@ PB_BIND(pluto_Quaternion, pluto_Quaternion, AUTO)
 PB_BIND(pluto_Vec3, pluto_Vec3, AUTO)
 
 
+PB_BIND(pluto_Vec2, pluto_Vec2, AUTO)
+
+
 PB_BIND(pluto_Pose, pluto_Pose, AUTO)
 
 
 PB_BIND(pluto_TrackingMessage, pluto_TrackingMessage, 2)
+
+
+PB_BIND(pluto_InputThumbstick, pluto_InputThumbstick, AUTO)
+
+
+PB_BIND(pluto_InputValueTouch, pluto_InputValueTouch, AUTO)
+
+
+PB_BIND(pluto_InputClickTouch, pluto_InputClickTouch, AUTO)
+
+
+PB_BIND(pluto_TouchControllerCommon, pluto_TouchControllerCommon, AUTO)
+
+
+PB_BIND(pluto_TouchControllerLeft, pluto_TouchControllerLeft, AUTO)
+
+
+PB_BIND(pluto_TouchControllerRight, pluto_TouchControllerRight, AUTO)
+
+
+PB_BIND(pluto_UpFrameMessage, pluto_UpFrameMessage, AUTO)
+
+
+PB_BIND(pluto_UpMessage, pluto_UpMessage, 2)
+
+
+PB_BIND(pluto_DownFrameDataMessage, pluto_DownFrameDataMessage, AUTO)
+
+
+PB_BIND(pluto_DownMessage, pluto_DownMessage, AUTO)
 
 
 

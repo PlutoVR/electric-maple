@@ -22,6 +22,9 @@
 #include "util/u_misc.h"
 #include "util/u_debug.h"
 
+#include "pb_decode.h"
+#include "pluto.pb.h"
+
 // Monado includes
 #include "gstreamer/gst_internal.h"
 #include "gstreamer/gst_pipeline.h"
@@ -219,7 +222,19 @@ data_channel_close_cb(GstWebRTCDataChannel *datachannel, struct gstreamer_webrtc
 static void
 data_channel_message_data_cb(GstWebRTCDataChannel *datachannel, GBytes *data, struct gstreamer_webrtc_pipeline *gwp)
 {
-	pl_callbacks_call(gwp->callbacks, PL_CALLBACKS_EVENT_TRACKING, data);
+	pluto_UpMessage message = pluto_UpMessage_init_default;
+	size_t n = 0;
+
+	const unsigned char *buf = (const unsigned char *)g_bytes_get_data(data, &n);
+	pb_istream_t our_istream = pb_istream_from_buffer(buf, n);
+
+	bool result = pb_decode_ex(&our_istream, pluto_UpMessage_fields, &message, PB_DECODE_NULLTERMINATED);
+
+	if (!result) {
+		U_LOG_E("Error! %s", PB_GET_ERROR(&our_istream));
+		return;
+	}
+	pl_callbacks_call(gwp->callbacks, PL_CALLBACKS_EVENT_TRACKING, &message);
 }
 
 static void

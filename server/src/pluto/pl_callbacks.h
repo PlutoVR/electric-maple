@@ -10,6 +10,9 @@
 #include <stdint.h>
 #include <glib.h>
 
+typedef struct _pluto_UpMessage pluto_UpMessage;
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -24,7 +27,7 @@ enum pl_callbacks_event
 
 /// Callback function type
 /// @relates pl_callbacks
-typedef void (*pl_callbacks_func_t)(enum pl_callbacks_event, GBytes *bytes, void *userdata);
+typedef void (*pl_callbacks_func_t)(enum pl_callbacks_event, const pluto_UpMessage *message, void *userdata);
 
 /// Callbacks data structure
 struct pl_callbacks;
@@ -57,11 +60,11 @@ pl_callbacks_add(struct pl_callbacks *callbacks, uint32_t event_mask, pl_callbac
 ///
 /// @param callbacks self
 /// @param event The enum @ref pl_callbacks_event describing this event
-/// @param bytes The bytes object. We do not add a reference!
+/// @param message The decoded message. We pass yours, we do not copy it!
 ///
 /// @public @memberof pl_callbacks
 void
-pl_callbacks_call(struct pl_callbacks *callbacks, enum pl_callbacks_event event, GBytes *bytes);
+pl_callbacks_call(struct pl_callbacks *callbacks, enum pl_callbacks_event event, const pluto_UpMessage *message);
 
 /// Clear all callbacks.
 ///

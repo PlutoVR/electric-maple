@@ -62,14 +62,12 @@ pl_callbacks_reset(struct pl_callbacks *callbacks)
 }
 
 void
-pl_callbacks_call(struct pl_callbacks *callbacks, enum pl_callbacks_event event, GBytes *bytes)
+pl_callbacks_call(struct pl_callbacks *callbacks, enum pl_callbacks_event event, const pluto_UpMessage *message)
 {
 	std::unique_lock<std::mutex> lock(callbacks->mutex);
 	auto invoker = [=](enum pl_callbacks_event ev, pl_callbacks_func_t callback, void *userdata) {
-		callback(ev, bytes, userdata);
+		callback(ev, message, userdata);
 		return false; // do not remove
 	};
 	callbacks->callbacks_collection.invokeCallbacks(event, invoker);
 }
-
-// auto invoker = [](MyEvent event, callback_t callback, void *userdata) { return callback(event, userdata); };

@@ -17,12 +17,17 @@ message Vec3 {
 	float z = 3;
 }
 
+message Vec2 {
+	float x = 1;
+	float y = 2;
+}
+
 message Pose {
 	Vec3 position = 1;
 	Quaternion orientation = 2;
 }
 
-//todo: make this bitflags, make this support "inferred"
+// todo: make this bitflags, make this support "inferred"
 enum TrackedStatus {
 	UNTRACKED = 0;
 	TRACKED = 1;
@@ -32,7 +37,7 @@ message TrackingMessage {
 	Pose P_localSpace_viewSpace = 1;
 	Pose P_viewSpace_view0 = 2; // Left view
 	Pose P_viewSpace_view1 = 3; // Right view
-	
+
 	Pose P_local_controller_grip_left = 4;
 	Pose controller_aim_left = 5;
 
@@ -41,6 +46,67 @@ message TrackingMessage {
 
 	int64 timestamp = 8;
 	int64 sequence_idx = 9;
+}
+
+message InputThumbstick {
+	Vec2 xy = 1;
+	bool click = 2;
+	bool touch = 3;
+	// bool proximity = 4;
+}
+
+message InputValueTouch {
+	float value = 1;
+	bool touch = 2;
+}
+
+message InputClickTouch {
+	bool click = 1;
+	bool touch = 2;
+}
+
+message TouchControllerCommon {
+	InputThumbstick thumbstick = 1;
+	InputValueTouch trigger = 2;
+	InputValueTouch squeeze = 3; // no "touch"
+	bool thumbrest_touch = 4;
+}
+
+message TouchControllerLeft {
+	InputClickTouch x = 1;
+	InputClickTouch y = 2;
+	InputClickTouch menu = 3; // no "touch"
+	TouchControllerCommon common = 4;
+}
+message TouchControllerRight {
+	InputClickTouch a = 1;
+	InputClickTouch b = 2;
+	InputClickTouch system = 3; // no "touch", probably not accessible
+	TouchControllerCommon common = 4;
+
+}
+
+message UpFrameMessage {
+	int64 frame_sequence_id = 1;
+	int64 decode_complete_time = 2;
+	int64 display_time = 4;
+}
+
+message UpMessage {
+	int64 up_message_id = 1;
+	TrackingMessage tracking = 2;
+	UpFrameMessage frame = 3;
+}
+
+message DownFrameDataMessage {
+	int64 frame_sequence_id = 1;
+	Pose P_localSpace_viewSpace = 2;
+	int64 display_time = 3;
+	// TODO fovs here
+}
+
+message DownMessage {
+	DownFrameDataMessage frame_data = 1;
 }
 
 // message RenderedView
