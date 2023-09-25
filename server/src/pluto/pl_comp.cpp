@@ -13,6 +13,7 @@
  * @ingroup comp_pl
  */
 
+#include "gstreamer/gst_internal.h"
 #include "os/os_time.h"
 
 #include "util/u_misc.h"
@@ -338,6 +339,11 @@ do_the_thing(struct pluto_compositor *c,
              struct comp_swapchain *lsc,
              struct comp_swapchain *rsc)
 {
+	if (c->offset_ns == 0) {
+		uint64_t now = os_monotonic_get_ns();
+		c->offset_ns = now;
+		c->hackers_gstreamer_sink->offset_ns = now;
+	}
 	VkResult ret;
 
 	struct vk_image_readback_to_xf *wrap = NULL;
@@ -505,6 +511,9 @@ do_the_thing(struct pluto_compositor *c,
 	u_sink_debug_push_frame(&c->hackers_debug_sink, frame);
 
 	xrt_sink_push_frame(c->hackers_xfs, frame);
+
+
+	// TODO send data channel message with pose and fov here?
 
 	// Dereference this frame - by now we should have pushed it.
 	xrt_frame_reference(&frame, NULL);
