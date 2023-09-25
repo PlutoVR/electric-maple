@@ -139,6 +139,8 @@ struct pluto_compositor
 	struct gstreamer_pipeline *hackers_gstreamer_pipeline;
 	struct gstreamer_sink *hackers_gstreamer_sink;
 	struct xrt_frame_sink *hackers_xfs;
+
+	uint64_t offset_ns;
 };
 
 
