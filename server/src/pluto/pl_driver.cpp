@@ -132,33 +132,24 @@ pluto_hmd_get_view_poses(struct xrt_device *xdev,
 }
 
 static void
-pluto_hmd_handle_data(enum pl_callbacks_event event, GBytes *bytes, void *userdata)
+pluto_hmd_handle_data(enum pl_callbacks_event event, const pluto_UpMessage *message, void *userdata)
 {
-	U_LOG_E("pluto_hmd_handle_data: %d\n", g_bytes_get_size(bytes));
-
 	struct pluto_hmd *ph = (struct pluto_hmd *)userdata;
-	pluto_TrackingMessage message = pluto_TrackingMessage_init_default;
-	size_t n = 0;
 
-	const unsigned char *data = (const unsigned char *)g_bytes_get_data(bytes, &n);
-	pb_istream_t our_istream = pb_istream_from_buffer(data, n);
-
-	bool result = pb_decode_ex(&our_istream, pluto_TrackingMessage_fields, &message, PB_DECODE_NULLTERMINATED);
-
-	if (!result) {
-		U_LOG_E("Error! %s", PB_GET_ERROR(&our_istream));
+	if (!message->has_tracking) {
 		return;
 	}
-
 	struct xrt_pose pose = {};
-	pose.position.x = message.P_localSpace_viewSpace.position.x;
-	pose.position.y = message.P_localSpace_viewSpace.position.y;
-	pose.position.z = message.P_localSpace_viewSpace.position.z;
+	pose.position = {message->tracking.P_localSpace_viewSpace.position.x,
+	                 message->tracking.P_localSpace_viewSpace.position.y,
+	                 message->tracking.P_localSpace_viewSpace.position.z};
 
-	pose.orientation.w = message.P_localSpace_viewSpace.orientation.w;
-	pose.orientation.x = message.P_localSpace_viewSpace.orientation.x;
-	pose.orientation.y = message.P_localSpace_viewSpace.orientation.y;
-	pose.orientation.z = message.P_localSpace_viewSpace.orientation.z;
+	pose.orientation.w = message->tracking.P_localSpace_viewSpace.orientation.w;
+	pose.orientation.x = message->tracking.P_localSpace_viewSpace.orientation.x;
+	pose.orientation.y = message->tracking.P_localSpace_viewSpace.orientation.y;
+	pose.orientation.z = message->tracking.P_localSpace_viewSpace.orientation.z;
+
+	// TODO handle timestamp, etc
 
 	U_LOG_E("RYLIE GOT POSE");
 

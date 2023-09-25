@@ -5,6 +5,7 @@ target_link_libraries(
 	PRIVATE
 		pl_build_defines
 		pl_callbacks
+		pluto_proto
 		aux_util
 		aux_gstreamer
 		${GST_LIBRARIES}

@@ -22,6 +22,7 @@
 #include "render/xr_platform_deps.h"
 
 #include <GLES3/gl3.h>
+#include <atomic>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -56,8 +57,29 @@ struct _EmRemoteExperience
 	} xr_owned;
 
 	GLSwapchain swapchainBuffers;
+
+	std::atomic_int64_t nextUpMessage{1};
 };
 
+static constexpr size_t kUpBufferSize = pluto_UpMessage_size + 10;
+
+bool
+em_remote_experience_emit_upmessage(EmRemoteExperience *exp, pluto_UpMessage *upMessage)
+{
+	int64_t message_id = exp->nextUpMessage++;
+	upMessage->up_message_id = message_id;
+
+	uint8_t buffer[kUpBufferSize];
+	pb_ostream_t os = pb_ostream_from_buffer(buffer, sizeof(buffer));
+
+	pb_encode(&os, pluto_UpMessage_fields, upMessage);
+
+	ALOGI("RYLIE: Sending message");
+	GBytes *bytes = g_bytes_new(buffer, os.bytes_written);
+	bool bResult = em_connection_send_bytes(exp->connection, bytes);
+	g_bytes_unref(bytes);
+	return bResult;
+}
 
 static void
 em_remote_experience_report_pose(EmRemoteExperience *exp, XrTime predictedDisplayTime)
@@ -77,32 +99,25 @@ em_remote_experience_report_pose(EmRemoteExperience *exp, XrTime predictedDispla
 
 	XrPosef hmdLocalPose = hmdLocalLocation.pose;
 
-	pluto_TrackingMessage message = pluto_TrackingMessage_init_default;
+	pluto_TrackingMessage tracking = pluto_TrackingMessage_init_default;
 
-	message.has_P_localSpace_viewSpace = true;
-	message.P_localSpace_viewSpace.has_position = true;
-	message.P_localSpace_viewSpace.has_orientation = true;
-	message.P_localSpace_viewSpace.position.x = hmdLocalPose.position.x;
-	message.P_localSpace_viewSpace.position.y = hmdLocalPose.position.y;
-	message.P_localSpace_viewSpace.position.z = hmdLocalPose.position.z;
+	tracking.has_P_localSpace_viewSpace = true;
+	tracking.P_localSpace_viewSpace.has_position = true;
+	tracking.P_localSpace_viewSpace.has_orientation = true;
+	tracking.P_localSpace_viewSpace.position.x = hmdLocalPose.position.x;
+	tracking.P_localSpace_viewSpace.position.y = hmdLocalPose.position.y;
+	tracking.P_localSpace_viewSpace.position.z = hmdLocalPose.position.z;
 
-	message.P_localSpace_viewSpace.orientation.w = hmdLocalPose.orientation.w;
-	message.P_localSpace_viewSpace.orientation.x = hmdLocalPose.orientation.x;
-	message.P_localSpace_viewSpace.orientation.y = hmdLocalPose.orientation.y;
-	message.P_localSpace_viewSpace.orientation.z = hmdLocalPose.orientation.z;
+	tracking.P_localSpace_viewSpace.orientation.w = hmdLocalPose.orientation.w;
+	tracking.P_localSpace_viewSpace.orientation.x = hmdLocalPose.orientation.x;
+	tracking.P_localSpace_viewSpace.orientation.y = hmdLocalPose.orientation.y;
+	tracking.P_localSpace_viewSpace.orientation.z = hmdLocalPose.orientation.z;
 
-	uint8_t buffer[8192];
+	pluto_UpMessage upMessage = pluto_UpMessage_init_default;
+	upMessage.has_tracking = true;
+	upMessage.tracking = tracking;
 
-
-
-	pb_ostream_t os = pb_ostream_from_buffer(buffer, sizeof(buffer));
-
-	pb_encode(&os, pluto_TrackingMessage_fields, &message);
-	ALOGW("RYLIE: Sending HMD pose message");
-	GBytes *bytes = g_bytes_new(buffer, os.bytes_written);
-	bool bResult = em_connection_send_bytes(exp->connection, bytes);
-	g_bytes_unref(bytes);
-	if (!bResult) {
+	if (!em_remote_experience_emit_upmessage(exp, &upMessage)) {
 		ALOGE("RYLIE: Could not queue HMD pose message!");
 	}
 }
