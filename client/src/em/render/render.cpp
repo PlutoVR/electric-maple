@@ -123,10 +123,10 @@ Renderer::setupQuadVertexData()
 {
 	// Set up the quad vertex data
 	static constexpr Vertex quadVertices[] = {
-	    {{-1.0f, 1.0f, 0.0f}, {0.0f, 1.0f}},
-	    {{-1.0f, -1.0f, 0.0f}, {0.0f, 0.0f}},
-	    {{1.0f, -1.0f, 0.0f}, {1.0f, 0.0f}},
-	    {{1.0f, 1.0f, 0.0f}, {1.0f, 1.0f}},
+	    {{-1.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
+	    {{-1.0f, -1.0f, 0.0f}, {0.0f, 1.0f}},
+	    {{1.0f, -1.0f, 0.0f}, {1.0f, 1.0f}},
+	    {{1.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
 	};
 
 	glGenVertexArrays(1, &quadVAO);
