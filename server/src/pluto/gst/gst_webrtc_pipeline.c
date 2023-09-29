@@ -228,7 +228,7 @@ data_channel_message_data_cb(GstWebRTCDataChannel *datachannel, GBytes *data, st
 	const unsigned char *buf = (const unsigned char *)g_bytes_get_data(data, &n);
 	pb_istream_t our_istream = pb_istream_from_buffer(buf, n);
 
-	bool result = pb_decode_ex(&our_istream, pluto_UpMessage_fields, &message, PB_DECODE_NULLTERMINATED);
+	bool result = pb_decode_ex(&our_istream, &pluto_UpMessage_msg, &message, PB_DECODE_NULLTERMINATED);
 
 	if (!result) {
 		U_LOG_E("Error! %s", PB_GET_ERROR(&our_istream));
