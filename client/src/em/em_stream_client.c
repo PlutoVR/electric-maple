@@ -424,7 +424,6 @@ em_stream_client_thread_func(void *ptr)
 	EmStreamClient *sc = (EmStreamClient *)ptr;
 
 	ALOGI("%s: running GMainLoop", __FUNCTION__);
-	ALOGD("em_fs_mainloop: running GMainLoop!");
 	g_main_loop_run(sc->loop);
 	ALOGI("%s: g_main_loop_run returned", __FUNCTION__);
 

@@ -435,6 +435,7 @@ emconn_webrtc_on_answer_created(GstPromise *promise, EmConnection *emconn)
 	GstWebRTCSessionDescription *answer = NULL;
 	gchar *sdp;
 
+	ALOGD("%s", __FUNCTION__);
 	gst_structure_get(gst_promise_get_reply(promise), "answer", GST_TYPE_WEBRTC_SESSION_DESCRIPTION, &answer, NULL);
 	gst_promise_unref(promise);
 
@@ -501,6 +502,7 @@ emconn_webrtc_process_candidate(EmConnection *emconn, guint mlineindex, const gc
 static void
 emconn_on_ws_message_cb(SoupWebsocketConnection *connection, gint type, GBytes *message, EmConnection *emconn)
 {
+	ALOGD("%s", __FUNCTION__);
 	gsize length = 0;
 	const gchar *msg_data = g_bytes_get_data(message, &length);
 	JsonParser *parser = json_parser_new();
