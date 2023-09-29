@@ -72,7 +72,7 @@ em_remote_experience_emit_upmessage(EmRemoteExperience *exp, pluto_UpMessage *up
 	uint8_t buffer[kUpBufferSize];
 	pb_ostream_t os = pb_ostream_from_buffer(buffer, sizeof(buffer));
 
-	pb_encode(&os, pluto_UpMessage_fields, upMessage);
+	pb_encode(&os, &pluto_UpMessage_msg, upMessage);
 
 	ALOGI("RYLIE: Sending message");
 	GBytes *bytes = g_bytes_new(buffer, os.bytes_written);
