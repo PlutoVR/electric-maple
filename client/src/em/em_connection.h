@@ -27,7 +27,7 @@ G_DECLARE_FINAL_TYPE(EmConnection, em_connection, EM, CONNECTION, GObject)
  * @memberof EmConnection
  */
 EmConnection *
-em_connection_new(gchar *websocket_uri);
+em_connection_new(const gchar *websocket_uri);
 
 EmConnection *
 em_connection_new_localhost();

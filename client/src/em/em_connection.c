@@ -639,7 +639,7 @@ emconn_connect_internal(EmConnection *emconn, enum em_status status)
 /* public (non-GObject) methods */
 
 EmConnection *
-em_connection_new(gchar *websocket_uri)
+em_connection_new(const gchar *websocket_uri)
 {
 	return EM_CONNECTION(g_object_new(EM_TYPE_CONNECTION, "websocket-uri", websocket_uri, NULL));
 }
