@@ -419,10 +419,10 @@ em_remote_experience_inner_poll_and_render_frame(EmRemoteExperience *exp,
 		glViewport(0, 0, width * 2, height);
 		glClearColor(0.0f, 1.0f, 0.0f, 1.0f);
 
-		for (uint32_t eye = 0; eye < 2; eye++) {
-			glViewport(eye * width, 0, width, height);
-			exp->renderer->draw(sample->frame_texture_id, sample->frame_texture_target);
-		}
+		// for (uint32_t eye = 0; eye < 2; eye++) {
+		// 	glViewport(eye * width, 0, width, height);
+		exp->renderer->draw(sample->frame_texture_id, sample->frame_texture_target);
+		// }
 
 		// Release
 
