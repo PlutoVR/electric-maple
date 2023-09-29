@@ -558,6 +558,11 @@ em_stream_client_try_pull_sample(EmStreamClient *sc)
 	// Get Newest sample from GST appsink. Waiting 1ms here before giving up (might want to adjust that time)
 	// ALOGE("DEBUG: Trying to get new gstgl sample, waiting max 1ms\n");
 
+	if (!sc->appsink) {
+		// not setup yet.
+		ALOGV("%s: no app sink yet, waiting for connection", __FUNCTION__);
+		return NULL;
+	}
 	GstSample *sample = gst_app_sink_try_pull_sample(GST_APP_SINK(sc->appsink), (GstClockTime)(1000 * GST_USECOND));
 
 	if (sample == NULL) {
