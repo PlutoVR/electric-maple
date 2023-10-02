@@ -81,6 +81,9 @@ struct _EmStreamClient
 	struct os_thread_helper play_thread;
 
 	bool pipeline_is_running;
+
+	GMutex sample_mutex;
+	GstSample *sample;
 };
 
 #if 0
@@ -186,6 +189,7 @@ em_stream_client_init(EmStreamClient *sc)
 	memset(sc, 0, sizeof(EmStreamClient));
 	sc->loop = g_main_loop_new(NULL, FALSE);
 	g_assert(os_thread_helper_init(&sc->play_thread) >= 0);
+	g_mutex_init(&sc->sample_mutex);
 	ALOGI("%s: done creating stuff", __FUNCTION__);
 }
 static void
@@ -197,6 +201,7 @@ em_stream_client_dispose(EmStreamClient *self)
 	em_stream_client_stop(self);
 	g_clear_object(&self->loop);
 	g_clear_object(&self->connection);
+	gst_clear_object(&self->sample);
 	gst_clear_object(&self->pipeline);
 	gst_clear_object(&self->gst_gl_display);
 	gst_clear_object(&self->gst_gl_context);
@@ -318,9 +323,19 @@ gst_bus_cb(GstBus *bus, GstMessage *message, gpointer data)
 static GstFlowReturn
 on_new_sample_cb(GstElement *appsink, EmStreamClient *sc)
 {
-	// ALOGE("RYLIE: %s", __FUNCTION__);
-	// TODO either pull the sample and buffer the ref locally, recording the timestamp,
-	// or log the timestamp to be picked up by the main thread.
+	// TODO record the timestamp and frame ID, get frame pose
+	GstSample *prevSample = NULL;
+	GstSample *sample = gst_app_sink_pull_sample(GST_APP_SINK(sc->appsink));
+	g_assert_nonnull(sample);
+	{
+		g_autoptr(GMutexLocker) locker = g_mutex_locker_new(&sc->sample_mutex);
+		prevSample = sc->sample;
+		sc->sample = sample;
+	}
+	if (prevSample) {
+		ALOGI("Discarding unused, replaced sample");
+		gst_sample_unref(prevSample);
+	}
 	return GST_FLOW_OK;
 }
 
@@ -547,22 +562,20 @@ em_stream_client_stop(EmStreamClient *sc)
 struct em_sample *
 em_stream_client_try_pull_sample(EmStreamClient *sc)
 {
-
-	// FOR RYAN : As mentioned, the glsinkbin -> appsink part of the gstreamer pipeline in gst_driver.c
-	// will output "samples" that might be signalled for using "new_sample_cb" in gst_driver (useful for
-	// testing if the gstreamer sink elements are giving us "anything"), but also on which we can "poll"
-	// to see and that's what we do here. Note that the non-try version of the call "gst_app_sink_pull_sample"
-	// WILL BLOCK until there's a sample.
-
-	// Get Newest sample from GST appsink. Waiting 1ms here before giving up (might want to adjust that time)
-	// ALOGE("DEBUG: Trying to get new gstgl sample, waiting max 1ms\n");
-
 	if (!sc->appsink) {
 		// not setup yet.
 		ALOGV("%s: no app sink yet, waiting for connection", __FUNCTION__);
 		return NULL;
 	}
-	GstSample *sample = gst_app_sink_try_pull_sample(GST_APP_SINK(sc->appsink), (GstClockTime)(1000 * GST_USECOND));
+
+	// We actually pull the sample in the new-sample signal handler, so here we're just receiving the sample already
+	// pulled.
+	GstSample *sample = NULL;
+	{
+		g_autoptr(GMutexLocker) locker = g_mutex_locker_new(&sc->sample_mutex);
+		sample = sc->sample;
+		sc->sample = NULL;
+	}
 
 	if (sample == NULL) {
 		if (gst_app_sink_is_eos(GST_APP_SINK(sc->appsink))) {
