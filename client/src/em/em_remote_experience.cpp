@@ -424,8 +424,8 @@ em_remote_experience_inner_poll_and_render_frame(EmRemoteExperience *exp,
 	projectionViews[1].subImage.imageRect.offset = {static_cast<int32_t>(width), 0};
 	projectionViews[1].subImage.imageRect.extent = {static_cast<int32_t>(width), static_cast<int32_t>(height)};
 
-	struct timespec decode_end;
-	struct em_sample *sample = em_stream_client_try_pull_sample(exp->stream_client, &decode_end);
+	struct timespec decodeEndTime;
+	struct em_sample *sample = em_stream_client_try_pull_sample(exp->stream_client, &decodeEndTime);
 
 	if (sample == nullptr) {
 		return;
@@ -475,19 +475,27 @@ em_remote_experience_inner_poll_and_render_frame(EmRemoteExperience *exp,
 
 	// Send frame report
 	{
-		XrTime xr_decode_end_time = 0;
-		XrTime xr_begin_frame_time = 0;
-		result = exp->convertTimespecTimeToTime(exp->xr_not_owned.instance, &decode_end, &xr_decode_end_time);
+		XrTime xrTimeDecodeEnd = 0;
+		XrTime xrTimeBeginFrame = 0;
+		result = exp->convertTimespecTimeToTime(exp->xr_not_owned.instance, &decodeEndTime, &xrTimeDecodeEnd);
 		if (XR_FAILED(result)) {
 			ALOGE("%s: Failed to convert decode-end time (%d)", __FUNCTION__, result);
 			return;
 		}
-		result =
-		    exp->convertTimespecTimeToTime(exp->xr_not_owned.instance, beginFrameTime, &xr_begin_frame_time);
+		result = exp->convertTimespecTimeToTime(exp->xr_not_owned.instance, beginFrameTime, &xrTimeBeginFrame);
 		if (XR_FAILED(result)) {
 			ALOGE("%s: Failed to convert begin-frame time (%d)", __FUNCTION__, result);
 			return;
 		}
-		// TODO send report with frame ID, xr_decode_end_time, xr_begin_frame_time, and predictedDisplayTime
+		pluto_UpFrameMessage msg = pluto_UpFrameMessage_init_default;
+		// TODO frame ID
+		// msg.frame_sequence_id = ???;
+		msg.decode_complete_time = xrTimeDecodeEnd;
+		msg.begin_frame_time = xrTimeBeginFrame;
+		msg.display_time = predictedDisplayTime;
+		pluto_UpMessage upMsg = pluto_UpMessage_init_default;
+		upMsg.frame = msg;
+		upMsg.has_frame = true;
+		em_remote_experience_emit_upmessage(exp, &upMsg);
 	}
 }
