@@ -111,10 +111,13 @@ em_stream_client_stop(EmStreamClient *sc);
 /*!
  * Attempt to retrieve a sample, if one has been decoded.
  *
- * Non-null return values need to be released with @ref em_stream_client_release_sample
+ * Non-null return values need to be released with @ref em_stream_client_release_sample.
+
+* @param sc self
+* @param[out] out_decode_end struct to populate with decode-end time.
  */
 struct em_sample *
-em_stream_client_try_pull_sample(EmStreamClient *sc);
+em_stream_client_try_pull_sample(EmStreamClient *sc, struct timespec *out_decode_end);
 
 /*!
  * Release a sample returned from @ref em_stream_client_try_pull_sample
