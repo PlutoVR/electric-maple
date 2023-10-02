@@ -335,7 +335,7 @@ em_remote_experience_poll_and_render_frame(EmRemoteExperience *exp)
 	struct timespec beginTime;
 	if (0 != clock_gettime(CLOCK_MONOTONIC, &beginTime)) {
 		ALOGE("%s: clock_gettime failed, which is very unexpected", __FUNCTION__);
-		// TODO how to handlel this?
+		// TODO how to handle this?
 	}
 
 	// Locate views, set up layers
