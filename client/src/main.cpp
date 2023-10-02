@@ -5,8 +5,6 @@
  * @brief Main file for WebRTC client.
  * @author Moshi Turner <moses@collabora.com>
  */
-#define XR_USE_TIMESPEC
-
 #include "EglData.hpp"
 #include "em/em_egl.h"
 #include "em/em_remote_experience.h"
