@@ -384,12 +384,12 @@ em_remote_experience_inner_poll_and_render_frame(EmRemoteExperience *exp,
 	projectionLayer->space = exp->xr_owned.worldSpace;
 
 	projectionViews[0].subImage.swapchain = exp->xr_owned.swapchain;
-	projectionViews[0].pose = views[0].pose;
+	projectionViews[0].pose = views[0].pose; // TODO use poses from server
 	projectionViews[0].fov = views[0].fov;
 	projectionViews[0].subImage.imageRect.offset = {0, 0};
 	projectionViews[0].subImage.imageRect.extent = {static_cast<int32_t>(width), static_cast<int32_t>(height)};
 	projectionViews[1].subImage.swapchain = exp->xr_owned.swapchain;
-	projectionViews[1].pose = views[1].pose;
+	projectionViews[1].pose = views[1].pose; // TODO use poses from server
 	projectionViews[1].fov = views[1].fov;
 	projectionViews[1].subImage.imageRect.offset = {static_cast<int32_t>(width), 0};
 	projectionViews[1].subImage.imageRect.extent = {static_cast<int32_t>(width), static_cast<int32_t>(height)};
@@ -397,45 +397,46 @@ em_remote_experience_inner_poll_and_render_frame(EmRemoteExperience *exp,
 	struct timespec decode_end;
 	struct em_sample *sample = em_stream_client_try_pull_sample(exp->stream_client, &decode_end);
 
-	if (sample) {
-
-		uint32_t imageIndex;
-		result = xrAcquireSwapchainImage(exp->xr_owned.swapchain, NULL, &imageIndex);
-
-		if (XR_FAILED(result)) {
-			ALOGE("Failed to acquire swapchain image (%d)", result);
-			std::abort();
-		}
-
-		XrSwapchainImageWaitInfo waitInfo = {.type = XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO,
-		                                     .timeout = XR_INFINITE_DURATION};
-
-		result = xrWaitSwapchainImage(exp->xr_owned.swapchain, &waitInfo);
-
-		if (XR_FAILED(result)) {
-			ALOGE("Failed to wait for swapchain image (%d)", result);
-			std::abort();
-		}
-		glBindFramebuffer(GL_FRAMEBUFFER, exp->swapchainBuffers.framebufferNameAtSwapchainIndex(imageIndex));
-
-		glViewport(0, 0, width * 2, height);
-		glClearColor(0.0f, 1.0f, 0.0f, 1.0f);
-
-		// for (uint32_t eye = 0; eye < 2; eye++) {
-		// 	glViewport(eye * width, 0, width, height);
-		exp->renderer->draw(sample->frame_texture_id, sample->frame_texture_target);
-		// }
-
-		// Release
-
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-		xrReleaseSwapchainImage(exp->xr_owned.swapchain, NULL);
-
-		if (exp->prev_sample != NULL) {
-			em_stream_client_release_sample(exp->stream_client, exp->prev_sample);
-			exp->prev_sample = NULL;
-		}
-		exp->prev_sample = sample;
+	if (sample == nullptr) {
+		return;
 	}
+
+	uint32_t imageIndex;
+	result = xrAcquireSwapchainImage(exp->xr_owned.swapchain, NULL, &imageIndex);
+
+	if (XR_FAILED(result)) {
+		ALOGE("Failed to acquire swapchain image (%d)", result);
+		std::abort();
+	}
+
+	XrSwapchainImageWaitInfo waitInfo = {.type = XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO,
+	                                     .timeout = XR_INFINITE_DURATION};
+
+	result = xrWaitSwapchainImage(exp->xr_owned.swapchain, &waitInfo);
+
+	if (XR_FAILED(result)) {
+		ALOGE("Failed to wait for swapchain image (%d)", result);
+		std::abort();
+	}
+	glBindFramebuffer(GL_FRAMEBUFFER, exp->swapchainBuffers.framebufferNameAtSwapchainIndex(imageIndex));
+
+	glViewport(0, 0, width * 2, height);
+	glClearColor(0.0f, 1.0f, 0.0f, 1.0f);
+
+	// for (uint32_t eye = 0; eye < 2; eye++) {
+	// 	glViewport(eye * width, 0, width, height);
+	exp->renderer->draw(sample->frame_texture_id, sample->frame_texture_target);
+	// }
+
+	// Release
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	xrReleaseSwapchainImage(exp->xr_owned.swapchain, NULL);
+
+	if (exp->prev_sample != NULL) {
+		em_stream_client_release_sample(exp->stream_client, exp->prev_sample);
+		exp->prev_sample = NULL;
+	}
+	exp->prev_sample = sample;
 }
