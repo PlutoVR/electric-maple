@@ -112,8 +112,9 @@ typedef struct _pluto_TouchControllerRight {
 
 typedef struct _pluto_UpFrameMessage {
     int64_t frame_sequence_id;
-    int64_t decode_complete_time;
-    int64_t display_time;
+    int64_t decode_complete_time; /* nanoseconds, in client OpenXR time domain */
+    int64_t begin_frame_time; /* nanoseconds, in client OpenXR time domain */
+    int64_t display_time; /* nanoseconds, in client OpenXR time domain */
 } pluto_UpFrameMessage;
 
 typedef struct _pluto_UpMessage {
@@ -174,7 +175,7 @@ extern "C" {
 #define pluto_TouchControllerCommon_init_default {false, pluto_InputThumbstick_init_default, false, pluto_InputValueTouch_init_default, false, pluto_InputValueTouch_init_default, 0}
 #define pluto_TouchControllerLeft_init_default   {false, pluto_InputClickTouch_init_default, false, pluto_InputClickTouch_init_default, false, pluto_InputClickTouch_init_default, false, pluto_TouchControllerCommon_init_default}
 #define pluto_TouchControllerRight_init_default  {false, pluto_InputClickTouch_init_default, false, pluto_InputClickTouch_init_default, false, pluto_InputClickTouch_init_default, false, pluto_TouchControllerCommon_init_default}
-#define pluto_UpFrameMessage_init_default        {0, 0, 0}
+#define pluto_UpFrameMessage_init_default        {0, 0, 0, 0}
 #define pluto_UpMessage_init_default             {0, false, pluto_TrackingMessage_init_default, false, pluto_UpFrameMessage_init_default}
 #define pluto_DownFrameDataMessage_init_default  {0, false, pluto_Pose_init_default, 0}
 #define pluto_DownMessage_init_default           {false, pluto_DownFrameDataMessage_init_default}
@@ -189,7 +190,7 @@ extern "C" {
 #define pluto_TouchControllerCommon_init_zero    {false, pluto_InputThumbstick_init_zero, false, pluto_InputValueTouch_init_zero, false, pluto_InputValueTouch_init_zero, 0}
 #define pluto_TouchControllerLeft_init_zero      {false, pluto_InputClickTouch_init_zero, false, pluto_InputClickTouch_init_zero, false, pluto_InputClickTouch_init_zero, false, pluto_TouchControllerCommon_init_zero}
 #define pluto_TouchControllerRight_init_zero     {false, pluto_InputClickTouch_init_zero, false, pluto_InputClickTouch_init_zero, false, pluto_InputClickTouch_init_zero, false, pluto_TouchControllerCommon_init_zero}
-#define pluto_UpFrameMessage_init_zero           {0, 0, 0}
+#define pluto_UpFrameMessage_init_zero           {0, 0, 0, 0}
 #define pluto_UpMessage_init_zero                {0, false, pluto_TrackingMessage_init_zero, false, pluto_UpFrameMessage_init_zero}
 #define pluto_DownFrameDataMessage_init_zero     {0, false, pluto_Pose_init_zero, 0}
 #define pluto_DownMessage_init_zero              {false, pluto_DownFrameDataMessage_init_zero}
@@ -236,6 +237,7 @@ extern "C" {
 #define pluto_TouchControllerRight_common_tag    4
 #define pluto_UpFrameMessage_frame_sequence_id_tag 1
 #define pluto_UpFrameMessage_decode_complete_time_tag 2
+#define pluto_UpFrameMessage_begin_frame_time_tag 3
 #define pluto_UpFrameMessage_display_time_tag    4
 #define pluto_UpMessage_up_message_id_tag        1
 #define pluto_UpMessage_tracking_tag             2
@@ -353,6 +355,7 @@ X(a_, STATIC,   OPTIONAL, MESSAGE,  common,            4)
 #define pluto_UpFrameMessage_FIELDLIST(X, a) \
 X(a, STATIC,   SINGULAR, INT64,    frame_sequence_id,   1) \
 X(a, STATIC,   SINGULAR, INT64,    decode_complete_time,   2) \
+X(a, STATIC,   SINGULAR, INT64,    begin_frame_time,   3) \
 X(a, STATIC,   SINGULAR, INT64,    display_time,      4)
 #define pluto_UpFrameMessage_CALLBACK NULL
 #define pluto_UpFrameMessage_DEFAULT NULL
@@ -425,8 +428,8 @@ extern const pb_msgdesc_t pluto_DownMessage_msg;
 #define pluto_TouchControllerLeft_size           58
 #define pluto_TouchControllerRight_size          58
 #define pluto_TrackingMessage_size               309
-#define pluto_UpFrameMessage_size                33
-#define pluto_UpMessage_size                     358
+#define pluto_UpFrameMessage_size                44
+#define pluto_UpMessage_size                     369
 #define pluto_Vec2_size                          10
 #define pluto_Vec3_size                          15
 
