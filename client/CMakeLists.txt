@@ -138,6 +138,7 @@ if(ANDROID)
 	set(GIO_INCLUDE_DIRS ${GST_ARCH_DIR}/include/glib-2.0/ ${GST_ARCH_DIR}/lib/gio-unix-2.0/)
 
 	add_subdirectory(gstreamer_android)
+	add_subdirectory(egl)
 	add_subdirectory(src)
 endif()
 

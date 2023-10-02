@@ -1,7 +1,6 @@
 add_library(
 	pluto_electricmaple SHARED
 	em_connection.c
-	em_egl.cpp
 	em_frame_data.cpp
 	em_remote_experience.cpp
 	em_stream_client.c
@@ -20,6 +19,7 @@ target_link_libraries(
 		xrt-interfaces
 		aux-includes
 		gstreamer_android
+		em_egl
 	)
 target_compile_definitions(
 	pluto_electricmaple PUBLIC XR_USE_PLATFORM_ANDROID XR_USE_GRAPHICS_API_OPENGL_ES
