@@ -5,6 +5,7 @@
  * @brief Main file for WebRTC client.
  * @author Moshi Turner <moses@collabora.com>
  */
+#define XR_USE_TIMESPEC
 
 #include "EglData.hpp"
 #include "em/em_egl.h"
@@ -248,7 +249,8 @@ android_main(struct android_app *app)
 	// Create OpenXR instance
 
 	const char *extensions[] = {XR_KHR_OPENGL_ES_ENABLE_EXTENSION_NAME,
-	                            XR_KHR_ANDROID_CREATE_INSTANCE_EXTENSION_NAME};
+	                            XR_KHR_ANDROID_CREATE_INSTANCE_EXTENSION_NAME,
+	                            XR_KHR_CONVERT_TIMESPEC_TIME_EXTENSION_NAME};
 
 	XrInstanceCreateInfoAndroidKHR androidInfo = {};
 	androidInfo.type = XR_TYPE_INSTANCE_CREATE_INFO_ANDROID_KHR;
