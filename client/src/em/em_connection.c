@@ -583,6 +583,7 @@ emconn_websocket_connected_cb(GObject *session, GAsyncResult *res, EmConnection 
 
 	ALOGI("RYLIE: Setting pipeline state to PLAYING");
 	gst_element_set_state(GST_ELEMENT(emconn->pipeline), GST_STATE_PLAYING);
+	ALOGI("%s: RYLIE: Done with function", __FUNCTION__);
 }
 
 
