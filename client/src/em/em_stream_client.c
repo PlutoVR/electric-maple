@@ -321,11 +321,12 @@ gst_bus_cb(GstBus *bus, GstMessage *message, gpointer data)
 }
 
 static GstFlowReturn
-on_new_sample_cb(GstElement *appsink, EmStreamClient *sc)
+on_new_sample_cb(GstAppSink *appsink, gpointer user_data)
 {
+	EmStreamClient *sc = (EmStreamClient *)user_data;
 	// TODO record the timestamp and frame ID, get frame pose
 	GstSample *prevSample = NULL;
-	GstSample *sample = gst_app_sink_pull_sample(GST_APP_SINK(sc->appsink));
+	GstSample *sample = gst_app_sink_pull_sample(appsink);
 	g_assert_nonnull(sample);
 	{
 		g_autoptr(GMutexLocker) locker = g_mutex_locker_new(&sc->sample_mutex);
@@ -397,11 +398,12 @@ on_need_pipeline_cb(EmConnection *emconn, EmStreamClient *sc)
 	             "max-buffers", 1,
 	             // drop old buffers when queue is filled
 	             "drop", true,
-	             // trigger new-sample signals, etc
-	             "emit-signals", true,
 	             // terminator
 	             NULL);
-	g_signal_connect(sc->appsink, "new-sample", G_CALLBACK(on_new_sample_cb), sc);
+	// Lower overhead than new-sample signal.
+	GstAppSinkCallbacks callbacks = {0};
+	callbacks.new_sample = on_new_sample_cb;
+	gst_app_sink_set_callbacks(GST_APP_SINK(sc->appsink), &callbacks, sc, NULL);
 
 
 	g_autoptr(GstElement) glsinkbin = gst_bin_get_by_name(GST_BIN(sc->pipeline), "glsink");
