@@ -28,6 +28,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <exception>
+#include <linux/time.h>
 #include <memory>
 #include <openxr/openxr.h>
 
@@ -393,7 +394,8 @@ em_remote_experience_inner_poll_and_render_frame(EmRemoteExperience *exp,
 	projectionViews[1].subImage.imageRect.offset = {static_cast<int32_t>(width), 0};
 	projectionViews[1].subImage.imageRect.extent = {static_cast<int32_t>(width), static_cast<int32_t>(height)};
 
-	struct em_sample *sample = em_stream_client_try_pull_sample(exp->stream_client);
+	struct timespec decode_end;
+	struct em_sample *sample = em_stream_client_try_pull_sample(exp->stream_client, &decode_end);
 
 	if (sample) {
 

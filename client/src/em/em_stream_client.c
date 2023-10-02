@@ -31,6 +31,8 @@
 #include <EGL/egl.h>
 #include <GLES2/gl2ext.h>
 
+#include <linux/time.h>
+#include <time.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
@@ -84,6 +86,7 @@ struct _EmStreamClient
 
 	GMutex sample_mutex;
 	GstSample *sample;
+	struct timespec sample_decode_end_ts;
 };
 
 #if 0
@@ -324,7 +327,13 @@ static GstFlowReturn
 on_new_sample_cb(GstAppSink *appsink, gpointer user_data)
 {
 	EmStreamClient *sc = (EmStreamClient *)user_data;
-	// TODO record the timestamp and frame ID, get frame pose
+	// TODO record the frame ID, get frame pose
+	struct timespec ts;
+	int ret = clock_gettime(CLOCK_MONOTONIC, &ts);
+	if (ret != 0) {
+		ALOGE("%s: clock_gettime failed, which is very bizarre.", __FUNCTION__);
+		return GST_FLOW_ERROR;
+	}
 	GstSample *prevSample = NULL;
 	GstSample *sample = gst_app_sink_pull_sample(appsink);
 	g_assert_nonnull(sample);
@@ -332,6 +341,7 @@ on_new_sample_cb(GstAppSink *appsink, gpointer user_data)
 		g_autoptr(GMutexLocker) locker = g_mutex_locker_new(&sc->sample_mutex);
 		prevSample = sc->sample;
 		sc->sample = sample;
+		sc->sample_decode_end_ts = ts;
 	}
 	if (prevSample) {
 		ALOGI("Discarding unused, replaced sample");
@@ -565,7 +575,7 @@ em_stream_client_stop(EmStreamClient *sc)
 }
 
 struct em_sample *
-em_stream_client_try_pull_sample(EmStreamClient *sc)
+em_stream_client_try_pull_sample(EmStreamClient *sc, struct timespec *out_decode_end)
 {
 	if (!sc->appsink) {
 		// not setup yet.
@@ -576,10 +586,12 @@ em_stream_client_try_pull_sample(EmStreamClient *sc)
 	// We actually pull the sample in the new-sample signal handler, so here we're just receiving the sample already
 	// pulled.
 	GstSample *sample = NULL;
+	struct timespec decode_end;
 	{
 		g_autoptr(GMutexLocker) locker = g_mutex_locker_new(&sc->sample_mutex);
 		sample = sc->sample;
 		sc->sample = NULL;
+		decode_end = sc->sample_decode_end_ts;
 	}
 
 	if (sample == NULL) {
@@ -589,6 +601,7 @@ em_stream_client_try_pull_sample(EmStreamClient *sc)
 		}
 		return NULL;
 	}
+	*out_decode_end = decode_end;
 
 	// ALOGE("FRED: GOT A SAMPLE !!!");
 	GstBuffer *buffer = gst_sample_get_buffer(sample);
