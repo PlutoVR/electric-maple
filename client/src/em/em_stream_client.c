@@ -318,7 +318,7 @@ gst_bus_cb(GstBus *bus, GstMessage *message, gpointer data)
 static GstFlowReturn
 on_new_sample_cb(GstElement *appsink, EmStreamClient *sc)
 {
-	ALOGE("RYLIE: %s", __FUNCTION__);
+	// ALOGE("RYLIE: %s", __FUNCTION__);
 	// TODO either pull the sample and buffer the ref locally, recording the timestamp,
 	// or log the timestamp to be picked up by the main thread.
 	return GST_FLOW_OK;
