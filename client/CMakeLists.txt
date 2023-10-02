@@ -88,7 +88,32 @@ setforce(BUILD_DOC OFF)
 setforce(XRT_MODULE_IPC OFF)
 setforce(XRT_FEATURE_SERVICE OFF)
 
-add_subdirectory(../monado ${CMAKE_CURRENT_BINARY_DIR}/monado)
+# Add select libraries from Monado
+
+set(NANOPB_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../monado/src/external/nanopb")
+add_library(
+	xrt-external-nanopb STATIC "${NANOPB_ROOT}/pb_common.c" "${NANOPB_ROOT}/pb_decode.c"
+				   "${NANOPB_ROOT}/pb_encode.c"
+	)
+target_include_directories(xrt-external-nanopb PUBLIC "${NANOPB_ROOT}")
+add_library(xrt-interfaces INTERFACE)
+target_include_directories(xrt-interfaces INTERFACE ../monado/src/xrt/include)
+
+add_library(aux-includes INTERFACE)
+target_include_directories(aux-includes INTERFACE ../monado/src/xrt/auxiliary)
+target_link_libraries(aux-includes INTERFACE xrt-interfaces)
+
+add_library(
+	aux_util STATIC ../monado/src/xrt/auxiliary/util/u_misc.c
+			../monado/src/xrt/auxiliary/util/u_time.cpp
+	)
+target_link_libraries(aux_util PUBLIC aux-includes)
+
+if(ANDROID)
+	find_library(ANDROID_LOG_LIBRARY log)
+	find_library(ANDROID_LIBRARY android)
+endif()
+
 add_subdirectory(../proto ${CMAKE_CURRENT_BINARY_DIR}/proto)
 add_subdirectory(../external/Catch2 catch2)
 
