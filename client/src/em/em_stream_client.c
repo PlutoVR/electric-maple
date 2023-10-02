@@ -552,6 +552,9 @@ em_stream_client_stop(EmStreamClient *sc)
 		gst_element_set_state(sc->pipeline, GST_STATE_NULL);
 		os_thread_helper_stop_and_wait(&sc->play_thread);
 	}
+	if (sc->connection != NULL) {
+		em_connection_disconnect(sc->connection);
+	}
 	gst_clear_object(&sc->pipeline);
 	gst_clear_object(&sc->appsink);
 	gst_clear_object(&sc->context);
