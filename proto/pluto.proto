@@ -88,8 +88,9 @@ message TouchControllerRight {
 
 message UpFrameMessage {
 	int64 frame_sequence_id = 1;
-	int64 decode_complete_time = 2; // nanoseconds, in client time domain
-	int64 display_time = 4; // nanoseconds, in client time domain
+	int64 decode_complete_time = 2; // nanoseconds, in client OpenXR time domain
+	int64 begin_frame_time = 3; // nanoseconds, in client OpenXR time domain
+	int64 display_time = 4; // nanoseconds, in client OpenXR time domain
 }
 
 message UpMessage {
