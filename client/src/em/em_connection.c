@@ -292,11 +292,15 @@ emconn_disconnect_internal(EmConnection *emconn, enum em_status status)
 {
 	if (emconn->ws_cancel != NULL) {
 		g_cancellable_cancel(emconn->ws_cancel);
+		gst_clear_object(&emconn->ws_cancel);
 	}
 	// Stop the pipeline, if it exists
 	if (emconn->pipeline != NULL) {
 		gst_element_set_state(GST_ELEMENT(emconn->pipeline), GST_STATE_NULL);
 		g_signal_emit(emconn, signals[SIGNAL_ON_DROP_PIPELINE], 0);
+	}
+	if (emconn->ws) {
+		soup_websocket_connection_close(emconn->ws, 0, "");
 	}
 	g_clear_object(&emconn->ws);
 
@@ -551,7 +555,7 @@ emconn_websocket_connected_cb(GObject *session, GAsyncResult *res, EmConnection 
 
 	g_assert(!emconn->ws);
 
-	emconn->ws = soup_session_websocket_connect_finish(SOUP_SESSION(session), res, &error);
+	emconn->ws = g_object_ref_sink(soup_session_websocket_connect_finish(SOUP_SESSION(session), res, &error));
 
 	if (error) {
 		ALOGW("Websocket connection failed, may not be available.");
