@@ -6,6 +6,8 @@
  * @author Ryan Pavlik <rpavlik@collabora.com>
  * @ingroup em_client
  */
+#include <ctime>
+#define XR_USE_TIMESPEC
 
 #include "em_remote_experience.h"
 
@@ -31,6 +33,7 @@
 #include <linux/time.h>
 #include <memory>
 #include <openxr/openxr.h>
+#include <openxr/openxr_platform.h>
 
 
 struct _EmRemoteExperience
@@ -41,6 +44,9 @@ struct _EmRemoteExperience
 	struct em_sample *prev_sample;
 
 	XrExtent2Di eye_extents;
+
+
+	PFN_xrConvertTimespecTimeToTimeKHR convertTimespecTimeToTime;
 
 	struct
 	{
@@ -190,6 +196,20 @@ em_remote_experience_new(EmConnection *connection,
 	self->xr_not_owned.instance = instance;
 	self->xr_not_owned.session = session;
 
+	// Get the extension function for converting times.
+	{
+		XrResult result =
+		    xrGetInstanceProcAddr(instance, "xrConvertTimespecTimeToTimeKHR",
+		                          reinterpret_cast<PFN_xrVoidFunction *>(&self->convertTimespecTimeToTime));
+
+		if (XR_FAILED(result)) {
+			ALOGE("%s: Failed to get extension function xrConvertTimespecTimeToTimeKHR (%d)\n",
+			      __FUNCTION__, result);
+			em_remote_experience_destroy(&self);
+			return nullptr;
+		}
+	}
+
 	// Quest requires the EGL context to be current when calling xrCreateSwapchain
 	em_stream_client_egl_begin_pbuffer(stream_client);
 
@@ -312,6 +332,11 @@ em_remote_experience_poll_and_render_frame(EmRemoteExperience *exp)
 		ALOGE("xrBeginFrame failed");
 		std::abort();
 	}
+	struct timespec beginTime;
+	if (0 != clock_gettime(CLOCK_MONOTONIC, &beginTime)) {
+		ALOGE("%s: clock_gettime failed, which is very unexpected", __FUNCTION__);
+		// TODO how to handlel this?
+	}
 
 	// Locate views, set up layers
 	XrView views[2] = {};
@@ -351,7 +376,10 @@ em_remote_experience_poll_and_render_frame(EmRemoteExperience *exp)
 		ALOGE("FRED: mainloop_one: Failed make egl context current");
 		return;
 	}
-	em_remote_experience_inner_poll_and_render_frame(exp, views, &layer, projectionViews);
+	if (frameState.shouldRender) {
+		em_remote_experience_inner_poll_and_render_frame(exp, &beginTime, frameState.predictedDisplayTime,
+		                                                 views, &layer, projectionViews);
+	}
 
 	// Submit frame
 	XrFrameEndInfo endInfo = {};
@@ -370,6 +398,8 @@ em_remote_experience_poll_and_render_frame(EmRemoteExperience *exp)
 
 void
 em_remote_experience_inner_poll_and_render_frame(EmRemoteExperience *exp,
+                                                 const struct timespec *beginFrameTime,
+                                                 XrTime predictedDisplayTime,
                                                  XrView *views,
                                                  XrCompositionLayerProjection *projectionLayer,
                                                  XrCompositionLayerProjectionView *projectionViews)
@@ -434,9 +464,30 @@ em_remote_experience_inner_poll_and_render_frame(EmRemoteExperience *exp,
 
 	xrReleaseSwapchainImage(exp->xr_owned.swapchain, NULL);
 
+	// TODO check here to see if we already overshot the predicted display time, maybe?
+
+
 	if (exp->prev_sample != NULL) {
 		em_stream_client_release_sample(exp->stream_client, exp->prev_sample);
 		exp->prev_sample = NULL;
 	}
 	exp->prev_sample = sample;
+
+	// Send frame report
+	{
+		XrTime xr_decode_end_time = 0;
+		XrTime xr_begin_frame_time = 0;
+		result = exp->convertTimespecTimeToTime(exp->xr_not_owned.instance, &decode_end, &xr_decode_end_time);
+		if (XR_FAILED(result)) {
+			ALOGE("%s: Failed to convert decode-end time (%d)", __FUNCTION__, result);
+			return;
+		}
+		result =
+		    exp->convertTimespecTimeToTime(exp->xr_not_owned.instance, beginFrameTime, &xr_begin_frame_time);
+		if (XR_FAILED(result)) {
+			ALOGE("%s: Failed to convert begin-frame time (%d)", __FUNCTION__, result);
+			return;
+		}
+		// TODO send report with frame ID, xr_decode_end_time, xr_begin_frame_time, and predictedDisplayTime
+	}
 }

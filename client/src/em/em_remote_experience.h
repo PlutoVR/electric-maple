@@ -24,7 +24,9 @@ extern "C" {
 
 /**
  * Create a remote experience object, which interacts with the stream client and OpenXR to provide a remotely-rendered
- * OpenXR experience..
+ * OpenXR experience.
+ *
+ * You must have enabled the XR_KHR_convert_timespec_time extension!
  *
  * @param connection Your connection: we sink a ref. Used to send reports upstream.
  * @param stream_client Your stream client: we take ownership.
@@ -65,12 +67,16 @@ em_remote_experience_poll_and_render_frame(EmRemoteExperience *exp);
  * @pre xrWaitFrame and xrBeginFrame have been called, as well as em_stream_client_egl_begin_pbuffer
  *
  * @param exp Self
+ * @param beginFrameTime a timespec from CLOCK_MONOTONIC indicating when xrBeginFrame was called.
+ * @param predictedDisplayTime the predicted display time from xrWaitFrame.
  * @param views an array of 2 XrView structures, populated.
  * @param projectionLayer a projection layer containing two views, partially populated. Will be populated further.
  * @param projectionViews an array of 2 projection view structures, initialized. Will be populated.
  */
 void
 em_remote_experience_inner_poll_and_render_frame(EmRemoteExperience *exp,
+                                                 const struct timespec *beginFrameTime,
+                                                 XrTime predictedDisplayTime,
                                                  XrView *views,
                                                  XrCompositionLayerProjection *projectionLayer,
                                                  XrCompositionLayerProjectionView *projectionViews);
