@@ -23,6 +23,7 @@ target_link_libraries(
 	)
 target_compile_definitions(
 	pluto_electricmaple PUBLIC XR_USE_PLATFORM_ANDROID XR_USE_GRAPHICS_API_OPENGL_ES
+				   XR_USE_TIMESPEC
 	)
 target_include_directories(
 	pluto_electricmaple

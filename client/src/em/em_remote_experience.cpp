@@ -6,7 +6,6 @@
  * @author Rylie Pavlik <rpavlik@collabora.com>
  * @ingroup em_client
  */
-#define XR_USE_TIMESPEC
 
 #include "em_remote_experience.h"
 
