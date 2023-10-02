@@ -4,6 +4,7 @@
  * @file
  * @brief Main file for WebRTC client.
  * @author Moshi Turner <moses@collabora.com>
+ * @author Rylie Pavlik <rpavlik@collabora.com>
  */
 #include "EglData.hpp"
 #include "em/em_egl.h"
