@@ -6,7 +6,6 @@
  * @author Ryan Pavlik <rpavlik@collabora.com>
  * @ingroup em_client
  */
-#include <ctime>
 #define XR_USE_TIMESPEC
 
 #include "em_remote_experience.h"
@@ -29,6 +28,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <ctime>
 #include <exception>
 #include <linux/time.h>
 #include <memory>
