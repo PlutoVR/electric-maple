@@ -363,8 +363,8 @@ on_need_pipeline_cb(EmConnection *emconn, EmStreamClient *sc)
 	// decodebin3 seems to .. hang?
 	// omxh264dec doesn't seem to exist
 
-	uint32_t width = 480;
-	uint32_t height = 270;
+	uint32_t width = 1280;
+	uint32_t height = 1024;
 
 	// We'll need an active egl context below before setting up gstgl (as explained previously)
 	if (!em_stream_client_egl_begin_pbuffer(sc)) {
@@ -611,8 +611,9 @@ em_stream_client_try_pull_sample(EmStreamClient *sc, struct timespec *out_decode
 
 	GstVideoInfo info;
 	gst_video_info_from_caps(&info, caps);
-	/*gint width = GST_VIDEO_INFO_WIDTH (&info);
-	gint height = GST_VIDEO_INFO_HEIGHT (&info);*/
+	gint width = GST_VIDEO_INFO_WIDTH(&info);
+	gint height = GST_VIDEO_INFO_HEIGHT(&info);
+	ALOGI("%s: frame %d (w) x %d (h)", __FUNCTION__, width, height);
 
 	// FOR RYAN: Handle resize according to how it's done in PlutosphereOXR
 	/*if (width != sc->width || height != sc->height) {

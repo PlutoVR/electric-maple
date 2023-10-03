@@ -22,6 +22,44 @@ typedef struct _pluto_UpMessage pluto_UpMessage;
 extern "C" {
 #endif
 
+typedef enum EmPollRenderResult
+{
+	EM_POLL_RENDER_RESULT_ERROR_EGL = -2,
+	EM_POLL_RENDER_RESULT_ERROR_WAITFRAME = -1,
+	EM_POLL_RENDER_RESULT_NO_SAMPLE_AVAILABLE = 0,
+	EM_POLL_RENDER_RESULT_SHOULD_NOT_RENDER,
+	EM_POLL_RENDER_RESULT_REUSED_SAMPLE,
+	EM_POLL_RENDER_RESULT_NEW_SAMPLE,
+} EmPollRenderResult;
+
+static inline bool
+em_poll_render_result_include_layer(EmPollRenderResult res)
+{
+	return res >= EM_POLL_RENDER_RESULT_REUSED_SAMPLE;
+}
+
+static inline bool
+em_poll_render_result_is_error(EmPollRenderResult res)
+{
+	return res < 0;
+}
+
+static inline const char *
+em_poll_render_result_to_string(EmPollRenderResult res)
+{
+#define MAKE_CASE(X)                                                                                                   \
+	case X: return #X
+	switch (res) {
+		MAKE_CASE(EM_POLL_RENDER_RESULT_ERROR_EGL);
+		MAKE_CASE(EM_POLL_RENDER_RESULT_ERROR_WAITFRAME);
+		MAKE_CASE(EM_POLL_RENDER_RESULT_NO_SAMPLE_AVAILABLE);
+		MAKE_CASE(EM_POLL_RENDER_RESULT_SHOULD_NOT_RENDER);
+		MAKE_CASE(EM_POLL_RENDER_RESULT_REUSED_SAMPLE);
+		MAKE_CASE(EM_POLL_RENDER_RESULT_NEW_SAMPLE);
+	default: return "EM_POLL_RENDER_RESULT_unknown";
+	}
+}
+
 /**
  * Create a remote experience object, which interacts with the stream client and OpenXR to provide a remotely-rendered
  * OpenXR experience.
@@ -58,7 +96,7 @@ em_remote_experience_destroy(EmRemoteExperience **ptr_exp);
  * Calls xrWaitFrame and xrBeginFrame, as well as xrEndFrame. See @ref em_remote_experience_inner_poll_and_render_frame
  * if you are doing this yourself in your app.
  */
-void
+EmPollRenderResult
 em_remote_experience_poll_and_render_frame(EmRemoteExperience *exp);
 
 /*!
@@ -73,7 +111,7 @@ em_remote_experience_poll_and_render_frame(EmRemoteExperience *exp);
  * @param projectionLayer a projection layer containing two views, partially populated. Will be populated further.
  * @param projectionViews an array of 2 projection view structures, initialized. Will be populated.
  */
-void
+EmPollRenderResult
 em_remote_experience_inner_poll_and_render_frame(EmRemoteExperience *exp,
                                                  const struct timespec *beginFrameTime,
                                                  XrTime predictedDisplayTime,
