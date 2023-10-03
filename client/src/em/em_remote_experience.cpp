@@ -310,7 +310,7 @@ em_remote_experience_destroy(EmRemoteExperience **ptr_exp)
 	*ptr_exp = NULL;
 }
 
-void
+EmPollRenderResult
 em_remote_experience_poll_and_render_frame(EmRemoteExperience *exp)
 {
 
@@ -320,7 +320,7 @@ em_remote_experience_poll_and_render_frame(EmRemoteExperience *exp)
 
 	if (XR_FAILED(result)) {
 		ALOGE("xrWaitFrame failed");
-		return;
+		return EM_POLL_RENDER_RESULT_ERROR_WAITFRAME;
 	}
 
 	XrFrameBeginInfo beginfo = {.type = XR_TYPE_FRAME_BEGIN_INFO};
@@ -355,6 +355,7 @@ em_remote_experience_poll_and_render_frame(EmRemoteExperience *exp)
 
 	if (XR_FAILED(result)) {
 		ALOGE("Failed to locate views");
+		// TODO how to handle this?
 	}
 
 	XrCompositionLayerProjection layer = {};
@@ -373,11 +374,13 @@ em_remote_experience_poll_and_render_frame(EmRemoteExperience *exp)
 
 	if (!em_stream_client_egl_begin_pbuffer(exp->stream_client)) {
 		ALOGE("FRED: mainloop_one: Failed make egl context current");
-		return;
+		return EM_POLL_RENDER_RESULT_ERROR_EGL;
 	}
-	if (frameState.shouldRender) {
-		em_remote_experience_inner_poll_and_render_frame(exp, &beginTime, frameState.predictedDisplayTime,
-		                                                 views, &layer, projectionViews);
+	bool shouldRender = frameState.shouldRender == XR_TRUE;
+	EmPollRenderResult prResult = EM_POLL_RENDER_RESULT_SHOULD_NOT_RENDER;
+	if (shouldRender) {
+		prResult = em_remote_experience_inner_poll_and_render_frame(
+		    exp, &beginTime, frameState.predictedDisplayTime, views, &layer, projectionViews);
 	}
 
 	// Submit frame
@@ -385,7 +388,7 @@ em_remote_experience_poll_and_render_frame(EmRemoteExperience *exp)
 	endInfo.type = XR_TYPE_FRAME_END_INFO;
 	endInfo.displayTime = frameState.predictedDisplayTime;
 	endInfo.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
-	endInfo.layerCount = frameState.shouldRender ? 1 : 0;
+	endInfo.layerCount = em_poll_render_result_include_layer(prResult) ? 1 : 0;
 	endInfo.layers = (const XrCompositionLayerBaseHeader *[1]){(XrCompositionLayerBaseHeader *)&layer};
 
 	xrEndFrame(session, &endInfo);
@@ -393,9 +396,40 @@ em_remote_experience_poll_and_render_frame(EmRemoteExperience *exp)
 	em_stream_client_egl_end(exp->stream_client);
 
 	em_remote_experience_report_pose(exp, frameState.predictedDisplayTime);
+	return prResult;
 }
 
-void
+static void
+report_frame_timing(EmRemoteExperience *exp,
+                    const struct timespec *beginFrameTime,
+                    const struct timespec *decodeEndTime,
+                    XrTime predictedDisplayTime)
+{
+	XrTime xrTimeDecodeEnd = 0;
+	XrTime xrTimeBeginFrame = 0;
+	XrResult result = exp->convertTimespecTimeToTime(exp->xr_not_owned.instance, decodeEndTime, &xrTimeDecodeEnd);
+	if (XR_FAILED(result)) {
+		ALOGE("%s: Failed to convert decode-end time (%d)", __FUNCTION__, result);
+		return;
+	}
+	result = exp->convertTimespecTimeToTime(exp->xr_not_owned.instance, beginFrameTime, &xrTimeBeginFrame);
+	if (XR_FAILED(result)) {
+		ALOGE("%s: Failed to convert begin-frame time (%d)", __FUNCTION__, result);
+		return;
+	}
+	pluto_UpFrameMessage msg = pluto_UpFrameMessage_init_default;
+	// TODO frame ID
+	// msg.frame_sequence_id = ???;
+	msg.decode_complete_time = xrTimeDecodeEnd;
+	msg.begin_frame_time = xrTimeBeginFrame;
+	msg.display_time = predictedDisplayTime;
+	pluto_UpMessage upMsg = pluto_UpMessage_init_default;
+	upMsg.frame = msg;
+	upMsg.has_frame = true;
+	em_remote_experience_emit_upmessage(exp, &upMsg);
+}
+
+EmPollRenderResult
 em_remote_experience_inner_poll_and_render_frame(EmRemoteExperience *exp,
                                                  const struct timespec *beginFrameTime,
                                                  XrTime predictedDisplayTime,
@@ -427,7 +461,10 @@ em_remote_experience_inner_poll_and_render_frame(EmRemoteExperience *exp,
 	struct em_sample *sample = em_stream_client_try_pull_sample(exp->stream_client, &decodeEndTime);
 
 	if (sample == nullptr) {
-		return;
+		if (exp->prev_sample) {
+			return EM_POLL_RENDER_RESULT_REUSED_SAMPLE;
+		}
+		return EM_POLL_RENDER_RESULT_NO_SAMPLE_AVAILABLE;
 	}
 
 	uint32_t imageIndex;
@@ -473,28 +510,7 @@ em_remote_experience_inner_poll_and_render_frame(EmRemoteExperience *exp,
 	exp->prev_sample = sample;
 
 	// Send frame report
-	{
-		XrTime xrTimeDecodeEnd = 0;
-		XrTime xrTimeBeginFrame = 0;
-		result = exp->convertTimespecTimeToTime(exp->xr_not_owned.instance, &decodeEndTime, &xrTimeDecodeEnd);
-		if (XR_FAILED(result)) {
-			ALOGE("%s: Failed to convert decode-end time (%d)", __FUNCTION__, result);
-			return;
-		}
-		result = exp->convertTimespecTimeToTime(exp->xr_not_owned.instance, beginFrameTime, &xrTimeBeginFrame);
-		if (XR_FAILED(result)) {
-			ALOGE("%s: Failed to convert begin-frame time (%d)", __FUNCTION__, result);
-			return;
-		}
-		pluto_UpFrameMessage msg = pluto_UpFrameMessage_init_default;
-		// TODO frame ID
-		// msg.frame_sequence_id = ???;
-		msg.decode_complete_time = xrTimeDecodeEnd;
-		msg.begin_frame_time = xrTimeBeginFrame;
-		msg.display_time = predictedDisplayTime;
-		pluto_UpMessage upMsg = pluto_UpMessage_init_default;
-		upMsg.frame = msg;
-		upMsg.has_frame = true;
-		em_remote_experience_emit_upmessage(exp, &upMsg);
-	}
+	report_frame_timing(exp, beginFrameTime, &decodeEndTime, predictedDisplayTime);
+
+	return EM_POLL_RENDER_RESULT_NEW_SAMPLE;
 }
