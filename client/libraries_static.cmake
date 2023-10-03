@@ -2,7 +2,7 @@ set(GST_LIBRARIES
     # ${GST_ARCH_DIR}/lib/libgstreamer-1.0.a
     ${GST_ARCH_DIR}/lib/libgstrtsp-1.0.a
     ${GST_ARCH_DIR}/lib/libgstphotography-1.0.a
-    ${GST_ARCH_DIR}/lib/liboggkate.a
+    # ${GST_ARCH_DIR}/lib/liboggkate.a
     ${GST_ARCH_DIR}/lib/libx264.a
     ${GST_ARCH_DIR}/lib/libspeex.a
     ${GST_ARCH_DIR}/lib/libtheoradec.a
@@ -38,7 +38,7 @@ set(GST_LIBRARIES
     ${GST_ARCH_DIR}/lib/libgstisoff-1.0.a
     # ${GST_ARCH_DIR}/lib/libvorbisidec.a
     ${GST_ARCH_DIR}/lib/libgstsctp-1.0.a
-    ${GST_ARCH_DIR}/lib/libkate.a
+    # ${GST_ARCH_DIR}/lib/libkate.a
     ${GST_ARCH_DIR}/lib/libdca.a
     ${GST_ARCH_DIR}/lib/libopenh264.a
     ${GST_ARCH_DIR}/lib/librtmp.a
@@ -65,7 +65,6 @@ set(GST_LIBRARIES
     ${GST_ARCH_DIR}/lib/libgstplayer-1.0.a
     ${GST_ARCH_DIR}/lib/libgstcodecs-1.0.a
     ${GST_ARCH_DIR}/lib/libges-1.0.a
-    ${GST_ARCH_DIR}/lib/libwebrtc_audio_processing.a
     ${GST_ARCH_DIR}/lib/libavcodec.a
     ${GST_ARCH_DIR}/lib/libjpeg.a
     ${GST_ARCH_DIR}/lib/libxml2.a
@@ -129,7 +128,7 @@ set(GST_LIBRARIES
     ${GST_ARCH_DIR}/lib/gstreamer-1.0/libgstauparse.a
     ${GST_ARCH_DIR}/lib/gstreamer-1.0/libgstvolume.a
     ${GST_ARCH_DIR}/lib/gstreamer-1.0/libgsttheora.a
-    ${GST_ARCH_DIR}/lib/gstreamer-1.0/libgstkate.a
+    # ${GST_ARCH_DIR}/lib/gstreamer-1.0/libgstkate.a
     ${GST_ARCH_DIR}/lib/gstreamer-1.0/libgstrtsp.a
     ${GST_ARCH_DIR}/lib/gstreamer-1.0/libgstencoding.a
     ${GST_ARCH_DIR}/lib/gstreamer-1.0/libgstsmoothstreaming.a
@@ -309,6 +308,13 @@ set(GST_LIBRARIES
     ${GST_ARCH_DIR}/lib/libgstcontroller-1.0.a
     ${GST_ARCH_DIR}/lib/libturbojpeg.a
 	)
+
+if(EXISTS "${GST_ARCH_DIR}/lib/libwebrtc-audio-processing-1.a")
+	list(APPEND GST_LIBRARIES "${GST_ARCH_DIR}/lib/libwebrtc-audio-processing-1.a")
+else()
+	list(APPEND GST_LIBRARIES "${GST_ARCH_DIR}/lib/libwebrtc_audio_processing.a")
+endif()
+
 set(LIBSOUP_LIBRARIES ${GST_ARCH_DIR}/lib/libsoup-2.4.a)
 set(JSONGLIB_LIBRARIES ${GST_ARCH_DIR}/lib/libjson-glib-1.0.a)
 set(GLIB_LIBRARIES ${GST_ARCH_DIR}/lib/libglib-2.0.a)
