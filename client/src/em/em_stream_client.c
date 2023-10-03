@@ -83,6 +83,7 @@ struct _EmStreamClient
 	struct os_thread_helper play_thread;
 
 	bool pipeline_is_running;
+	bool received_first_frame;
 
 	GMutex sample_mutex;
 	GstSample *sample;
@@ -342,6 +343,7 @@ on_new_sample_cb(GstAppSink *appsink, gpointer user_data)
 		prevSample = sc->sample;
 		sc->sample = sample;
 		sc->sample_decode_end_ts = ts;
+		sc->received_first_frame = true;
 	}
 	if (prevSample) {
 		ALOGI("Discarding unused, replaced sample");
@@ -414,7 +416,7 @@ on_need_pipeline_cb(EmConnection *emconn, EmStreamClient *sc)
 	GstAppSinkCallbacks callbacks = {0};
 	callbacks.new_sample = on_new_sample_cb;
 	gst_app_sink_set_callbacks(GST_APP_SINK(sc->appsink), &callbacks, sc, NULL);
-
+	sc->received_first_frame = false;
 
 	g_autoptr(GstElement) glsinkbin = gst_bin_get_by_name(GST_BIN(sc->pipeline), "glsink");
 	g_object_set(glsinkbin, "sink", sc->appsink, NULL);
