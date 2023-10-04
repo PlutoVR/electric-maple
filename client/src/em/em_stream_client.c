@@ -373,7 +373,7 @@ on_need_pipeline_cb(EmConnection *emconn, EmStreamClient *sc)
 	}
 
 	gchar *pipeline_string = g_strdup_printf(
-	    "webrtcbin name=webrtc bundle-policy=max-bundle ! "
+	    "webrtcbin name=webrtc bundle-policy=max-bundle latency=0 ! "
 	    "rtph264depay ! "
 	    "h264parse ! "
 	    "video/x-h264,stream-format=(string)byte-stream, alignment=(string)au,parsed=(boolean)true !"
