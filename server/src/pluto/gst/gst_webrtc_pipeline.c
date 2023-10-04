@@ -5,7 +5,7 @@
  * @file
  * @brief  A GStreamer pipeline for WebRTC streaming
  * @author Moshi Turner <moses@collabora.com>
- * @author Jakub Adam <jakub.adam@collabora.com
+ * @author Jakub Adam <jakub.adam@collabora.com>
  * @author Nicolas Dufresne <nicolas.dufresne@collabora.com>
  * @author Olivier Crête <olivier.crete@collabora.com>
  * @author Jakob Bornecrantz <jakob@collabora.com>
@@ -16,6 +16,9 @@
 
 #include "gst_webrtc_pipeline.h"
 
+#include "gst/gstbin.h"
+#include "gst/gstobject.h"
+#include "gst/rtp/gstrtphdrext.h"
 #include "pl_callbacks.h"
 
 #include "os/os_threading.h"
@@ -44,6 +47,9 @@
 #include <assert.h>
 
 #define WEBRTC_TEE_NAME "webrtctee"
+#define VIDEOPAYLOADER_NAME "videopay"
+#define RTP_HDREXT_EM_URI "http://gitlab.collabora.com/rpavlik/electric-maple-rtc/20231004"
+#define RTP_HDREXT_EM_ID (1)
 
 #ifdef __aarch64__
 #define DEFAULT_VIDEOSINK " queue max-size-bytes=0 ! kmssink bus-id=a0070000.v_mix"
@@ -160,6 +166,7 @@ on_offer_created(GstPromise *promise, GstElement *webrtcbin)
 	g_signal_emit_by_name(webrtcbin, "set-local-description", offer, NULL);
 
 	sdp = gst_sdp_message_as_text(offer->sdp);
+	U_LOG_I("Offer: %s", sdp);
 	mss_http_server_send_sdp_offer(http_server, g_object_get_data(G_OBJECT(webrtcbin), "client_id"), sdp);
 	g_free(sdp);
 
@@ -261,6 +268,20 @@ webrtc_client_connected_cb(MssHttpServer *server, MssClientId client_id, struct 
 	g_object_set_data(G_OBJECT(webrtcbin), "client_id", client_id);
 	gst_bin_add(pipeline, webrtcbin);
 
+	{
+		// Teach the payloader about our extension so it will include it in the sdp offer, etc.
+		GstElement *videopay = gst_bin_get_by_name(GST_BIN(pipeline), VIDEOPAYLOADER_NAME);
+		g_assert_nonnull(videopay);
+
+		GstRTPHeaderExtension *video_ext = gst_rtp_header_extension_create_from_uri(RTP_HDREXT_EM_URI);
+		g_assert_nonnull(video_ext);
+		gst_rtp_header_extension_set_id(video_ext, RTP_HDREXT_EM_ID);
+		gst_rtp_header_extension_set_direction(video_ext, GST_RTP_HEADER_EXTENSION_DIRECTION_SENDONLY);
+		    g_signal_emit_by_name(videopay, "add-extension", video_ext);
+
+		gst_clear_object(&video_ext);
+		gst_clear_object(&videopay);
+	}
 	ret = gst_element_set_state(webrtcbin, GST_STATE_READY);
 	g_assert(ret != GST_STATE_CHANGE_FAILURE);
 
@@ -592,19 +613,19 @@ gstreamer_pipeline_webrtc_create(struct xrt_frame_context *xfctx,
 	http_server = mss_http_server_new();
 
 	pipeline_str = g_strdup_printf(
-	    "appsrc name=%s ! "                //
-	    "queue ! "                         //
-	    "videoconvert ! "                  //
-	    "video/x-raw,format=NV12 ! "       //
-	    "queue !"                          //
-	    "x264enc tune=zerolatency ! "      //
-	    "video/x-h264,profile=baseline ! " //
-	    "queue !"                          //
-	    "h264parse ! "                     //
-	    "rtph264pay config-interval=1 ! "  //
-	    "application/x-rtp,payload=96 ! "  //
+	    "appsrc name=%s ! "                       //
+	    "queue ! "                                //
+	    "videoconvert ! "                         //
+	    "video/x-raw,format=NV12 ! "              //
+	    "queue !"                                 //
+	    "x264enc tune=zerolatency ! "             //
+	    "video/x-h264,profile=baseline ! "        //
+	    "queue !"                                 //
+	    "h264parse ! "                            //
+	    "rtph264pay name=%s config-interval=1 ! " //
+	    "application/x-rtp,payload=96 ! "         //
 	    "tee name=%s allow-not-linked=true",
-	    appsrc_name, WEBRTC_TEE_NAME);
+	    appsrc_name, VIDEOPAYLOADER_NAME, WEBRTC_TEE_NAME);
 
 	// no webrtc bin yet until later!
 

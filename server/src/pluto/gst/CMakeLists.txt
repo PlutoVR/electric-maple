@@ -1,3 +1,5 @@
+add_subdirectory(rtp)
+
 add_library(pl_gst STATIC gst_webrtc_pipeline.c gst_webrtc_server.c)
 
 target_link_libraries(
