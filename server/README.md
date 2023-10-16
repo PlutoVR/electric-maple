@@ -62,7 +62,7 @@ apt info gstreamer1.0-plugins-good | grep libsoup-3.0
   - libsoup-3.0-dev
 - Otherwise you must use libsoup 2:
   - libsoup2.4-dev
-  - In this case, you must also pass `-DPL_LIBSOUP2=ON` to CMake.
+  - In this case, you must also pass `-DEMS_LIBSOUP2=ON` to CMake.
 
 Best to only have one of the two libsoup dev packages installed at a time.
 
