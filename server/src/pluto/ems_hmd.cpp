@@ -3,12 +3,12 @@
 // SPDX-License-Identifier: MIT
 /*!
  * @file
- * @brief Pluto HMD device
+ * @brief Electric Maple Server HMD device
  *
  * @author Jakob Bornecrantz <jakob@collabora.com>
  * @author Rylie Pavlik <rylie.pavlik@collabora.com>
  * @author Moshi Turner <moses@collabora.com>
- * @ingroup drv_sample
+ * @ingroup drv_ems
  */
 
 #include "ems_callbacks.h"
@@ -53,7 +53,7 @@
  */
 
 /*!
- * A sample HMD device.
+ * The remote HMD device.
  *
  * @implements xrt_device
  */
@@ -76,14 +76,14 @@ DEBUG_GET_ONCE_LOG_OPTION(sample_log, "EMS_LOG", U_LOGGING_WARN)
 static void
 ems_hmd_destroy(struct xrt_device *xdev)
 {
-	struct ems_hmd *ph = ems_hmd(xdev);
+	struct ems_hmd *eh = ems_hmd(xdev);
 
-	ph->received = nullptr;
+	eh->received = nullptr;
 
 	// Remove the variable tracking.
-	u_var_remove_root(ph);
+	u_var_remove_root(eh);
 
-	u_device_free(&ph->base);
+	u_device_free(&eh->base);
 }
 
 static void
@@ -134,7 +134,7 @@ ems_hmd_get_view_poses(struct xrt_device *xdev,
 static void
 ems_hmd_handle_data(enum ems_callbacks_event event, const pluto_UpMessage *message, void *userdata)
 {
-	struct ems_hmd *ph = (struct ems_hmd *)userdata;
+	struct ems_hmd *eh = (struct ems_hmd *)userdata;
 
 	if (!message->has_tracking) {
 		return;
@@ -152,15 +152,14 @@ ems_hmd_handle_data(enum ems_callbacks_event event, const pluto_UpMessage *messa
 	// TODO handle timestamp, etc
 
 	{
-		std::lock_guard<std::mutex> lock(ph->received->mutex);
-		ph->received->pose = pose;
-		ph->received->updated = true;
+		std::lock_guard<std::mutex> lock(eh->received->mutex);
+		eh->received->pose = pose;
+		eh->received->updated = true;
 	}
 }
 
-// extern "C"
 struct ems_hmd *
-ems_hmd_create(ems_instance &pp)
+ems_hmd_create(ems_instance &emsi)
 {
 	// We only want the HMD parts and one input.
 	enum u_device_alloc_flags flags = (enum u_device_alloc_flags)(U_DEVICE_ALLOC_HMD);
@@ -178,12 +177,12 @@ ems_hmd_create(ems_instance &pp)
 	// Public data.
 	eh->base.name = XRT_DEVICE_GENERIC_HMD;
 	eh->base.device_type = XRT_DEVICE_TYPE_HMD;
-	eh->base.tracking_origin = &pp.tracking_origin;
+	eh->base.tracking_origin = &emsi.tracking_origin;
 	eh->base.orientation_tracking_supported = true;
 	eh->base.position_tracking_supported = false;
 
 	// Private data.
-	eh->instance = &pp;
+	eh->instance = &emsi;
 	eh->pose = (struct xrt_pose){XRT_QUAT_IDENTITY, {0.0f, 1.6f, 0.0f}};
 	eh->log_level = debug_get_log_option_sample_log();
 
@@ -244,7 +243,7 @@ ems_hmd_create(ems_instance &pp)
 	eh->base.hmd->views[0].viewport.x_pixels = 0;
 	eh->base.hmd->views[1].viewport.x_pixels = panel_w;
 
-	ems_callbacks_add(pp.callbacks, EMS_CALLBACKS_EVENT_TRACKING, ems_hmd_handle_data, eh);
+	ems_callbacks_add(emsi.callbacks, EMS_CALLBACKS_EVENT_TRACKING, ems_hmd_handle_data, eh);
 
 	// TODO: Doing anything with distortion here makes no sense
 	u_distortion_mesh_set_none(&eh->base);

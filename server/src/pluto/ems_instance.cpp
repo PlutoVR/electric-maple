@@ -88,10 +88,10 @@ ems_instance_create_system(struct xrt_instance *xinst,
 	xrt_result_t xret = XRT_SUCCESS;
 
 
-	struct ems_instance *sp = from_xinst(xinst);
+	struct ems_instance *emsi = from_xinst(xinst);
 
-	*out_xsysd = &sp->xsysd_base;
-	*out_xso = sp->xso;
+	*out_xsysd = &emsi->xsysd_base;
+	*out_xso = emsi->xso;
 
 	// Early out if we only want devices.
 	if (out_xsysc == NULL) {
@@ -99,7 +99,7 @@ ems_instance_create_system(struct xrt_instance *xinst,
 	}
 
 	if (xret == XRT_SUCCESS && xsysc == NULL) {
-		xret = ems_compositor_create_system(*sp, &xsysc);
+		xret = ems_compositor_create_system(*emsi, &xsysc);
 	}
 
 	*out_xsysc = xsysc;
@@ -110,13 +110,13 @@ ems_instance_create_system(struct xrt_instance *xinst,
 void
 ems_instance_destroy(struct xrt_instance *xinst)
 {
-	struct ems_instance *sp = from_xinst(xinst);
+	struct ems_instance *emsi = from_xinst(xinst);
 
-	ems_callbacks_reset(sp->callbacks);
+	ems_callbacks_reset(emsi->callbacks);
 
-	ems_callbacks_destroy(&sp->callbacks);
+	ems_callbacks_destroy(&emsi->callbacks);
 
-	delete sp;
+	delete emsi;
 }
 
 

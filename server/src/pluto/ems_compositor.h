@@ -90,7 +90,7 @@ struct ems_compositor
 	struct comp_base base;
 
 	// This thing should outlive us
-	struct ems_instance *program;
+	struct ems_instance *instance;
 
 	//! The device we are displaying to.
 	struct xrt_device *xdev;
@@ -137,8 +137,8 @@ struct ems_compositor
 
 	bool pipeline_playing = false;
 	struct gstreamer_pipeline *gstreamer_pipeline;
-	struct gstreamer_sink *hackers_gstreamer_sink;
-	struct xrt_frame_sink *hackers_xfs;
+	struct gstreamer_sink *gstreamer_sink;
+	struct xrt_frame_sink *frame_sink;
 
 	uint64_t offset_ns;
 };

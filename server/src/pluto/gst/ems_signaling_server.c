@@ -21,7 +21,7 @@
 #include <libsoup/soup-message.h>
 #include <libsoup/soup-server.h>
 
-#if SOUP_CHECK_VERSION(3,0,0)
+#if SOUP_CHECK_VERSION(3, 0, 0)
 #include <libsoup/soup-server-message.h>
 #endif
 
@@ -261,7 +261,10 @@ ems_signaling_server_send_sdp_offer(EmsSignalingServer *server, EmsClientId clie
 }
 
 void
-ems_signaling_server_send_candidate(EmsSignalingServer *server, EmsClientId client_id, guint mlineindex, const gchar *candidate)
+ems_signaling_server_send_candidate(EmsSignalingServer *server,
+                                    EmsClientId client_id,
+                                    guint mlineindex,
+                                    const gchar *candidate)
 {
 	JsonBuilder *builder;
 	JsonNode *root;

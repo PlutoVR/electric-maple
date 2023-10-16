@@ -332,16 +332,16 @@ compositor_init_sys_info(struct ems_compositor *c, struct xrt_device *xdev)
  */
 
 void
-do_the_thing(struct ems_compositor *c,
-             const struct xrt_layer_projection_view_data *lvd,
-             const struct xrt_layer_projection_view_data *rvd,
-             struct comp_swapchain *lsc,
-             struct comp_swapchain *rsc)
+pack_blit_and_encode(struct ems_compositor *c,
+                     const struct xrt_layer_projection_view_data *lvd,
+                     const struct xrt_layer_projection_view_data *rvd,
+                     struct comp_swapchain *lsc,
+                     struct comp_swapchain *rsc)
 {
 	if (c->offset_ns == 0) {
 		uint64_t now = os_monotonic_get_ns();
 		c->offset_ns = now;
-		c->hackers_gstreamer_sink->offset_ns = now;
+		c->gstreamer_sink->offset_ns = now;
 	}
 	VkResult ret;
 
@@ -489,8 +489,7 @@ do_the_thing(struct ems_compositor *c,
 
 	// Do checking here.
 	if (ret != VK_SUCCESS) {
-		EMS_COMP_ERROR(c, "vk_cmd_pool_end_submit_wait_and_free_cmd_buffer_locked: %s",
-		                 vk_result_string(ret));
+		EMS_COMP_ERROR(c, "vk_cmd_pool_end_submit_wait_and_free_cmd_buffer_locked: %s", vk_result_string(ret));
 		xrt_frame_reference(&frame, NULL);
 		return;
 	}
@@ -509,7 +508,7 @@ do_the_thing(struct ems_compositor *c,
 
 	u_sink_debug_push_frame(&c->debug_sink, frame);
 
-	xrt_sink_push_frame(c->hackers_xfs, frame);
+	xrt_sink_push_frame(c->frame_sink, frame);
 
 
 	// TODO send data channel message with pose and fov here?
@@ -545,11 +544,11 @@ ems_compositor_end_session(struct xrt_compositor *xc)
 
 static xrt_result_t
 ems_compositor_predict_frame(struct xrt_compositor *xc,
-                               int64_t *out_frame_id,
-                               uint64_t *out_wake_time_ns,
-                               uint64_t *out_predicted_gpu_time_ns,
-                               uint64_t *out_predicted_display_time_ns,
-                               uint64_t *out_predicted_display_period_ns)
+                             int64_t *out_frame_id,
+                             uint64_t *out_wake_time_ns,
+                             uint64_t *out_predicted_gpu_time_ns,
+                             uint64_t *out_predicted_display_time_ns,
+                             uint64_t *out_predicted_display_period_ns)
 {
 	COMP_TRACE_MARKER();
 
@@ -577,9 +576,9 @@ ems_compositor_predict_frame(struct xrt_compositor *xc,
 
 static xrt_result_t
 ems_compositor_mark_frame(struct xrt_compositor *xc,
-                            int64_t frame_id,
-                            enum xrt_compositor_frame_point point,
-                            uint64_t when_ns)
+                          int64_t frame_id,
+                          enum xrt_compositor_frame_point point,
+                          uint64_t when_ns)
 {
 	COMP_TRACE_MARKER();
 
@@ -652,7 +651,7 @@ ems_compositor_layer_commit(struct xrt_compositor *xc, xrt_graphics_sync_handle_
 			struct comp_swapchain *left = layer.sc_array[0];
 			struct comp_swapchain *right = layer.sc_array[1];
 
-			do_the_thing(c, lvd, rvd, left, right);
+			pack_blit_and_encode(c, lvd, rvd, left, right);
 		} break;
 		case XRT_LAYER_STEREO_PROJECTION: {
 			const struct xrt_layer_stereo_projection_data *stereo = &layer.data.stereo;
@@ -662,7 +661,7 @@ ems_compositor_layer_commit(struct xrt_compositor *xc, xrt_graphics_sync_handle_
 			struct comp_swapchain *left = layer.sc_array[0];
 			struct comp_swapchain *right = layer.sc_array[1];
 
-			do_the_thing(c, lvd, rvd, left, right);
+			pack_blit_and_encode(c, lvd, rvd, left, right);
 		} break;
 		default: U_LOG_E("Unhandled layer type %d", layer.data.type); break;
 		}
@@ -723,8 +722,8 @@ ems_compositor_poll_events(struct xrt_compositor *xc, union xrt_compositor_event
 
 static xrt_result_t
 ems_compositor_get_swapchain_create_properties(struct xrt_compositor *xc,
-                                                 const struct xrt_swapchain_create_info *info,
-                                                 struct xrt_swapchain_create_properties *xsccp)
+                                               const struct xrt_swapchain_create_info *info,
+                                               struct xrt_swapchain_create_properties *xsccp)
 {
 	xrt_result_t xret = comp_swapchain_get_create_properties(info, xsccp);
 	if (xret != XRT_SUCCESS) {
@@ -786,7 +785,7 @@ ems_compositor_destroy(struct xrt_compositor *xc)
  */
 
 xrt_result_t
-ems_compositor_create_system(ems_instance &pp, struct xrt_system_compositor **out_xsysc)
+ems_compositor_create_system(ems_instance &emsi, struct xrt_system_compositor **out_xsysc)
 {
 	struct ems_compositor *c = U_TYPED_CALLOC(struct ems_compositor);
 
@@ -812,7 +811,7 @@ ems_compositor_create_system(ems_instance &pp, struct xrt_system_compositor **ou
 	c->frame.rendering.id = -1;
 	c->state = EMS_COMP_COMP_STATE_READY;
 
-	xrt_device *xdev = pp.xsysd_base.roles.head;
+	xrt_device *xdev = emsi.xsysd_base.roles.head;
 
 	c->settings.frame_interval_ns = xdev->hmd->screens[0].nominal_frame_interval_ns;
 	c->xdev = xdev;
@@ -846,17 +845,19 @@ ems_compositor_create_system(ems_instance &pp, struct xrt_system_compositor **ou
 	    VK_FORMAT_R8G8B8A8_UNORM);       // vk_format
 
 	u_var_add_root(c, "Electric Maple Server compositor", 0);
-	u_var_add_sink_debug(c, &c->debug_sink, "Meow!");
+	u_var_add_sink_debug(c, &c->debug_sink, "Debug Sink");
 
-	ems_gstreamer_pipeline_create(&c->xfctx, "Meow", pp.callbacks, &c->gstreamer_pipeline);
+#define EMS_APPSRC_NAME "EMS_source"
+
+	ems_gstreamer_pipeline_create(&c->xfctx, EMS_APPSRC_NAME, emsi.callbacks, &c->gstreamer_pipeline);
 	gstreamer_sink_create_with_pipeline( //
 	    c->gstreamer_pipeline,           //
 	    READBACK_W,                      //
 	    READBACK_H,                      //
 	    XRT_FORMAT_R8G8B8X8,             //
-	    "Meow",                          //
-	    &c->hackers_gstreamer_sink,      //
-	    &c->hackers_xfs);                //
+	    EMS_APPSRC_NAME,                 //
+	    &c->gstreamer_sink,              //
+	    &c->frame_sink);                 //
 
 
 	// Bounce image for scaling.
