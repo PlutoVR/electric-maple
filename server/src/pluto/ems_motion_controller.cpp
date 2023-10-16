@@ -31,7 +31,7 @@
 #include "pluto.pb.h"
 #include "pb_decode.h"
 
-#include "pl_server_internal.h"
+#include "ems_server_internal.h"
 
 #include <thread>
 
@@ -46,22 +46,15 @@
  *
  */
 
-/*!
- * A sample HMD device.
- *
- * @implements xrt_device
- */
-
-
 
 /// Casting helper function
-static inline struct pluto_controller *
-pluto_controller(struct xrt_device *xdev)
+static inline struct ems_motion_controller *
+ems_motion_controller(struct xrt_device *xdev)
 {
-	return (struct pluto_controller *)xdev;
+	return (struct ems_motion_controller *)xdev;
 }
 
-DEBUG_GET_ONCE_LOG_OPTION(sample_log, "PLUTO_LOG", U_LOGGING_WARN)
+DEBUG_GET_ONCE_LOG_OPTION(sample_log, "EMS_LOG", U_LOGGING_WARN)
 
 #define PL_TRACE(p, ...) U_LOG_XDEV_IFL_T(&p->base, p->log_level, __VA_ARGS__)
 #define PL_DEBUG(p, ...) U_LOG_XDEV_IFL_D(&p->base, p->log_level, __VA_ARGS__)
@@ -70,7 +63,7 @@ DEBUG_GET_ONCE_LOG_OPTION(sample_log, "PLUTO_LOG", U_LOGGING_WARN)
 static void
 controller_destroy(struct xrt_device *xdev)
 {
-	struct pluto_controller *pc = pluto_controller(xdev);
+	struct ems_motion_controller *pc = ems_motion_controller(xdev);
 
 	// Remove the variable tracking.
 	u_var_remove_root(pc);
@@ -96,7 +89,7 @@ controller_get_tracked_pose(struct xrt_device *xdev,
                             uint64_t at_timestamp_ns,
                             struct xrt_space_relation *out_relation)
 {
-	struct pluto_controller *pc = pluto_controller(xdev);
+	struct ems_motion_controller *pc = ems_motion_controller(xdev);
 
 	switch (name) {
 	case XRT_INPUT_TOUCH_GRIP_POSE:
@@ -161,8 +154,8 @@ static struct xrt_binding_profile binding_profiles_touch[1] = {
  *
  */
 
-struct pluto_controller *
-pluto_controller_create(pluto_program &pp, enum xrt_device_name device_name, enum xrt_device_type device_type)
+struct ems_motion_controller *
+ems_motion_controller_create(ems_instance &emsi, enum xrt_device_name device_name, enum xrt_device_type device_type)
 {
 	uint32_t input_count = 0;
 	uint32_t output_count = 0;
@@ -190,7 +183,8 @@ pluto_controller_create(pluto_program &pp, enum xrt_device_name device_name, enu
 
 	// We don't need anything special from allocate except inputs and outputs.
 	u_device_alloc_flags flags{};
-	struct pluto_controller *pc = U_DEVICE_ALLOCATE(struct pluto_controller, flags, input_count, output_count);
+	struct ems_motion_controller *pc =
+	    U_DEVICE_ALLOCATE(struct ems_motion_controller, flags, input_count, output_count);
 
 	// Functions.
 	pc->base.update_inputs = controller_update_inputs;
@@ -200,7 +194,7 @@ pluto_controller_create(pluto_program &pp, enum xrt_device_name device_name, enu
 	pc->base.destroy = controller_destroy;
 
 	// Data.
-	pc->base.tracking_origin = &pp.tracking_origin;
+	pc->base.tracking_origin = &emsi.tracking_origin;
 	pc->base.binding_profiles = binding_profiles_touch;
 	pc->base.binding_profile_count = ARRAY_SIZE(binding_profiles_touch);
 	pc->base.orientation_tracking_supported = true;
@@ -209,7 +203,7 @@ pluto_controller_create(pluto_program &pp, enum xrt_device_name device_name, enu
 	pc->base.device_type = device_type;
 
 	// Private fields.
-	pc->program = &pp;
+	pc->instance = &emsi;
 	pc->pose = default_pose;
 	pc->log_level = debug_get_log_option_sample_log();
 
@@ -259,4 +253,4 @@ pluto_controller_create(pluto_program &pp, enum xrt_device_name device_name, enu
 }
 
 // Has to be standard layout because of first element casts we do.
-static_assert(std::is_standard_layout<struct pluto_controller>::value);
+static_assert(std::is_standard_layout<struct ems_motion_controller>::value);

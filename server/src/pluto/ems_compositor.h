@@ -10,7 +10,7 @@
  * @author Jakob Bornecrantz <jakob@collabora.com>
  * @author Lubosz Sarnecki <lubosz.sarnecki@collabora.com>
  * @author Rylie Pavlik <rylie.pavlik@collabora.com>
- * @ingroup comp_pl
+ * @ingroup comp_ems
  */
 
 #pragma once
@@ -33,14 +33,14 @@
 #include "gst/ems_gstreamer_pipeline.h"
 
 
-#include "pl_server_internal.h"
+#include "ems_server_internal.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /*!
- * @defgroup comp_pl Remote rendering compositor
+ * @defgroup comp_ems Remote rendering compositor
  * @ingroup xrt
  * @brief A small compositor that outputs to a video encoding/streaming pipeline.
  */
@@ -55,23 +55,23 @@ extern "C" {
 /*!
  * State to emulate state transitions correctly.
  *
- * @ingroup comp_pl
+ * @ingroup comp_ems
  */
-enum pl_comp_state
+enum ems_comp_state
 {
-	PLUTO_COMP_COMP_STATE_UNINITIALIZED = 0,
-	PLUTO_COMP_COMP_STATE_READY = 1,
-	PLUTO_COMP_COMP_STATE_PREPARED = 2,
-	PLUTO_COMP_COMP_STATE_VISIBLE = 3,
-	PLUTO_COMP_COMP_STATE_FOCUSED = 4,
+	EMS_COMP_COMP_STATE_UNINITIALIZED = 0,
+	EMS_COMP_COMP_STATE_READY = 1,
+	EMS_COMP_COMP_STATE_PREPARED = 2,
+	EMS_COMP_COMP_STATE_VISIBLE = 3,
+	EMS_COMP_COMP_STATE_FOCUSED = 4,
 };
 
 /*!
  * Tracking frame state.
  *
- * @ingroup comp_pl
+ * @ingroup comp_ems
  */
-struct pl_comp_frame
+struct ems_comp_frame
 {
 	int64_t id;
 	uint64_t predicted_display_time_ns;
@@ -83,14 +83,14 @@ struct pl_comp_frame
  * Main compositor struct tying everything in the compositor together.
  *
  * @implements xrt_compositor_native, comp_base.
- * @ingroup comp_pl
+ * @ingroup comp_ems
  */
-struct pluto_compositor
+struct ems_compositor
 {
 	struct comp_base base;
 
 	// This thing should outlive us
-	struct pluto_program *program;
+	struct ems_instance *program;
 
 	//! The device we are displaying to.
 	struct xrt_device *xdev;
@@ -110,14 +110,14 @@ struct pluto_compositor
 	struct xrt_system_compositor_info sys_info;
 
 	//! State for generating the correct set of events.
-	enum pl_comp_state state;
+	enum ems_comp_state state;
 
 	//! @todo Insert your own required members here
 
 	struct
 	{
-		struct pl_comp_frame waited;
-		struct pl_comp_frame rendering;
+		struct ems_comp_frame waited;
+		struct ems_comp_frame rendering;
 	} frame;
 
 
@@ -151,56 +151,56 @@ struct pluto_compositor
  */
 
 /*!
- * Convenience function to convert a xrt_compositor to a pluto_compositor.
+ * Convenience function to convert a xrt_compositor to a ems_compositor.
  * (Down-cast helper.)
  *
- * @private @memberof pluto_compositor
- * @ingroup comp_pl
+ * @private @memberof ems_compositor
+ * @ingroup comp_ems
  */
-static inline struct pluto_compositor *
-pluto_compositor(struct xrt_compositor *xc)
+static inline struct ems_compositor *
+ems_compositor(struct xrt_compositor *xc)
 {
-	return (struct pluto_compositor *)xc;
+	return (struct ems_compositor *)xc;
 }
 
 /*!
  * Spew level logging.
  *
- * @relates pluto_compositor
- * @ingroup comp_pl
+ * @relates ems_compositor
+ * @ingroup comp_ems
  */
-#define PLUTO_COMP_TRACE(c, ...) U_LOG_IFL_T(c->settings.log_level, __VA_ARGS__);
+#define EMS_COMP_TRACE(c, ...) U_LOG_IFL_T(c->settings.log_level, __VA_ARGS__);
 
 /*!
  * Debug level logging.
  *
- * @relates pluto_compositor
+ * @relates ems_compositor
  */
-#define PLUTO_COMP_DEBUG(c, ...) U_LOG_IFL_D(c->settings.log_level, __VA_ARGS__);
+#define EMS_COMP_DEBUG(c, ...) U_LOG_IFL_D(c->settings.log_level, __VA_ARGS__);
 
 /*!
  * Info level logging.
  *
- * @relates pluto_compositor
- * @ingroup comp_pl
+ * @relates ems_compositor
+ * @ingroup comp_ems
  */
-#define PLUTO_COMP_INFO(c, ...) U_LOG_IFL_I(c->settings.log_level, __VA_ARGS__);
+#define EMS_COMP_INFO(c, ...) U_LOG_IFL_I(c->settings.log_level, __VA_ARGS__);
 
 /*!
  * Warn level logging.
  *
- * @relates pluto_compositor
- * @ingroup comp_pl
+ * @relates ems_compositor
+ * @ingroup comp_ems
  */
-#define PLUTO_COMP_WARN(c, ...) U_LOG_IFL_W(c->settings.log_level, __VA_ARGS__);
+#define EMS_COMP_WARN(c, ...) U_LOG_IFL_W(c->settings.log_level, __VA_ARGS__);
 
 /*!
  * Error level logging.
  *
- * @relates pluto_compositor
- * @ingroup comp_pl
+ * @relates ems_compositor
+ * @ingroup comp_ems
  */
-#define PLUTO_COMP_ERROR(c, ...) U_LOG_IFL_E(c->settings.log_level, __VA_ARGS__);
+#define EMS_COMP_ERROR(c, ...) U_LOG_IFL_E(c->settings.log_level, __VA_ARGS__);
 
 
 #ifdef __cplusplus

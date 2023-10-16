@@ -17,9 +17,6 @@
 #include "util/u_pacing.h"
 #include "util/u_logging.h"
 
-// #include "pl_comp.h"
-// #include "pl_driver.h"
-
 #include <memory>
 #include <mutex>
 #include <stdio.h>
@@ -34,19 +31,18 @@
 #include <mutex>
 
 
-struct pl_callbacks;
+struct ems_callbacks;
+struct ems_instance;
+struct ems_hmd;
 
-struct pluto_program;
-struct pluto_hmd;
-
-struct pluto_hmd_recvbuf
+struct ems_hmd_recvbuf
 {
-
 	std::atomic_bool updated;
 	std::mutex mutex;
 	struct xrt_pose pose;
 };
-struct pluto_hmd
+
+struct ems_hmd
 {
 	//! Has to come first.
 	struct xrt_device base;
@@ -54,14 +50,14 @@ struct pluto_hmd
 	struct xrt_pose pose;
 
 	// Should outlive us
-	struct pluto_program *program;
+	struct ems_instance *instance;
 
 	// struct os_mutex mutex;
-	std::unique_ptr<pluto_hmd_recvbuf> received;
+	std::unique_ptr<ems_hmd_recvbuf> received;
 	enum u_logging_level log_level;
 };
 
-struct pluto_controller
+struct ems_motion_controller
 {
 	//! Has to come first.
 	struct xrt_device base;
@@ -69,12 +65,12 @@ struct pluto_controller
 	struct xrt_pose pose;
 
 	// Should outlive us
-	struct pluto_program *program;
+	struct ems_instance *instance;
 
 	enum u_logging_level log_level;
 };
 
-struct pluto_program
+struct ems_instance
 {
 	//! Instance base.
 	struct xrt_instance xinst_base;
@@ -86,15 +82,15 @@ struct pluto_program
 	struct xrt_tracking_origin tracking_origin;
 
 	// convenience
-	struct pluto_hmd *head;
-	struct pluto_controller *left;
-	struct pluto_controller *right;
+	struct ems_hmd *head;
+	struct ems_motion_controller *left;
+	struct ems_motion_controller *right;
 
 	//! Space overseer, implemented for now using helper code.
 	struct xrt_space_overseer *xso;
 
 	//! Callbacks collection
-	struct pl_callbacks *callbacks;
+	struct ems_callbacks *callbacks;
 };
 
 
@@ -102,18 +98,18 @@ struct pluto_program
 
 
 /*!
- * Creates a @ref pluto_compositor.
+ * Creates a @ref ems_compositor.
  *
- * @ingroup comp_pl
+ * @ingroup comp_ems
  */
 xrt_result_t
-pluto_compositor_create_system(pluto_program &pp, struct xrt_system_compositor **out_xsysc);
+ems_compositor_create_system(ems_instance &emsi, struct xrt_system_compositor **out_xsysc);
 
 
 // driver interface functions
 
-struct pluto_hmd *
-pluto_hmd_create(pluto_program &pp);
+struct ems_hmd *
+ems_hmd_create(ems_instance &emsi);
 
-struct pluto_controller *
-pluto_controller_create(pluto_program &pp, enum xrt_device_name device_name, enum xrt_device_type device_type);
+struct ems_motion_controller *
+ems_motion_controller_create(ems_instance &emsi, enum xrt_device_name device_name, enum xrt_device_type device_type);

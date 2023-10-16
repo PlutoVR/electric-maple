@@ -16,7 +16,7 @@
 
 #include "ems_gstreamer_pipeline.h"
 
-#include "pl_callbacks.h"
+#include "ems_callbacks.h"
 
 #include "os/os_threading.h"
 #include "util/u_misc.h"
@@ -68,7 +68,7 @@ struct ems_gstreamer_pipeline
 	guint timeout_src_id;
 
 
-	struct pl_callbacks *callbacks;
+	struct ems_callbacks *callbacks;
 };
 
 
@@ -234,7 +234,7 @@ data_channel_message_data_cb(GstWebRTCDataChannel *datachannel, GBytes *data, st
 		U_LOG_E("Error! %s", PB_GET_ERROR(&our_istream));
 		return;
 	}
-	pl_callbacks_call(gwp->callbacks, PL_CALLBACKS_EVENT_TRACKING, &message);
+	ems_callbacks_call(gwp->callbacks, EMS_CALLBACKS_EVENT_TRACKING, &message);
 }
 
 static void
@@ -580,7 +580,7 @@ ems_gstreamer_pipeline_stop(struct gstreamer_pipeline *gp)
 void
 ems_gstreamer_pipeline_create(struct xrt_frame_context *xfctx,
                               const char *appsrc_name,
-                              struct pl_callbacks *callbacks_collection,
+                              struct ems_callbacks *callbacks_collection,
                               struct gstreamer_pipeline **out_gp)
 {
 	gchar *pipeline_str;

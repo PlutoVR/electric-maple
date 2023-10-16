@@ -4,7 +4,7 @@ target_link_libraries(
 	ems_gst
 	PRIVATE
 		pl_build_defines
-		pl_callbacks
+		ems_callbacks
 		pluto_proto
 		aux_util
 		aux_gstreamer

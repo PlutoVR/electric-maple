@@ -3,20 +3,20 @@
 
 add_subdirectory(include)
 
-add_library(pl_callbacks STATIC pl_callbacks.cpp)
+add_library(ems_callbacks STATIC ems_callbacks.cpp)
 target_link_libraries(
-	pl_callbacks
+	ems_callbacks
 	PUBLIC xrt-interfaces
 	PRIVATE aux_util
 	)
 
-target_include_directories(pl_callbacks PUBLIC . ${GLIB_INCLUDE_DIRS})
+target_include_directories(ems_callbacks PUBLIC . ${GLIB_INCLUDE_DIRS})
 
 add_subdirectory(gst)
 
-add_library(comp_pluto STATIC pl_comp.cpp pl_comp.h)
+add_library(comp_ems STATIC ems_compositor.cpp ems_compositor.h)
 target_link_libraries(
-	comp_pluto
+	comp_ems
 	PUBLIC xrt-interfaces
 	PRIVATE
 		aux_util
@@ -26,26 +26,26 @@ target_link_libraries(
 		comp_multi
 		ems_gst
 	)
-target_include_directories(comp_pluto PUBLIC . ${GST_INCLUDE_DIRS})
+target_include_directories(comp_ems PUBLIC . ${GST_INCLUDE_DIRS})
 
-add_library(drv_pluto STATIC pl_driver.cpp pl_device_controller.cpp)
+add_library(drv_ems STATIC ems_hmd.cpp ems_motion_controller.cpp)
 
-target_link_libraries(drv_pluto PRIVATE xrt-interfaces aux_util pluto_proto pl_callbacks)
+target_link_libraries(drv_ems PRIVATE xrt-interfaces aux_util pluto_proto ems_callbacks)
 
-add_executable(pluto_streaming_server pl_instance.cpp pl_server_internal.h pl_server_main.cpp)
+add_executable(ems_streaming_server ems_instance.cpp ems_server_internal.h ems_server_main.cpp)
 
 target_link_libraries(
-	pluto_streaming_server
+	ems_streaming_server
 	PRIVATE
 		aux_util
 		aux_util_debug_gui
 		st_prober
 		ipc_server
 		comp_main
-		drv_pluto
+		drv_ems
 		pluto_proto
-		comp_pluto
-		pl_callbacks
+		comp_ems
+		ems_callbacks
 	)
 
-target_link_libraries(pluto_streaming_server PRIVATE st_gui xrt-external-imgui-sdl2 aux_ogl)
+target_link_libraries(ems_streaming_server PRIVATE st_gui xrt-external-imgui-sdl2 aux_ogl)

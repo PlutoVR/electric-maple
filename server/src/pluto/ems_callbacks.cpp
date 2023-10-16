@@ -7,7 +7,7 @@
  * @ingroup aux_util
  */
 
-#include "pl_callbacks.h"
+#include "ems_callbacks.h"
 #include <cstddef>
 #include <type_traits>
 
@@ -17,28 +17,28 @@
 #include <mutex>
 #include <stdint.h>
 
-struct pl_callbacks
+struct ems_callbacks
 {
 	std::mutex mutex;
-	xrt::auxiliary::util::GenericCallbacks<pl_callbacks_func_t, enum pl_callbacks_event> callbacks_collection;
+	xrt::auxiliary::util::GenericCallbacks<ems_callbacks_func_t, enum ems_callbacks_event> callbacks_collection;
 };
 
-struct pl_callbacks *
-pl_callbacks_create()
+struct ems_callbacks *
+ems_callbacks_create()
 {
-	// auto ret = std::make_unique<pl_callbacks>();
+	// auto ret = std::make_unique<ems_callbacks>();
 
 	// return ret.release();
-	return new pl_callbacks;
+	return new ems_callbacks;
 }
 
 void
-pl_callbacks_destroy(struct pl_callbacks **ptr_callbacks)
+ems_callbacks_destroy(struct ems_callbacks **ptr_callbacks)
 {
 	if (!ptr_callbacks) {
 		return;
 	}
-	std::unique_ptr<pl_callbacks> callbacks(*ptr_callbacks);
+	std::unique_ptr<ems_callbacks> callbacks(*ptr_callbacks);
 	// take the lock to wait for anybody else who might be in the lock.
 	std::unique_lock<std::mutex> lock(callbacks->mutex);
 	lock.unlock();
@@ -48,24 +48,24 @@ pl_callbacks_destroy(struct pl_callbacks **ptr_callbacks)
 }
 
 void
-pl_callbacks_add(struct pl_callbacks *callbacks, uint32_t event_mask, pl_callbacks_func_t func, void *userdata)
+ems_callbacks_add(struct ems_callbacks *callbacks, uint32_t event_mask, ems_callbacks_func_t func, void *userdata)
 {
 	std::unique_lock<std::mutex> lock(callbacks->mutex);
 	callbacks->callbacks_collection.addCallback(func, event_mask, userdata);
 }
 
 void
-pl_callbacks_reset(struct pl_callbacks *callbacks)
+ems_callbacks_reset(struct ems_callbacks *callbacks)
 {
 	std::unique_lock<std::mutex> lock(callbacks->mutex);
 	callbacks->callbacks_collection = {};
 }
 
 void
-pl_callbacks_call(struct pl_callbacks *callbacks, enum pl_callbacks_event event, const pluto_UpMessage *message)
+ems_callbacks_call(struct ems_callbacks *callbacks, enum ems_callbacks_event event, const pluto_UpMessage *message)
 {
 	std::unique_lock<std::mutex> lock(callbacks->mutex);
-	auto invoker = [=](enum pl_callbacks_event ev, pl_callbacks_func_t callback, void *userdata) {
+	auto invoker = [=](enum ems_callbacks_event ev, ems_callbacks_func_t callback, void *userdata) {
 		callback(ev, message, userdata);
 		return false; // do not remove
 	};
