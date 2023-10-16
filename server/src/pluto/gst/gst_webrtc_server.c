@@ -18,12 +18,13 @@
 
 #include <json-glib/json-glib.h>
 
-
+#include <libsoup/soup-version.h>
 #include <libsoup/soup-message.h>
-#ifndef PL_LIBSOUP2
+#include <libsoup/soup-server.h>
+
+#if SOUP_CHECK_VERSION(3,0,0)
 #include <libsoup/soup-server-message.h>
 #endif
-#include <libsoup/soup-server.h>
 
 #include "util/u_logging.h"
 
@@ -55,7 +56,7 @@ mss_http_server_new()
 	return MSS_HTTP_SERVER(g_object_new(MSS_TYPE_HTTP_SERVER, NULL));
 }
 
-#ifdef PL_LIBSOUP2
+#if !SOUP_CHECK_VERSION(3, 0, 0)
 static void
 http_cb(SoupServer *server,
         SoupMessage *msg,
@@ -168,7 +169,7 @@ mss_http_server_add_websocket_connection(MssHttpServer *server, SoupWebsocketCon
 	g_signal_emit(server, signals[SIGNAL_WS_CLIENT_CONNECTED], 0, connection);
 }
 
-#ifdef PL_LIBSOUP2
+#if !SOUP_CHECK_VERSION(3, 0, 0)
 static void
 websocket_cb(SoupServer *server,
              SoupWebsocketConnection *connection,

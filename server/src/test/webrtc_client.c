@@ -367,7 +367,7 @@ main(int argc, char *argv[])
 
 	soup_session = soup_session_new();
 
-#ifdef PL_LIBSOUP2
+#if !SOUP_CHECK_VERSION(3, 0, 0)
 	soup_session_websocket_connect_async(soup_session,                                     // session
 	                                     soup_message_new(SOUP_METHOD_GET, websocket_uri), // message
 	                                     NULL,                                             // origin
