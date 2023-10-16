@@ -24,7 +24,7 @@ target_link_libraries(
 		aux_vk
 		comp_util
 		comp_multi
-		pl_gst
+		ems_gst
 	)
 target_include_directories(comp_pluto PUBLIC . ${GST_INCLUDE_DIRS})
 

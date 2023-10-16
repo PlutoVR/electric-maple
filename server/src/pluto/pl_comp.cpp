@@ -504,11 +504,11 @@ do_the_thing(struct pluto_compositor *c,
 	wrap = NULL;
 
 	if (!c->pipeline_playing) {
-		gstreamer_webrtc_pipeline_play(c->hackers_gstreamer_pipeline);
+		ems_gstreamer_pipeline_play(c->gstreamer_pipeline);
 		c->pipeline_playing = true;
 	}
 
-	u_sink_debug_push_frame(&c->hackers_debug_sink, frame);
+	u_sink_debug_push_frame(&c->debug_sink, frame);
 
 	xrt_sink_push_frame(c->hackers_xfs, frame);
 
@@ -818,7 +818,7 @@ pluto_compositor_create_system(pluto_program &pp, struct xrt_system_compositor *
 	c->settings.frame_interval_ns = xdev->hmd->screens[0].nominal_frame_interval_ns;
 	c->xdev = xdev;
 
-	PLUTO_COMP_INFO(c, "Starting Pluto remote compositor!");
+	PLUTO_COMP_INFO(c, "Starting Electric Maple Server remote compositor!");
 
 
 	/*
@@ -846,12 +846,12 @@ pluto_compositor_create_system(pluto_program &pp, struct xrt_system_compositor *
 	    XRT_FORMAT_R8G8B8X8,             // xrt_format
 	    VK_FORMAT_R8G8B8A8_UNORM);       // vk_format
 
-	u_var_add_root(c, "Pluto compositor!", 0);
-	u_var_add_sink_debug(c, &c->hackers_debug_sink, "Meow!");
+	u_var_add_root(c, "Electric Maple Server compositor", 0);
+	u_var_add_sink_debug(c, &c->debug_sink, "Meow!");
 
-	gstreamer_pipeline_webrtc_create(&c->xfctx, "Meow", pp.callbacks, &c->hackers_gstreamer_pipeline);
+	ems_gstreamer_pipeline_create(&c->xfctx, "Meow", pp.callbacks, &c->gstreamer_pipeline);
 	gstreamer_sink_create_with_pipeline( //
-	    c->hackers_gstreamer_pipeline,   //
+	    c->gstreamer_pipeline,           //
 	    READBACK_W,                      //
 	    READBACK_H,                      //
 	    XRT_FORMAT_R8G8B8X8,             //

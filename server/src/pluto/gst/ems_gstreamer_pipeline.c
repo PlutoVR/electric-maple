@@ -14,7 +14,7 @@
  * @ingroup aux_util
  */
 
-#include "gst_webrtc_pipeline.h"
+#include "ems_gstreamer_pipeline.h"
 
 #include "pl_callbacks.h"
 
@@ -29,7 +29,7 @@
 #include "gstreamer/gst_internal.h"
 #include "gstreamer/gst_pipeline.h"
 
-#include "gst_webrtc_server.h"
+#include "ems_signaling_server.h"
 
 #include <glib-unix.h>
 #include <gst/gst.h>
@@ -53,10 +53,10 @@
 
 
 
-MssHttpServer *http_server;
+EmsSignalingServer *signaling_server;
 
 
-struct gstreamer_webrtc_pipeline
+struct ems_gstreamer_pipeline
 {
 	struct gstreamer_pipeline base;
 
@@ -82,7 +82,7 @@ sigint_handler(gpointer user_data)
 static gboolean
 gst_bus_cb(GstBus *bus, GstMessage *message, gpointer user_data)
 {
-	struct gstreamer_webrtc_pipeline *gwp = (struct gstreamer_webrtc_pipeline *)user_data;
+	struct ems_gstreamer_pipeline *gwp = (struct ems_gstreamer_pipeline *)user_data;
 	GstBin *pipeline = GST_BIN(gwp->base.pipeline);
 
 	switch (GST_MESSAGE_TYPE(message)) {
@@ -113,7 +113,7 @@ gst_bus_cb(GstBus *bus, GstMessage *message, gpointer user_data)
 }
 
 static GstElement *
-get_webrtcbin_for_client(GstBin *pipeline, MssClientId client_id)
+get_webrtcbin_for_client(GstBin *pipeline, EmsClientId client_id)
 {
 	gchar *name;
 	GstElement *webrtcbin;
@@ -160,7 +160,7 @@ on_offer_created(GstPromise *promise, GstElement *webrtcbin)
 	g_signal_emit_by_name(webrtcbin, "set-local-description", offer, NULL);
 
 	sdp = gst_sdp_message_as_text(offer->sdp);
-	mss_http_server_send_sdp_offer(http_server, g_object_get_data(G_OBJECT(webrtcbin), "client_id"), sdp);
+	ems_signaling_server_send_sdp_offer(signaling_server, g_object_get_data(G_OBJECT(webrtcbin), "client_id"), sdp);
 	g_free(sdp);
 
 	gst_webrtc_session_description_free(offer);
@@ -169,7 +169,7 @@ on_offer_created(GstPromise *promise, GstElement *webrtcbin)
 }
 
 static void
-webrtc_on_data_channel_cb(GstElement *webrtcbin, GObject *data_channel, struct gstreamer_webrtc_pipeline *gwp)
+webrtc_on_data_channel_cb(GstElement *webrtcbin, GObject *data_channel, struct ems_gstreamer_pipeline *gwp)
 {
 	U_LOG_E("called!!!!");
 }
@@ -179,13 +179,13 @@ webrtc_on_data_channel_cb(GstElement *webrtcbin, GObject *data_channel, struct g
 static void
 webrtc_on_ice_candidate_cb(GstElement *webrtcbin, guint mlineindex, gchar *candidate)
 {
-	mss_http_server_send_candidate(http_server, g_object_get_data(G_OBJECT(webrtcbin), "client_id"), mlineindex,
-	                               candidate);
+	ems_signaling_server_send_candidate(signaling_server, g_object_get_data(G_OBJECT(webrtcbin), "client_id"),
+	                                    mlineindex, candidate);
 }
 
 
 static void
-data_channel_error_cb(GstWebRTCDataChannel *datachannel, struct gstreamer_webrtc_pipeline *gwp)
+data_channel_error_cb(GstWebRTCDataChannel *datachannel, struct ems_gstreamer_pipeline *gwp)
 {
 	U_LOG_E("error\n");
 }
@@ -203,7 +203,7 @@ datachannel_send_message(GstWebRTCDataChannel *datachannel)
 }
 
 static void
-data_channel_open_cb(GstWebRTCDataChannel *datachannel, struct gstreamer_webrtc_pipeline *gwp)
+data_channel_open_cb(GstWebRTCDataChannel *datachannel, struct ems_gstreamer_pipeline *gwp)
 {
 	U_LOG_E("data channel opened\n");
 
@@ -211,7 +211,7 @@ data_channel_open_cb(GstWebRTCDataChannel *datachannel, struct gstreamer_webrtc_
 }
 
 static void
-data_channel_close_cb(GstWebRTCDataChannel *datachannel, struct gstreamer_webrtc_pipeline *gwp)
+data_channel_close_cb(GstWebRTCDataChannel *datachannel, struct ems_gstreamer_pipeline *gwp)
 {
 	U_LOG_E("data channel closed\n");
 
@@ -220,7 +220,7 @@ data_channel_close_cb(GstWebRTCDataChannel *datachannel, struct gstreamer_webrtc
 }
 
 static void
-data_channel_message_data_cb(GstWebRTCDataChannel *datachannel, GBytes *data, struct gstreamer_webrtc_pipeline *gwp)
+data_channel_message_data_cb(GstWebRTCDataChannel *datachannel, GBytes *data, struct ems_gstreamer_pipeline *gwp)
 {
 	pluto_UpMessage message = pluto_UpMessage_init_default;
 	size_t n = 0;
@@ -238,14 +238,14 @@ data_channel_message_data_cb(GstWebRTCDataChannel *datachannel, GBytes *data, st
 }
 
 static void
-data_channel_message_string_cb(GstWebRTCDataChannel *datachannel, gchar *str, struct gstreamer_webrtc_pipeline *gwp)
+data_channel_message_string_cb(GstWebRTCDataChannel *datachannel, gchar *str, struct ems_gstreamer_pipeline *gwp)
 {
 	U_LOG_E("Received data channel message: %s\n", str);
 }
 
 
 static void
-webrtc_client_connected_cb(MssHttpServer *server, MssClientId client_id, struct gstreamer_webrtc_pipeline *gwp)
+webrtc_client_connected_cb(EmsSignalingServer *server, EmsClientId client_id, struct ems_gstreamer_pipeline *gwp)
 {
 	GstBin *pipeline = GST_BIN(gwp->base.pipeline);
 	gchar *name;
@@ -312,10 +312,10 @@ webrtc_client_connected_cb(MssHttpServer *server, MssClientId client_id, struct 
 }
 
 static void
-webrtc_sdp_answer_cb(MssHttpServer *server,
-                     MssClientId client_id,
+webrtc_sdp_answer_cb(EmsSignalingServer *server,
+                     EmsClientId client_id,
                      const gchar *sdp,
-                     struct gstreamer_webrtc_pipeline *gwp)
+                     struct ems_gstreamer_pipeline *gwp)
 {
 	GstBin *pipeline = GST_BIN(gwp->base.pipeline);
 	GstSDPMessage *sdp_msg = NULL;
@@ -352,11 +352,11 @@ out:
 }
 
 static void
-webrtc_candidate_cb(MssHttpServer *server,
-                    MssClientId client_id,
+webrtc_candidate_cb(EmsSignalingServer *server,
+                    EmsClientId client_id,
                     guint mlineindex,
                     const gchar *candidate,
-                    struct gstreamer_webrtc_pipeline *gwp)
+                    struct ems_gstreamer_pipeline *gwp)
 {
 	GstBin *pipeline = GST_BIN(gwp->base.pipeline);
 
@@ -385,7 +385,7 @@ remove_webrtcbin_probe_cb(GstPad *pad, GstPadProbeInfo *info, gpointer user_data
 }
 
 static void
-webrtc_client_disconnected_cb(MssHttpServer *server, MssClientId client_id, struct gstreamer_webrtc_pipeline *gwp)
+webrtc_client_disconnected_cb(EmsSignalingServer *server, EmsClientId client_id, struct ems_gstreamer_pipeline *gwp)
 {
 	GstBin *pipeline = GST_BIN(gwp->base.pipeline);
 	GstElement *webrtcbin;
@@ -534,10 +534,10 @@ loop_thread(void *data)
  */
 
 void
-gstreamer_webrtc_pipeline_play(struct gstreamer_pipeline *gp)
+ems_gstreamer_pipeline_play(struct gstreamer_pipeline *gp)
 {
 	U_LOG_E("Starting pipeline");
-	struct gstreamer_webrtc_pipeline *gwp = (struct gstreamer_webrtc_pipeline *)gp;
+	struct ems_gstreamer_pipeline *gwp = (struct ems_gstreamer_pipeline *)gp;
 
 	main_loop = g_main_loop_new(NULL, FALSE);
 
@@ -546,16 +546,16 @@ gstreamer_webrtc_pipeline_play(struct gstreamer_pipeline *gp)
 
 	g_assert(ret != GST_STATE_CHANGE_FAILURE);
 
-	g_signal_connect(http_server, "ws-client-connected", G_CALLBACK(webrtc_client_connected_cb), gwp);
+	g_signal_connect(signaling_server, "ws-client-connected", G_CALLBACK(webrtc_client_connected_cb), gwp);
 
 	pthread_t thread;
 	pthread_create(&thread, NULL, loop_thread, NULL);
 }
 
 void
-gstreamer_webrtc_pipeline_stop(struct gstreamer_pipeline *gp)
+ems_gstreamer_pipeline_stop(struct gstreamer_pipeline *gp)
 {
-	struct gstreamer_webrtc_pipeline *gwp = (struct gstreamer_webrtc_pipeline *)gp;
+	struct ems_gstreamer_pipeline *gwp = (struct ems_gstreamer_pipeline *)gp;
 	U_LOG_E("Stopping pipeline");
 
 	// Settle the pipeline.
@@ -578,10 +578,10 @@ gstreamer_webrtc_pipeline_stop(struct gstreamer_pipeline *gp)
 
 
 void
-gstreamer_pipeline_webrtc_create(struct xrt_frame_context *xfctx,
-                                 const char *appsrc_name,
-                                 struct pl_callbacks *callbacks_collection,
-                                 struct gstreamer_pipeline **out_gp)
+ems_gstreamer_pipeline_create(struct xrt_frame_context *xfctx,
+                              const char *appsrc_name,
+                              struct pl_callbacks *callbacks_collection,
+                              struct gstreamer_pipeline **out_gp)
 {
 	gchar *pipeline_str;
 	GstElement *pipeline;
@@ -589,7 +589,7 @@ gstreamer_pipeline_webrtc_create(struct xrt_frame_context *xfctx,
 	GstBus *bus;
 
 
-	http_server = mss_http_server_new();
+	signaling_server = ems_signaling_server_new();
 
 	pipeline_str = g_strdup_printf(
 	    "appsrc name=%s ! "                //
@@ -610,7 +610,7 @@ gstreamer_pipeline_webrtc_create(struct xrt_frame_context *xfctx,
 
 	printf("%s\n\n\n\n", pipeline_str);
 
-	struct gstreamer_webrtc_pipeline *gwp = U_TYPED_CALLOC(struct gstreamer_webrtc_pipeline);
+	struct ems_gstreamer_pipeline *gwp = U_TYPED_CALLOC(struct ems_gstreamer_pipeline);
 	gwp->base.node.break_apart = break_apart;
 	gwp->base.node.destroy = destroy;
 	gwp->base.xfctx = xfctx;
@@ -627,9 +627,9 @@ gstreamer_pipeline_webrtc_create(struct xrt_frame_context *xfctx,
 	gst_bus_add_watch(bus, gst_bus_cb, gwp);
 	gst_object_unref(bus);
 
-	g_signal_connect(http_server, "ws-client-disconnected", G_CALLBACK(webrtc_client_disconnected_cb), gwp);
-	g_signal_connect(http_server, "sdp-answer", G_CALLBACK(webrtc_sdp_answer_cb), gwp);
-	g_signal_connect(http_server, "candidate", G_CALLBACK(webrtc_candidate_cb), gwp);
+	g_signal_connect(signaling_server, "ws-client-disconnected", G_CALLBACK(webrtc_client_disconnected_cb), gwp);
+	g_signal_connect(signaling_server, "sdp-answer", G_CALLBACK(webrtc_sdp_answer_cb), gwp);
+	g_signal_connect(signaling_server, "candidate", G_CALLBACK(webrtc_candidate_cb), gwp);
 
 	// loop = g_main_loop_new (NULL, FALSE);
 	// g_unix_signal_add (SIGINT, sigint_handler, loop);

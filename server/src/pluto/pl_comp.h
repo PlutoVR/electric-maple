@@ -30,7 +30,7 @@
 
 #include "gstreamer/gst_pipeline.h"
 #include "gstreamer/gst_sink.h"
-#include "gst/gst_webrtc_pipeline.h"
+#include "gst/ems_gstreamer_pipeline.h"
 
 
 #include "pl_server_internal.h"
@@ -127,7 +127,7 @@ struct pluto_compositor
 
 	struct vk_image_readback_to_xf_pool *pool = nullptr;
 	int image_sequence;
-	struct u_sink_debug hackers_debug_sink;
+	struct u_sink_debug debug_sink;
 
 	struct
 	{
@@ -136,7 +136,7 @@ struct pluto_compositor
 	} bounce;
 
 	bool pipeline_playing = false;
-	struct gstreamer_pipeline *hackers_gstreamer_pipeline;
+	struct gstreamer_pipeline *gstreamer_pipeline;
 	struct gstreamer_sink *hackers_gstreamer_sink;
 	struct xrt_frame_sink *hackers_xfs;
 
