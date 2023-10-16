@@ -15,20 +15,6 @@ cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
 ninja -C build
 ```
 
-You can then start the server with:
-
-```sh
-build/src/pluto/pluto_streaming_server
-```
-
-and use the build-tree OpenXR runtime manifest at `build/openxr_monado-dev.json` by symlinking it to the active runtime path, using something like XR Picker to do that for you, or:
-
-```sh
-env XR_RUNTIME_JSON=$HOME/src/linux-streaming/server/build/openxr_monado-dev.json hello_xr -G vulkan2
-```
-
-to apply the active runtime just for a single command.
-
 ## Build Dependencies
 
 - libeigen3-dev
@@ -83,3 +69,28 @@ Best to only have one of the two libsoup dev packages installed at a time.
 
 There is a desktop test client built to `build/src/test/webrtc_client` that just
 shows the frames on a desktop window, with no upstream data or VR rendering.
+
+## Running
+
+Due to the early stage of the project, you must start this up in this particular order:
+
+- this server
+- OpenXR application
+- streaming client app
+
+Assuming you followed the build steps above, you can start the server with:
+
+```sh
+build/src/pluto/pluto_streaming_server
+```
+
+To run an OpenXR app, use the build-tree OpenXR runtime manifest at
+`build/openxr_monado-dev.json` by symlinking it to the active runtime path,
+using something like XR Picker to do that for you, or:
+
+```sh
+env XR_RUNTIME_JSON=$HOME/src/linux-streaming/server/build/openxr_monado-dev.json hello_xr -G vulkan2
+```
+
+to apply the active runtime just for a single command. (Change the path to the
+build as applicable.)
