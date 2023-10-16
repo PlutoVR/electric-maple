@@ -1,0 +1,63 @@
+%% Copyright 2023, Collabora, Ltd.
+%% Copyright 2023, PlutoVR Inc.
+%%
+%% SPDX-License-Identifier: BSL-1.0
+
+classDiagram
+    class EmEglMutexIface {
+        <<interface>>
+        +EGLDisplay: display
+        +EGLContext: context
+        +begin(drawSurface, readSurface)
+        +end()
+    }
+
+    note for EmEglMutexIface "This interface separates the responsibility for ensuring an EGL context is only\nactive in a single thread at a time."
+    note for EmEglMutexIface "A default implementation is provided"
+
+
+    class EmConnection {
+        <<GObject>>
+        pipeline: GstPipeline
+        websocket_uri: String
+        +connect()
+        +disconnect()
+        ~set_pipeline()
+        ~send_bytes(bytes)
+    }
+
+    note for EmConnection "Hides the signaling server usage,\nWebRTC negotiation, and data channel usage"
+
+    class EmStreamClient {
+        +set_egl_context(egl_mutex, adopt, pbuffer_surface)
+        +spawn_thread(connection)
+        +stop()
+        ~try_pull_sample(): decode_end_time, em_sample
+        ~release_sample(sample: em_sample)
+    }
+    EmStreamClient <.. EmConnection: via EmConnection's "need-pipeline" signal
+    EmStreamClient --> EmConnection: calls set_pipeline
+
+    note for EmStreamClient "Hides the creation and use (except for WebRTC negotiation) of the GStreamer pipeline,\nframe receiving, and the GMainLoop used by GStreamer and other GLib components."
+
+    EmStreamClient --> EmEglMutexIface: uses to initialize EGL context for gstreamer
+
+    class EmRemoteExperience {
+        connection: EmConnection
+        stream_client: EmStreamClient
+        instance: XrInstance
+        session: XrSession
+        +poll_and_render_frame()
+        +inner_poll_and_render_frame(beginFrameTime, predDisplayTime, views, projLayer, projViews)
+        ~emit_upmessage(upMessage)
+    }
+
+    %% Owns
+    EmRemoteExperience *-- EmStreamClient
+
+    %% Holds a reference to
+    EmRemoteExperience o-- EmConnection
+
+    note for EmRemoteExperience "Hides all OpenXR related code: swapchain acquire, wait, release,\nrendering from decoded frames, and optionally xr*Frame calls"
+
+    EmRemoteExperience --> EmEglMutexIface: uses EGL context for rendering
