@@ -30,6 +30,7 @@ em_sample_new(GstSample *gst_sample, GstGLContext *context)
 
 	GstVideoInfo info;
 	gst_video_info_from_caps(&info, caps);
+
 	GstVideoFrame frame;
 
 	ALOGV("%s: Mapping buffer for %p", __FUNCTION__, gst_sample);
@@ -39,6 +40,8 @@ em_sample_new(GstSample *gst_sample, GstGLContext *context)
 
 	EmSample *ret = calloc(1, sizeof(EmSample));
 	ret->sample = gst_sample_ref(gst_sample);
+	ret->width = GST_VIDEO_INFO_WIDTH(&info);
+	ret->height = GST_VIDEO_INFO_HEIGHT(&info);
 
 	ret->frame_texture_id = *(GLuint *)frame.data[0];
 

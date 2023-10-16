@@ -3,6 +3,7 @@ add_library(
 	em_connection.c
 	em_frame_data.cpp
 	em_remote_experience.cpp
+	em_sample.c
 	em_stream_client.c
 	render/GLDebug.cpp
 	render/GLError.cpp

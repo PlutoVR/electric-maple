@@ -15,7 +15,7 @@
 #include "em/em_app_log.h"
 #include "em/em_connection.h"
 #include "em/em_stream_client.h"
-#include "em/gst_common.h"
+#include "em/em_sample.h"
 #include "em/render/render.hpp"
 
 #include "os/os_time.h"

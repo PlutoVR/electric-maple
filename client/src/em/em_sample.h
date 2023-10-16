@@ -17,6 +17,9 @@ typedef struct _EmSample
 {
 	GLuint frame_texture_id;
 	GstSample *sample;
+	gint width;
+	gint height;
+	// GLenum frame_texture_target;
 } EmSample;
 
 G_BEGIN_DECLS

@@ -20,7 +20,7 @@ extern "C" {
 #endif // __cplusplus
 
 
-struct em_sample;
+typedef struct _EmSample EmSample;
 
 typedef struct EmEglMutexIface EmEglMutexIface;
 
@@ -116,14 +116,14 @@ em_stream_client_stop(EmStreamClient *sc);
 * @param sc self
 * @param[out] out_decode_end struct to populate with decode-end time.
  */
-struct em_sample *
+EmSample *
 em_stream_client_try_pull_sample(EmStreamClient *sc, struct timespec *out_decode_end);
 
 /*!
  * Release a sample returned from @ref em_stream_client_try_pull_sample
  */
 void
-em_stream_client_release_sample(EmStreamClient *sc, struct em_sample *ems);
+em_stream_client_release_sample(EmStreamClient *sc, EmSample *ems);
 
 #ifdef __cplusplus
 } // extern "C"

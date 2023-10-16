@@ -11,7 +11,7 @@
 #include "em_stream_client.h"
 #include "em_app_log.h"
 #include "em_connection.h"
-#include "gst_common.h" // for em_sample
+#include "em_sample.h"
 #include "em/em_egl.h"
 
 #include "os/os_threading.h"
@@ -23,6 +23,7 @@
 #include <gst/gstbus.h>
 #include <gst/gstelement.h>
 #include <gst/gstinfo.h>
+#include <gst/gstmessage.h>
 #include <gst/gstmessage.h>
 #include <gst/gstsample.h>
 #include <gst/gstutils.h>
@@ -44,13 +45,6 @@ em_gst_message_debug(const char *function, GstMessage *msg);
 	do {                                                                                                           \
 		em_gst_message_debug(__FUNCTION__, MSG);                                                               \
 	} while (0)
-
-struct em_sc_sample
-{
-	struct em_sample base;
-	GstSample *sample;
-};
-
 
 struct _EmStreamClient
 {
@@ -585,7 +579,7 @@ em_stream_client_stop(EmStreamClient *sc)
 	sc->pipeline_is_running = false;
 }
 
-struct em_sample *
+EmSample *
 em_stream_client_try_pull_sample(EmStreamClient *sc, struct timespec *out_decode_end)
 {
 	if (!sc->appsink) {
@@ -614,36 +608,27 @@ em_stream_client_try_pull_sample(EmStreamClient *sc, struct timespec *out_decode
 	}
 	*out_decode_end = decode_end;
 
-	// ALOGE("FRED: GOT A SAMPLE !!!");
-	GstBuffer *buffer = gst_sample_get_buffer(sample);
-	GstCaps *caps = gst_sample_get_caps(sample);
-
-	GstVideoInfo info;
-	gst_video_info_from_caps(&info, caps);
-	gint width = GST_VIDEO_INFO_WIDTH(&info);
-	gint height = GST_VIDEO_INFO_HEIGHT(&info);
-	ALOGI("%s: frame %d (w) x %d (h)", __FUNCTION__, width, height);
-
-	// TODO: Handle resize?
-#if 0
-	if (width != sc->width || height != sc->height) {
-		sc->width = width;
-		sc->height = height;
-	}
-#endif
-
-	struct em_sc_sample *ret = calloc(1, sizeof(struct em_sc_sample));
-
-	GstVideoFrame frame;
-	GstMapFlags flags = (GstMapFlags)(GST_MAP_READ | GST_MAP_GL);
-	gst_video_frame_map(&frame, &info, buffer, flags);
-	ret->base.frame_texture_id = *(GLuint *)frame.data[0];
-
+	bool firstTime = false;
 	if (sc->context == NULL) {
+		firstTime = true;
 		ALOGI("%s: Retrieving the GStreamer EGL context", __FUNCTION__);
 		/* Get GStreamer's gl context. */
 		gst_gl_query_local_gl_context(sc->appsink, GST_PAD_SINK, &sc->context);
+	}
 
+	EmSample *ret = em_sample_new(sample, sc->context);
+	ALOGI("%s: frame %d (w) x %d (h)", __FUNCTION__, ret->width, ret->height);
+
+	// TODO: Handle resize?
+#if 0
+	if (ret->width != sc->width || ret->height != sc->height) {
+		sc->width = ret->width;
+		sc->height = ret->height;
+	}
+#endif
+
+	if (firstTime) {
+		GstCaps *caps = gst_sample_get_caps(ret->sample);
 		/* Check if we have 2D or OES textures */
 		GstStructure *s = gst_caps_get_structure(caps, 0);
 		const gchar *texture_target_str = gst_structure_get_string(s, "texture-target");
@@ -656,29 +641,18 @@ em_stream_client_try_pull_sample(EmStreamClient *sc, struct timespec *out_decode
 			g_assert_not_reached();
 		}
 	}
-	ret->base.frame_texture_target = sc->frame_texture_target;
 
-	GstGLSyncMeta *sync_meta = gst_buffer_get_gl_sync_meta(buffer);
-	if (sync_meta) {
-		/* MOSHI: the set_sync() seems to be needed for resizing */
-		gst_gl_sync_meta_set_sync_point(sync_meta, sc->context);
-		gst_gl_sync_meta_wait(sync_meta, sc->context);
-	}
-
-	gst_video_frame_unmap(&frame);
 	// move sample ownership into the return value
-	ret->sample = sample;
-	return &(ret->base);
+	gst_sample_unref(sample);
+	return ret;
 }
 
 void
-em_stream_client_release_sample(EmStreamClient *sc, struct em_sample *ems)
+em_stream_client_release_sample(EmStreamClient *sc, EmSample *ems)
 {
 
-	struct em_sc_sample *impl = (struct em_sc_sample *)ems;
 	ALOGW("RYLIE: Releasing sample with texture ID %d", ems->frame_texture_id);
-	gst_sample_unref(impl->sample);
-	free(impl);
+	em_sample_free(ems);
 }
 
 

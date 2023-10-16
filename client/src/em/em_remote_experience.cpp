@@ -12,7 +12,7 @@
 #include "em_app_log.h"
 #include "em_connection.h"
 #include "em_stream_client.h"
-#include "gst_common.h"
+#include "em_sample.h"
 #include "render/GLSwapchain.h"
 #include "render/render.hpp"
 
@@ -21,6 +21,7 @@
 
 #include "render/xr_platform_deps.h"
 
+#include <GLES2/gl2ext.h>
 #include <GLES3/gl3.h>
 #include <atomic>
 #include <cassert>
@@ -40,7 +41,7 @@ struct _EmRemoteExperience
 	EmConnection *connection;
 	EmStreamClient *stream_client;
 	std::unique_ptr<Renderer> renderer;
-	struct em_sample *prev_sample;
+	EmSample *prev_sample;
 
 	XrExtent2Di eye_extents;
 
@@ -140,7 +141,7 @@ em_remote_experience_dispose(EmRemoteExperience *exp)
 			em_stream_client_egl_end(exp->stream_client);
 		}
 		if (exp->prev_sample) {
-			em_stream_client_release_sample(exp->stream_client, exp->prev_sample);
+			em_sample_free(exp->prev_sample);
 			exp->prev_sample = nullptr;
 		}
 	}
@@ -458,7 +459,7 @@ em_remote_experience_inner_poll_and_render_frame(EmRemoteExperience *exp,
 	projectionViews[1].subImage.imageRect.extent = {static_cast<int32_t>(width), static_cast<int32_t>(height)};
 
 	struct timespec decodeEndTime;
-	struct em_sample *sample = em_stream_client_try_pull_sample(exp->stream_client, &decodeEndTime);
+	EmSample *sample = em_stream_client_try_pull_sample(exp->stream_client, &decodeEndTime);
 
 	if (sample == nullptr) {
 		if (exp->prev_sample) {
@@ -491,7 +492,9 @@ em_remote_experience_inner_poll_and_render_frame(EmRemoteExperience *exp,
 
 	// for (uint32_t eye = 0; eye < 2; eye++) {
 	// 	glViewport(eye * width, 0, width, height);
-	exp->renderer->draw(sample->frame_texture_id, sample->frame_texture_target);
+	// Assume this, it's the only correct answer when things are working right.
+	const GLenum frame_texture_target = GL_TEXTURE_EXTERNAL_OES;
+	exp->renderer->draw(sample->frame_texture_id, frame_texture_target);
 	// }
 
 	// Release
