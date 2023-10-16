@@ -10,7 +10,9 @@ CMakeSettings.json
 patches/
 __pycache__/
 
+*.bkp
+*.code-workspace
 .cache/
+compile_commands.json
 
-# Moshi's SyncThing does things sometimes.
-**syncthing**
+logcat.*.txt
