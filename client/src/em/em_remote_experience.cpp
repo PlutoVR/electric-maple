@@ -17,7 +17,7 @@
 #include "render/render.hpp"
 
 #include "pb_encode.h"
-#include "pluto.pb.h"
+#include "electricmaple.pb.h"
 
 #include "render/xr_platform_deps.h"
 
@@ -67,10 +67,10 @@ struct _EmRemoteExperience
 	std::atomic_int64_t nextUpMessage{1};
 };
 
-static constexpr size_t kUpBufferSize = pluto_UpMessage_size + 10;
+static constexpr size_t kUpBufferSize = em_proto_UpMessage_size + 10;
 
 bool
-em_remote_experience_emit_upmessage(EmRemoteExperience *exp, pluto_UpMessage *upMessage)
+em_remote_experience_emit_upmessage(EmRemoteExperience *exp, em_proto_UpMessage *upMessage)
 {
 	int64_t message_id = exp->nextUpMessage++;
 	upMessage->up_message_id = message_id;
@@ -78,7 +78,7 @@ em_remote_experience_emit_upmessage(EmRemoteExperience *exp, pluto_UpMessage *up
 	uint8_t buffer[kUpBufferSize];
 	pb_ostream_t os = pb_ostream_from_buffer(buffer, sizeof(buffer));
 
-	pb_encode(&os, &pluto_UpMessage_msg, upMessage);
+	pb_encode(&os, &em_proto_UpMessage_msg, upMessage);
 
 	ALOGI("RYLIE: Sending message");
 	GBytes *bytes = g_bytes_new(buffer, os.bytes_written);
@@ -105,7 +105,7 @@ em_remote_experience_report_pose(EmRemoteExperience *exp, XrTime predictedDispla
 
 	XrPosef hmdLocalPose = hmdLocalLocation.pose;
 
-	pluto_TrackingMessage tracking = pluto_TrackingMessage_init_default;
+	em_proto_TrackingMessage tracking = em_proto_TrackingMessage_init_default;
 
 	tracking.has_P_localSpace_viewSpace = true;
 	tracking.P_localSpace_viewSpace.has_position = true;
@@ -119,7 +119,7 @@ em_remote_experience_report_pose(EmRemoteExperience *exp, XrTime predictedDispla
 	tracking.P_localSpace_viewSpace.orientation.y = hmdLocalPose.orientation.y;
 	tracking.P_localSpace_viewSpace.orientation.z = hmdLocalPose.orientation.z;
 
-	pluto_UpMessage upMessage = pluto_UpMessage_init_default;
+	em_proto_UpMessage upMessage = em_proto_UpMessage_init_default;
 	upMessage.has_tracking = true;
 	upMessage.tracking = tracking;
 
@@ -417,13 +417,13 @@ report_frame_timing(EmRemoteExperience *exp,
 		ALOGE("%s: Failed to convert begin-frame time (%d)", __FUNCTION__, result);
 		return;
 	}
-	pluto_UpFrameMessage msg = pluto_UpFrameMessage_init_default;
+	em_proto_UpFrameMessage msg = em_proto_UpFrameMessage_init_default;
 	// TODO frame ID
 	// msg.frame_sequence_id = ???;
 	msg.decode_complete_time = xrTimeDecodeEnd;
 	msg.begin_frame_time = xrTimeBeginFrame;
 	msg.display_time = predictedDisplayTime;
-	pluto_UpMessage upMsg = pluto_UpMessage_init_default;
+	em_proto_UpMessage upMsg = em_proto_UpMessage_init_default;
 	upMsg.frame = msg;
 	upMsg.has_frame = true;
 	em_remote_experience_emit_upmessage(exp, &upMsg);

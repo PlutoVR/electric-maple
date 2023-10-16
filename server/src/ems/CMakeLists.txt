@@ -30,7 +30,7 @@ target_include_directories(comp_ems PUBLIC . ${GST_INCLUDE_DIRS})
 
 add_library(drv_ems STATIC ems_hmd.cpp ems_motion_controller.cpp)
 
-target_link_libraries(drv_ems PRIVATE xrt-interfaces aux_util pluto_proto ems_callbacks)
+target_link_libraries(drv_ems PRIVATE xrt-interfaces aux_util em_proto ems_callbacks)
 
 add_executable(ems_streaming_server ems_instance.cpp ems_server_internal.h ems_server_main.cpp)
 
@@ -43,7 +43,7 @@ target_link_libraries(
 		ipc_server
 		comp_main
 		drv_ems
-		pluto_proto
+		em_proto
 		comp_ems
 		ems_callbacks
 	)

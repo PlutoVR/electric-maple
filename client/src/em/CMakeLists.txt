@@ -11,7 +11,7 @@ add_library(
 	)
 target_link_libraries(
 	pluto_electricmaple
-	PRIVATE pluto_proto aux_util ${ANDROID_LOG_LIBRARY}
+	PRIVATE em_proto aux_util ${ANDROID_LOG_LIBRARY}
 	PUBLIC
 		OpenXR::openxr_loader # actually only need headers but prefab doesn't expose that
 		EGL::EGL

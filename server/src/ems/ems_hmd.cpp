@@ -33,7 +33,7 @@
 
 
 
-#include "pluto.pb.h"
+#include "electricmaple.pb.h"
 #include "pb_decode.h"
 
 #include "ems_server_internal.h"
@@ -132,7 +132,7 @@ ems_hmd_get_view_poses(struct xrt_device *xdev,
 }
 
 static void
-ems_hmd_handle_data(enum ems_callbacks_event event, const pluto_UpMessage *message, void *userdata)
+ems_hmd_handle_data(enum ems_callbacks_event event, const em_proto_UpMessage *message, void *userdata)
 {
 	struct ems_hmd *eh = (struct ems_hmd *)userdata;
 

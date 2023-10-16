@@ -25,7 +25,7 @@ target_include_directories(
 target_link_libraries(
 	plutovr_webrtc_client
 	PRIVATE
-		pluto_proto
+		em_proto
 		aux_util
 		pluto_electricmaple
 		gstreamer_android

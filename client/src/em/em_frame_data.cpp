@@ -9,7 +9,7 @@
 
 #include "em_frame_data.hpp"
 #include "em/em_id_data_accumulator.hpp"
-#include "pluto.pb.h"
+#include "electricmaple.pb.h"
 #include <mutex>
 
 namespace em {
@@ -34,7 +34,7 @@ FrameDataAccumulator::emitCompleteRecords(PfnEmitUpMessage pfn, void *userdata)
 	std::lock_guard<std::mutex> lock(m_mutex);
 	m_accum.visitAll([&](id_data_accum::IdType id, FrameData const &data) {
 		if (data.decodeTime != 0 && data.displayTime != 0) {
-			pluto_UpMessage message = pluto_UpMessage_init_default;
+			em_proto_UpMessage message = em_proto_UpMessage_init_default;
 			message.has_frame = true;
 			message.frame.frame_sequence_id = id;
 			message.frame.decode_complete_time = data.decodeTime;

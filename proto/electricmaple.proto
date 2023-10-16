@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BSL-1.0
 
 syntax = "proto3";
-package pluto;
+package em.proto;
 
 message Quaternion {
 	float w = 1;

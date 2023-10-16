@@ -10,7 +10,7 @@
 #include <stdint.h>
 #include <glib.h>
 
-typedef struct _pluto_UpMessage pluto_UpMessage;
+typedef struct _em_proto_UpMessage em_proto_UpMessage;
 
 
 #ifdef __cplusplus
@@ -27,7 +27,7 @@ enum ems_callbacks_event
 
 /// Callback function type
 /// @relates ems_callbacks
-typedef void (*ems_callbacks_func_t)(enum ems_callbacks_event, const pluto_UpMessage *message, void *userdata);
+typedef void (*ems_callbacks_func_t)(enum ems_callbacks_event, const em_proto_UpMessage *message, void *userdata);
 
 /// Callbacks data structure
 struct ems_callbacks;
@@ -64,7 +64,7 @@ ems_callbacks_add(struct ems_callbacks *callbacks, uint32_t event_mask, ems_call
 ///
 /// @public @memberof ems_callbacks
 void
-ems_callbacks_call(struct ems_callbacks *callbacks, enum ems_callbacks_event event, const pluto_UpMessage *message);
+ems_callbacks_call(struct ems_callbacks *callbacks, enum ems_callbacks_event event, const em_proto_UpMessage *message);
 
 /// Clear all callbacks.
 ///

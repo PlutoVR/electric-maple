@@ -23,7 +23,7 @@
 #include "util/u_debug.h"
 
 #include "pb_decode.h"
-#include "pluto.pb.h"
+#include "electricmaple.pb.h"
 
 // Monado includes
 #include "gstreamer/gst_internal.h"
@@ -222,13 +222,13 @@ data_channel_close_cb(GstWebRTCDataChannel *datachannel, struct ems_gstreamer_pi
 static void
 data_channel_message_data_cb(GstWebRTCDataChannel *datachannel, GBytes *data, struct ems_gstreamer_pipeline *egp)
 {
-	pluto_UpMessage message = pluto_UpMessage_init_default;
+	em_proto_UpMessage message = em_proto_UpMessage_init_default;
 	size_t n = 0;
 
 	const unsigned char *buf = (const unsigned char *)g_bytes_get_data(data, &n);
 	pb_istream_t our_istream = pb_istream_from_buffer(buf, n);
 
-	bool result = pb_decode_ex(&our_istream, &pluto_UpMessage_msg, &message, PB_DECODE_NULLTERMINATED);
+	bool result = pb_decode_ex(&our_istream, &em_proto_UpMessage_msg, &message, PB_DECODE_NULLTERMINATED);
 
 	if (!result) {
 		U_LOG_E("Error! %s", PB_GET_ERROR(&our_istream));
