@@ -71,9 +71,6 @@ struct em_state
 
 em_state state = {};
 
-
-// FOR RYLIE: THE APP_CMD_ START/RESUME will not fire if quest2 is NOT worn
-// unless the proper dev params on the headset have been set (haven't done that).
 void
 onAppCmd(struct android_app *app, int32_t cmd)
 {
@@ -189,26 +186,14 @@ connected_cb(EmConnection *connection, struct em_state *state)
 
 } // namespace
 
-// FOR RYLIE : This is our main android app entry point. please note that there is
-// a PROFOUND difference between our webrtc/gstreamer-pipeline test application here
-// and PlutosphereOXR on which you'll have to integrate... The current test app
-// is a NO-JAVA one (AndroidManifest's hasCode=false), whereas PlutosphereOXR
-// is based on a java entrypoint (class MainActivity : NativeActivity() with the
-// onCreate(...) method). Since their app's also making use of native C/C++ code
-// and cmake, you'll be able to integrate most of what you find in here easily
-// but the crux of the integration will be about gstreamer-1.0 and the plugins
-// (especially androidmedia, which makes use of JNI).
-//
-// Read on, you'll see, most of the explanations around integrating libgstreamer-1.0
-// and the plugins is going to be in gst_driver.c.
 void
 android_main(struct android_app *app)
 {
 
-	// FOR RYLIE : VERY VERY useful for debugging gstreamer.
+	// Debugging gstreamer.
 	// GST_DEBUG = *:3 will give you ONLY ERROR-level messages.
 	// GST_DEBUG = *:6 will give you ALL messages (make sure you BOOST your android-studio's
-	// Logcat buffer to be able to capture everything gstreamer'S going to spit at you !
+	// Logcat buffer to be able to capture everything gstreamer's going to spit at you !
 	// in Tools -> logcat -> Cycle Buffer Size (I set it to 102400 KB).
 
 	// setenv("GST_DEBUG", "*:3", 1);

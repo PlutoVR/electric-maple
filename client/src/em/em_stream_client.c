@@ -615,11 +615,13 @@ em_stream_client_try_pull_sample(EmStreamClient *sc, struct timespec *out_decode
 	gint height = GST_VIDEO_INFO_HEIGHT(&info);
 	ALOGI("%s: frame %d (w) x %d (h)", __FUNCTION__, width, height);
 
-	// FOR RYLIE: Handle resize according to how it's done in PlutosphereOXR
-	/*if (width != sc->width || height != sc->height) {
-	    sc->width = width;
-	    sc->height = height;
-	}*/
+	// TODO: Handle resize?
+#if 0
+	if (width != sc->width || height != sc->height) {
+		sc->width = width;
+		sc->height = height;
+	}
+#endif
 
 	struct em_sc_sample *ret = calloc(1, sizeof(struct em_sc_sample));
 
