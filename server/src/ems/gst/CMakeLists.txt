@@ -3,7 +3,7 @@ add_library(ems_gst STATIC ems_gstreamer_pipeline.c ems_signaling_server.c)
 target_link_libraries(
 	ems_gst
 	PRIVATE
-		pl_build_defines
+		ems_build_defines
 		ems_callbacks
 		pluto_proto
 		aux_util
