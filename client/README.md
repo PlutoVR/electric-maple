@@ -49,3 +49,32 @@ from Cerbero), you will need to set one of these in `local.properties`:
   - `cmake` - Additional helper modules for CMake.
   - `deps` - where `./download_gst.sh` will put GStreamer
   - `scripts` - some possibly-outdated scripts.
+
+## Running
+
+You must start the server and an OpenXR app first. See the server README for
+details.
+
+By default this will try to connect to 127.0.0.1 (the Android device itself), on
+the assumption that you've set up tunnels with ADB. `./setup-tunnel.sh` can do
+that for you.
+
+For easiest build, install, and run, you can use the scripts in this directory:
+once you have a device connected with ADB enabled, run:
+
+```sh
+./launch.sh
+```
+
+This will clear logcat, stop the app on the device, set up tunnels, build the
+app, install it, launch it, then start tailing the logcat with a grep to show
+the app-specific stuff.
+
+If you want to save the logcat messages, run `./grab-logcat.sh` to stop the app,
+determine the process ID, and save the full available logcat for that process ID
+to a time-and-date-stamped file. It will also make a file next to it ending in
+`.clean.txt` which has fewer timestamps and things like process and thread IDs
+that vary on every run, so you can use a diff tool easier between runs.
+
+`./stop.sh` will stop the app. Make sure to stop when you're done, the app is
+pretty power hungry, at least on some devices.
