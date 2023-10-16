@@ -37,11 +37,20 @@
 #include <stdlib.h>
 #include <string.h>
 
+void
+em_gst_message_debug(const char *function, GstMessage *msg);
+
+#define LOG_MSG(MSG)                                                                                                   \
+	do {                                                                                                           \
+		em_gst_message_debug(__FUNCTION__, MSG);                                                               \
+	} while (0)
+
 struct em_sc_sample
 {
 	struct em_sample base;
 	GstSample *sample;
 };
+
 
 struct _EmStreamClient
 {
