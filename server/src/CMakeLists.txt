@@ -1,2 +1,2 @@
-add_subdirectory(pluto)
+add_subdirectory(ems)
 add_subdirectory(test)

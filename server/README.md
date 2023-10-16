@@ -1,4 +1,4 @@
-# Pluto ElectricMaple streaming server
+# Electric Maple streaming server
 
 <!--
 Copyright 2023, Collabora, Ltd.
@@ -82,7 +82,7 @@ Due to the early stage of the project, you must start this up in this particular
 Assuming you followed the build steps above, you can start the server with:
 
 ```sh
-build/src/pluto/ems_streaming_server
+build/src/ems/ems_streaming_server
 ```
 
 To run an OpenXR app, use the build-tree OpenXR runtime manifest at
