@@ -227,7 +227,7 @@ compositor_init_vulkan(struct pluto_compositor *c)
 
 	// Init command pool.
 	constexpr VkCommandPoolCreateFlags flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
-	U_LOG_E("%s", vk_result_string(ret));
+	// U_LOG_I("%s", vk_result_string(ret));
 	ret = vk_cmd_pool_init(vk, &c->cmd_pool, flags);
 	if (ret != VK_SUCCESS) {
 		PLUTO_COMP_ERROR(c, "vk_cmd_pool_init: %s", vk_result_string(ret));
