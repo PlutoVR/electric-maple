@@ -616,7 +616,9 @@ static void
 emconn_connect_internal(EmConnection *emconn, enum em_status status)
 {
 	em_connection_disconnect(emconn);
-
+	if (!emconn->ws_cancel) {
+		emconn->ws_cancel = g_cancellable_new();
+	}
 	g_cancellable_reset(emconn->ws_cancel);
 	ALOGI("RYLIE: calling soup_session_websocket_connect_async. websocket_uri = %s", emconn->websocket_uri);
 #if SOUP_MAJOR_VERSION == 2
