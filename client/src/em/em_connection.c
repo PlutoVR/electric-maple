@@ -340,8 +340,9 @@ emconn_webrtc_deep_notify_callback(GstObject *self, GstObject *prop_object, GPar
 {
 	GstWebRTCPeerConnectionState state;
 	g_object_get(prop_object, "connection-state", &state, NULL);
-	ALOGI("RYLIE: deep-notify callback says peer connection state is %s", peer_connection_state_to_string(state));
-	emconn_update_status_from_peer_connection_state(emconn, state);
+	ALOGV("RYLIE: deep-notify callback says peer connection state is %s - but it lies sometimes",
+	      peer_connection_state_to_string(state));
+	// emconn_update_status_from_peer_connection_state(emconn, state);
 }
 
 static void
