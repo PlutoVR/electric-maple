@@ -580,6 +580,7 @@ em_stream_client_stop(EmStreamClient *sc)
 	gst_clear_object(&sc->pipeline);
 	gst_clear_object(&sc->appsink);
 	gst_clear_object(&sc->context);
+	gst_clear_object(&sc->connection);
 
 	sc->pipeline_is_running = false;
 }
