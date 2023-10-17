@@ -67,6 +67,9 @@ struct em_state
 	uint32_t height;
 
 	EmConnection *connection;
+
+	bool shouldStop;
+	bool stopped;
 };
 
 em_state state = {};
@@ -77,7 +80,10 @@ onAppCmd(struct android_app *app, int32_t cmd)
 	switch (cmd) {
 	case APP_CMD_START: ALOGE("APP_CMD_START"); break;
 	case APP_CMD_RESUME: ALOGE("APP_CMD_RESUME"); break;
-	case APP_CMD_PAUSE: ALOGE("APP_CMD_PAUSE"); break;
+	case APP_CMD_PAUSE:
+		ALOGE("APP_CMD_PAUSE - setting shouldStop");
+		state.shouldStop = true;
+		break;
 	case APP_CMD_STOP:
 		ALOGE("APP_CMD_STOP - shutting down connection");
 		em_connection_disconnect(state.connection);
@@ -152,10 +158,17 @@ poll_events(struct android_app *app, struct em_state &state)
 			case XR_SESSION_STATE_FOCUSED: ALOGI("OpenXR session is now FOCUSED"); break;
 			case XR_SESSION_STATE_STOPPING:
 				ALOGI("OpenXR session is now STOPPING");
+				state.shouldStop = true;
 				xrEndSession(state.session);
 				break;
-			case XR_SESSION_STATE_LOSS_PENDING: ALOGI("OpenXR session is now LOSS_PENDING"); break;
-			case XR_SESSION_STATE_EXITING: ALOGI("OpenXR session is now EXITING"); break;
+			case XR_SESSION_STATE_LOSS_PENDING:
+				ALOGI("OpenXR session is now LOSS_PENDING");
+				state.shouldStop = true;
+				break;
+			case XR_SESSION_STATE_EXITING:
+				ALOGI("OpenXR session is now EXITING");
+				state.shouldStop = true;
+				break;
 			default: break;
 			}
 
@@ -369,8 +382,13 @@ android_main(struct android_app *app)
 	// Main rendering loop.
 	ALOGI("DEBUG: Starting main loop.\n");
 	while (!app->destroyRequested) {
-		if (poll_events(app, state)) {
+		if (!state.stopped && poll_events(app, state)) {
 			em_remote_experience_poll_and_render_frame(remote_experience);
+		}
+		if (state.shouldStop && !state.stopped) {
+			ALOGI("Calling em_stream_client_stop");
+			em_stream_client_stop(stream_client);
+			state.stopped = true;
 		}
 	}
 
