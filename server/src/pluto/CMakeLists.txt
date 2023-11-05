@@ -19,6 +19,7 @@ target_link_libraries(
 	comp_pluto
 	PUBLIC xrt-interfaces
 	PRIVATE
+		pluto_proto
 		aux_util
 		aux_os
 		aux_vk

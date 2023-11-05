@@ -13,13 +13,17 @@
 
 #include "gstreamer/gst_pipeline.h"
 
-
 #ifdef __cplusplus
 extern "C" {
 #endif
-struct gstreamer_pipeline;
 
+struct gstreamer_pipeline;
 struct pl_callbacks;
+
+typedef struct _pluto_DownMessage pluto_DownMessage;
+
+void
+gstreamer_webrtc_pipeline_set_down_msg(struct gstreamer_pipeline *gp, pluto_DownMessage *msg);
 
 void
 gstreamer_webrtc_pipeline_play(struct gstreamer_pipeline *gp);

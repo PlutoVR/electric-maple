@@ -34,6 +34,7 @@
 #include <glib-unix.h>
 #include <gst/gst.h>
 #include <gst/gststructure.h>
+#include <gst/rtp/gstrtpbuffer.h>
 
 #define GST_USE_UNSTABLE_API
 #include <gst/webrtc/datachannel.h>
@@ -51,6 +52,10 @@
 #define DEFAULT_VIDEOSINK " videoconvert ! autovideosink "
 #endif
 
+// TODO: Can we define the below at a higher level so it can also be
+//       picked-up by em_stream_client ?
+#define RTP_TWOBYTES_HDR_EXT_ID 1 // Must be in the [1,15] range
+#define RTP_TWOBYTES_HDR_EXT_MAX_SIZE 255
 
 
 MssHttpServer *http_server;
@@ -67,10 +72,10 @@ struct gstreamer_webrtc_pipeline
 	GObject *data_channel;
 	guint timeout_src_id;
 
+	GBytes* downMsg_bytes;
 
 	struct pl_callbacks *callbacks;
 };
-
 
 static gboolean
 sigint_handler(gpointer user_data)
@@ -243,6 +248,55 @@ data_channel_message_string_cb(GstWebRTCDataChannel *datachannel, gchar *str, st
 	U_LOG_I("Received data channel message: %s\n", str);
 }
 
+GstPadProbeReturn webrtcbin_srcpad_probe(GstPad *pad, GstPadProbeInfo *info, gpointer user_data) {
+	(void) pad;
+
+	GstBuffer *buffer;
+	GstRTPBuffer rtp_buffer = GST_RTP_BUFFER_INIT;
+	gconstpointer extension_data;
+	size_t extension_size;
+
+	struct gstreamer_webrtc_pipeline *gwp = (struct gstreamer_webrtc_pipeline*) user_data;
+
+	if (GST_PAD_PROBE_INFO_TYPE(info) & GST_PAD_PROBE_TYPE_BUFFER_LIST) {
+		U_LOG_E("Received BufferList in webrtcbin srcpad! No support for BufferList!\n");
+		return GST_PAD_PROBE_REMOVE;
+	}
+
+	buffer = gst_pad_probe_info_get_buffer(info);
+
+	buffer = gst_buffer_make_writable(buffer);
+
+	if (!gst_rtp_buffer_map(buffer, GST_MAP_WRITE, &rtp_buffer)) {
+		U_LOG_E("Failed to map GstBuffer\n");
+		return GST_PAD_PROBE_REMOVE;
+	}
+
+	// Add extension data only on last Access Unit, indicated by the marker bit.
+	if (!gst_rtp_buffer_get_marker(&rtp_buffer)) {
+		gst_rtp_buffer_unmap(&rtp_buffer);
+		return GST_PAD_PROBE_OK; // Nothing's wrong, we keep the pad active.
+	}
+
+	// Inject extension data
+	extension_data = g_bytes_get_data(gwp->downMsg_bytes, &extension_size);
+
+	if (extension_size > RTP_TWOBYTES_HDR_EXT_MAX_SIZE) {
+		U_LOG_E("size of data in rtp header is too large ! Implement multi-extension-element support !");
+		gst_rtp_buffer_unmap(&rtp_buffer);
+		return GST_PAD_PROBE_REMOVE;
+	}
+
+	if (!gst_rtp_buffer_add_extension_twobytes_header(&rtp_buffer,
+            0 /* appbits */, RTP_TWOBYTES_HDR_EXT_ID, extension_data, (guint) extension_size)) {
+		U_LOG_E("Failed to add extension data !");
+		return GST_PAD_PROBE_REMOVE;
+	}
+
+	gst_rtp_buffer_unmap(&rtp_buffer);
+
+	return GST_PAD_PROBE_OK;
+}
 
 static void
 webrtc_client_connected_cb(MssHttpServer *server, MssClientId client_id, struct gstreamer_webrtc_pipeline *gwp)
@@ -250,6 +304,7 @@ webrtc_client_connected_cb(MssHttpServer *server, MssClientId client_id, struct 
 	GstBin *pipeline = GST_BIN(gwp->base.pipeline);
 	gchar *name;
 	GstElement *webrtcbin;
+	GstPad *webrtcbin_srcpad;
 	GstCaps *caps;
 	GstStateChangeReturn ret;
 	GstWebRTCRTPTransceiver *transceiver;
@@ -285,6 +340,20 @@ webrtc_client_connected_cb(MssHttpServer *server, MssClientId client_id, struct 
 		g_signal_connect(gwp->data_channel, "on-message-data", G_CALLBACK(data_channel_message_data_cb), gwp);
 		g_signal_connect(gwp->data_channel, "on-message-string", G_CALLBACK(data_channel_message_string_cb),
 		                 gwp);
+	}
+
+	// Get the srcpad associated with our webrtcbin element
+	webrtcbin_srcpad = gst_element_get_static_pad(webrtcbin, "src");
+
+	if (webrtcbin_srcpad != NULL) {
+		// Add a probe to call our callback when buffers get to the src pad
+		gst_pad_add_probe(webrtcbin_srcpad,
+				GST_PAD_PROBE_TYPE_BUFFER | GST_PAD_PROBE_TYPE_BUFFER_LIST,
+				webrtcbin_srcpad_probe, gwp, NULL /*destroy_data*/);
+
+		gst_object_unref(webrtcbin_srcpad);
+	} else {
+		U_LOG_E("Could not retrieve webrtcbin srcpad !");
 	}
 
 	ret = gst_element_set_state(webrtcbin, GST_STATE_PLAYING);
@@ -532,6 +601,13 @@ loop_thread(void *data)
  * Exported functions.
  *
  */
+void
+gstreamer_webrtc_pipeline_set_down_msg(struct gstreamer_pipeline *gp, pluto_DownMessage *msg)
+{
+	struct gstreamer_webrtc_pipeline *gwp = (struct gstreamer_webrtc_pipeline *)gp;
+
+	gwp->downMsg_bytes = g_bytes_new(msg, sizeof(pluto_DownMessage));
+}
 
 void
 gstreamer_webrtc_pipeline_play(struct gstreamer_pipeline *gp)

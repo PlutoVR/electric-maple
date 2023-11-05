@@ -31,8 +31,8 @@
 #include "vk/vk_cmd.h"
 #include "vk/vk_cmd_pool.h"
 
-
 #include "pl_comp.h"
+#include "pluto.pb.h"
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -508,7 +508,19 @@ do_the_thing(struct pluto_compositor *c,
 	wrap->base_frame.source_timestamp = wrap->base_frame.timestamp;
 	wrap->base_frame.source_sequence = c->image_sequence++;
 	wrap->base_frame.source_id = 0;
-	wrap = NULL;
+
+	// set the latest Downstream mesg before pushing the frame
+	pluto_DownMessage msg = pluto_DownMessage_init_default;
+	msg.has_frame_data = true;
+	msg.frame_data.frame_sequence_id = wrap->base_frame.source_sequence;
+	// TODO: set the below as well ...
+	// msg.frame_data.has_P_localSpace_viewSpace =  ;
+	// msg.frame_data.P_localSpace_viewSpace = ... ;
+	// msg.frame_datadisplay_time; /* Needed ?*/
+
+	wrap = NULL; // important to keep this line after setting "msg.frame_sequence_id" above.
+
+	gstreamer_webrtc_pipeline_set_down_msg(c->hackers_gstreamer_pipeline, &msg);
 
 	if (!c->pipeline_playing) {
 		gstreamer_webrtc_pipeline_play(c->hackers_gstreamer_pipeline);
