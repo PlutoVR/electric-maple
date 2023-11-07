@@ -49,3 +49,5 @@ target_link_libraries(
 	)
 
 target_link_libraries(pluto_streaming_server PRIVATE st_gui xrt-external-imgui-sdl2 aux_ogl)
+
+install(TARGETS pluto_streaming_server RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
