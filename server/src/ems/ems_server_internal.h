@@ -16,6 +16,7 @@
 
 #include "util/u_pacing.h"
 #include "util/u_logging.h"
+#include "util/u_system_helpers.h"
 
 #include <memory>
 #include <mutex>
@@ -76,7 +77,7 @@ struct ems_instance
 	struct xrt_instance xinst_base;
 
 	//! System devices base.
-	struct xrt_system_devices xsysd_base;
+	struct u_system_devices_static sys_devices;
 
 	//! Shared tracking origin for all devices.
 	struct xrt_tracking_origin tracking_origin;

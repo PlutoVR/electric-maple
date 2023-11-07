@@ -32,7 +32,7 @@ from_xinst(struct xrt_instance *xinst)
 inline struct ems_instance *
 from_xsysd(struct xrt_system_devices *xsysd)
 {
-	return container_of(xsysd, struct ems_instance, xsysd_base);
+	return container_of(xsysd, struct ems_instance, sys_devices);
 }
 
 
@@ -90,7 +90,7 @@ ems_instance_create_system(struct xrt_instance *xinst,
 
 	struct ems_instance *emsi = from_xinst(xinst);
 
-	*out_xsysd = &emsi->xsysd_base;
+	*out_xsysd = &emsi->sys_devices;
 	*out_xso = emsi->xso;
 
 	// Early out if we only want devices.
@@ -132,7 +132,7 @@ ems_instance_system_devices_init(struct ems_instance *emsi)
 	// needed before creating devices
 	emsi->callbacks = ems_callbacks_create();
 
-	emsi->xsysd_base.destroy = ems_instance_system_devices_destroy;
+	emsi->sys_devices.destroy = ems_instance_system_devices_destroy;
 
 
 	xrt_tracking_origin &origin = emsi->tracking_origin;
@@ -159,15 +159,15 @@ ems_instance_system_devices_init(struct ems_instance *emsi)
 	struct xrt_device *right = &emcr->base;
 
 	// Setup the device base as the only device.
-	emsi->xsysd_base.xdevs[0] = head;
-	emsi->xsysd_base.xdevs[1] = left;
-	emsi->xsysd_base.xdevs[2] = right;
-	emsi->xsysd_base.xdev_count = 3;
-	emsi->xsysd_base.roles.head = head;
-	emsi->xsysd_base.roles.left = left;
-	emsi->xsysd_base.roles.right = right;
+	emsi->sys_devices.xdevs[0] = head;
+	emsi->sys_devices.xdevs[1] = left;
+	emsi->sys_devices.xdevs[2] = right;
+	emsi->sys_devices.xdev_count = 3;
+	emsi->sys_devices.static_roles.head = head;
+	emsi->sys_devices.static_roles.left = left;
+	emsi->sys_devices.static_roles.right = right;
 
-	u_builder_create_space_overseer(&emsi->xsysd_base, &emsi->xso);
+	u_builder_create_space_overseer(&emsi->sys_devices, &emsi->xso);
 }
 
 void

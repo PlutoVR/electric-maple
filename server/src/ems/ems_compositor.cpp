@@ -818,7 +818,7 @@ ems_compositor_create_system(ems_instance &emsi, struct xrt_system_compositor **
 	c->frame.rendering.id = -1;
 	c->state = EMS_COMP_COMP_STATE_READY;
 
-	xrt_device *xdev = emsi.xsysd_base.roles.head;
+	xrt_device *xdev = emsi.sys_devices.static_roles.head;
 
 	c->settings.frame_interval_ns = xdev->hmd->screens[0].nominal_frame_interval_ns;
 	c->xdev = xdev;
