@@ -7,7 +7,7 @@
  * @author Moshi Turner <moses@collabora.com>
  * @author Jakub Adam <jakub.adam@collabora.com
  * @author Nicolas Dufresne <nicolas.dufresne@collabora.com>
- * @author Olivier Crête <olivier.crete@collabora.com>
+ * @author Olivier Crete <olivier.crete@collabora.com>
  * @ingroup aux_util
  */
 
@@ -135,7 +135,7 @@ message_cb(SoupWebsocketConnection *connection, gint type, GBytes *message, gpoi
 static void
 mss_http_server_remove_websocket_connection(MssHttpServer *server, SoupWebsocketConnection *connection)
 {
-	g_info("%s", __FUNCTION__);
+	g_info("%s", __func__);
 	MssClientId client_id;
 
 	client_id = g_object_get_data(G_OBJECT(connection), "client_id");
@@ -156,7 +156,7 @@ closed_cb(SoupWebsocketConnection *connection, gpointer user_data)
 static void
 mss_http_server_add_websocket_connection(MssHttpServer *server, SoupWebsocketConnection *connection)
 {
-	g_info("%s", __FUNCTION__);
+	g_info("%s", __func__);
 	g_object_ref(connection);
 	server->websocket_connections = g_slist_append(server->websocket_connections, connection);
 	g_object_set_data(G_OBJECT(connection), "client_id", connection);
@@ -216,7 +216,7 @@ mss_http_server_send_to_websocket_client(MssHttpServer *server, MssClientId clie
 {
 	SoupWebsocketConnection *connection = client_id;
 	SoupWebsocketState socket_state;
-	g_info("%s", __FUNCTION__);
+	g_info("%s", __func__);
 
 	if (!g_slist_find(server->websocket_connections, connection)) {
 		g_warning("Unknown websocket connection.");
