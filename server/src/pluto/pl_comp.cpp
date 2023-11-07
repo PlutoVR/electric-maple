@@ -37,10 +37,17 @@
 #include <stdio.h>
 #include <stdarg.h>
 
-#define APP_VIEW_W (1920 / 2)
-#define APP_VIEW_H (1080)
+// native quest resolution
+// #define APP_VIEW_W (1832)
+// #define APP_VIEW_H (1920)
 
-#define READBACK_DIV_FACTOR (4)
+
+#define APP_VIEW_W (1920)
+#define APP_VIEW_H (1920)
+
+// TODO making this 1 causes readback failures
+// I assume this means there is some kind of buffer creation failing and we aren't handling the error right.
+#define READBACK_DIV_FACTOR (2)
 
 #define READBACK_W2 (APP_VIEW_W / READBACK_DIV_FACTOR)
 #define READBACK_W (READBACK_W2 * 2)
