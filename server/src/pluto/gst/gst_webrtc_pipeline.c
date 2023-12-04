@@ -25,6 +25,8 @@
 #include "pb_decode.h"
 #include "pluto.pb.h"
 
+#include <pb_encode.h>
+
 // Monado includes
 #include "gstreamer/gst_internal.h"
 #include "gstreamer/gst_pipeline.h"
@@ -72,7 +74,7 @@ struct gstreamer_webrtc_pipeline
 	GObject *data_channel;
 	guint timeout_src_id;
 
-	GBytes* downMsg_bytes;
+	GBytes *downMsg_bytes;
 
 	struct pl_callbacks *callbacks;
 };
@@ -248,15 +250,17 @@ data_channel_message_string_cb(GstWebRTCDataChannel *datachannel, gchar *str, st
 	U_LOG_I("Received data channel message: %s\n", str);
 }
 
-GstPadProbeReturn webrtcbin_srcpad_probe(GstPad *pad, GstPadProbeInfo *info, gpointer user_data) {
-	(void) pad;
+GstPadProbeReturn
+webrtcbin_srcpad_probe(GstPad *pad, GstPadProbeInfo *info, gpointer user_data)
+{
+	(void)pad;
 
 	GstBuffer *buffer;
 	GstRTPBuffer rtp_buffer = GST_RTP_BUFFER_INIT;
 	gconstpointer extension_data;
 	size_t extension_size;
 
-	struct gstreamer_webrtc_pipeline *gwp = (struct gstreamer_webrtc_pipeline*) user_data;
+	struct gstreamer_webrtc_pipeline *gwp = (struct gstreamer_webrtc_pipeline *)user_data;
 
 	if (GST_PAD_PROBE_INFO_TYPE(info) & GST_PAD_PROBE_TYPE_BUFFER_LIST) {
 		U_LOG_E("Received BufferList in webrtcbin srcpad! No support for BufferList!\n");
@@ -287,8 +291,8 @@ GstPadProbeReturn webrtcbin_srcpad_probe(GstPad *pad, GstPadProbeInfo *info, gpo
 		return GST_PAD_PROBE_REMOVE;
 	}
 
-	if (!gst_rtp_buffer_add_extension_twobytes_header(&rtp_buffer,
-            0 /* appbits */, RTP_TWOBYTES_HDR_EXT_ID, extension_data, (guint) extension_size)) {
+	if (!gst_rtp_buffer_add_extension_twobytes_header(&rtp_buffer, 0 /* appbits */, RTP_TWOBYTES_HDR_EXT_ID,
+	                                                  extension_data, (guint)extension_size)) {
 		U_LOG_E("Failed to add extension data !");
 		return GST_PAD_PROBE_REMOVE;
 	}
@@ -347,9 +351,8 @@ webrtc_client_connected_cb(MssHttpServer *server, MssClientId client_id, struct 
 
 	if (webrtcbin_srcpad != NULL) {
 		// Add a probe to call our callback when buffers get to the src pad
-		gst_pad_add_probe(webrtcbin_srcpad,
-				GST_PAD_PROBE_TYPE_BUFFER | GST_PAD_PROBE_TYPE_BUFFER_LIST,
-				webrtcbin_srcpad_probe, gwp, NULL /*destroy_data*/);
+		gst_pad_add_probe(webrtcbin_srcpad, GST_PAD_PROBE_TYPE_BUFFER | GST_PAD_PROBE_TYPE_BUFFER_LIST,
+		                  webrtcbin_srcpad_probe, gwp, NULL /*destroy_data*/);
 
 		gst_object_unref(webrtcbin_srcpad);
 	} else {
@@ -606,7 +609,16 @@ gstreamer_webrtc_pipeline_set_down_msg(struct gstreamer_pipeline *gp, pluto_Down
 {
 	struct gstreamer_webrtc_pipeline *gwp = (struct gstreamer_webrtc_pipeline *)gp;
 
-	gwp->downMsg_bytes = g_bytes_new(msg, sizeof(pluto_DownMessage));
+	uint8_t buf[pluto_DownMessage_size];
+	size_t n = 0;
+	pb_get_encoded_size(&n, pluto_DownMessage_fields, &msg);
+
+	pb_ostream_t os = pb_ostream_from_buffer(buf, sizeof(buf));
+
+	pb_encode(&os, pluto_DownMessage_fields, &msg);
+	g_bytes_unref(gwp->downMsg_bytes);
+	gwp->downMsg_bytes = NULL;
+	gwp->downMsg_bytes = g_bytes_new(buf, n);
 }
 
 void
