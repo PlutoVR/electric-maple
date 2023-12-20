@@ -446,6 +446,15 @@ em_remote_experience_inner_poll_and_render_frame(EmRemoteExperience *exp,
 	uint32_t width = exp->eye_extents.width;
 	uint32_t height = exp->eye_extents.height;
 
+	static bool showedFov = false;
+	if (!showedFov) {
+		showedFov = true;
+		ALOGI("RYLIE XrFovf 0: L %0.3f R %0.3f U %0.3f D %0.3f", views[0].fov.angleLeft,
+		      views[0].fov.angleRight, views[0].fov.angleUp, views[0].fov.angleDown);
+		ALOGI("RYLIE XrFovf 1: L %0.3f R %0.3f U %0.3f D %0.3f", views[1].fov.angleLeft,
+		      views[1].fov.angleRight, views[1].fov.angleUp, views[1].fov.angleDown);
+	}
+
 	projectionLayer->space = exp->xr_owned.worldSpace;
 
 	projectionViews[0].subImage.swapchain = exp->xr_owned.swapchain;
