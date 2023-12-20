@@ -449,10 +449,14 @@ em_remote_experience_inner_poll_and_render_frame(EmRemoteExperience *exp,
 	static bool showedFov = false;
 	if (!showedFov) {
 		showedFov = true;
-		ALOGI("RYLIE XrFovf 0: L %0.3f R %0.3f U %0.3f D %0.3f", views[0].fov.angleLeft,
-		      views[0].fov.angleRight, views[0].fov.angleUp, views[0].fov.angleDown);
-		ALOGI("RYLIE XrFovf 1: L %0.3f R %0.3f U %0.3f D %0.3f", views[1].fov.angleLeft,
-		      views[1].fov.angleRight, views[1].fov.angleUp, views[1].fov.angleDown);
+		ALOGI(
+		    "RYLIE XrFovf 0: (xrt_fov){ .angle_left = %0.03ff, .angle_right = %0.03ff, .angle_up = %0.03ff, "
+		    ".angle_down = %0.03ff }",
+		    views[0].fov.angleLeft, views[0].fov.angleRight, views[0].fov.angleUp, views[0].fov.angleDown);
+		ALOGI(
+		    "RYLIE XrFovf 1: (xrt_fov){ .angle_left = %0.03ff, .angle_right = %0.03ff, .angle_up = %0.03ff, "
+		    ".angle_down = %0.03ff }",
+		    views[1].fov.angleLeft, views[1].fov.angleRight, views[1].fov.angleUp, views[1].fov.angleDown);
 	}
 
 	projectionLayer->space = exp->xr_owned.worldSpace;
