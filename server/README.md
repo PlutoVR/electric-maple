@@ -19,6 +19,8 @@ ninja -C build
 
 - libeigen3-dev
 - gstreamer1.0-plugins-good
+- gstreamer1.0-plugins-bad
+- gstreamer1.0-plugins-ugly
 - gstreamer1.0-nice
 - libgstreamer-plugins-bad1.0-dev
 - libgstreamer-plugins-base1.0-dev
@@ -36,6 +38,8 @@ ninja -C build
 ```sh
 sudo apt install libeigen3-dev \
     gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-bad \
+    gstreamer1.0-plugins-ugly \
     gstreamer1.0-nice \
     libgstreamer-plugins-bad1.0-dev \
     libgstreamer-plugins-base1.0-dev \
