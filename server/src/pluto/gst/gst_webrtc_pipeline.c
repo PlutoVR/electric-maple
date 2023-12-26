@@ -257,7 +257,8 @@ webrtc_client_connected_cb(MssHttpServer *server, MssClientId client_id, struct 
 	name = g_strdup_printf("webrtcbin_%p", client_id);
 
 	webrtcbin = gst_element_factory_make("webrtcbin", name);
-	g_object_set(webrtcbin, "bundle-policy", GST_WEBRTC_BUNDLE_POLICY_MAX_BUNDLE, NULL);
+	g_object_set(webrtcbin, "bundle-policy", GST_WEBRTC_BUNDLE_POLICY_MAX_BUNDLE, "stun-server",
+	             "stun://stun.l.google.com:19302", NULL);
 	g_object_set_data(G_OBJECT(webrtcbin), "client_id", client_id);
 	gst_bin_add(pipeline, webrtcbin);
 
