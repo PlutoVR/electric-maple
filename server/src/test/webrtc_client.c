@@ -228,7 +228,7 @@ out:
 }
 
 static void
-data_channel_error_cb(GstWebRTCDataChannel *datachannel, void* data)
+data_channel_error_cb(GstWebRTCDataChannel *datachannel, void *data)
 {
 	U_LOG_E("error\n");
 	abort();
@@ -244,7 +244,7 @@ data_channel_close_cb(GstWebRTCDataChannel *datachannel, gpointer timeout_src_id
 }
 
 static void
-data_channel_message_string_cb(GstWebRTCDataChannel *datachannel, gchar *str, void* data)
+data_channel_message_string_cb(GstWebRTCDataChannel *datachannel, gchar *str, void *data)
 {
 	U_LOG_E("Received data channel message: %s\n", str);
 }
@@ -258,7 +258,7 @@ datachannel_send_message(gpointer unused)
 }
 
 static void
-webrtc_on_data_channel_cb(GstElement *webrtcbin, GstWebRTCDataChannel *data_channel, void* data)
+webrtc_on_data_channel_cb(GstElement *webrtcbin, GstWebRTCDataChannel *data_channel, void *data)
 {
 	guint timeout_src_id;
 

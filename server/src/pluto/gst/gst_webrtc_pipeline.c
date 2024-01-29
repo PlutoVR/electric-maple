@@ -193,7 +193,7 @@ data_channel_open_cb(GstWebRTCDataChannel *datachannel, struct gstreamer_webrtc_
 {
 	U_LOG_E("data channel opened\n");
 
-	gwp->timeout_src_id = g_timeout_add_seconds(3, G_SOURCE_FUNC (datachannel_send_message), datachannel);
+	gwp->timeout_src_id = g_timeout_add_seconds(3, G_SOURCE_FUNC(datachannel_send_message), datachannel);
 }
 
 static void
@@ -201,8 +201,8 @@ data_channel_close_cb(GstWebRTCDataChannel *datachannel, struct gstreamer_webrtc
 {
 	U_LOG_E("data channel closed\n");
 
-	g_clear_handle_id (&gwp->timeout_src_id, g_source_remove);
-	g_clear_object (&gwp->data_channel);
+	g_clear_handle_id(&gwp->timeout_src_id, g_source_remove);
+	g_clear_object(&gwp->data_channel);
 }
 
 static void
@@ -225,8 +225,7 @@ webrtc_client_connected_cb(MssHttpServer *server, MssClientId client_id, struct 
 	name = g_strdup_printf("webrtcbin_%p", client_id);
 
 	webrtcbin = gst_element_factory_make("webrtcbin", name);
-	g_object_set (webrtcbin, "bundle-policy",
-			GST_WEBRTC_BUNDLE_POLICY_MAX_BUNDLE, NULL);
+	g_object_set(webrtcbin, "bundle-policy", GST_WEBRTC_BUNDLE_POLICY_MAX_BUNDLE, NULL);
 	g_object_set_data(G_OBJECT(webrtcbin), "client_id", client_id);
 	gst_bin_add(pipeline, webrtcbin);
 
