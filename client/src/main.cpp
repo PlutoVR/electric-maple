@@ -6,12 +6,72 @@
  * @author Moshi Turner <moses@collabora.com>
  */
 
-
+#include <cmath>
+#include <cstdlib>
+#include <ctime>
+#include <array>
 #include <errno.h>
 
 #include <assert.h>
 
 #include "common.hpp"
+#include "vf/vf_interface.h"
+
+#include <unistd.h>
+
+#include <android/native_activity.h>
+#include <jni.h>
+#include <android/asset_manager_jni.h>
+#include <android/log.h>
+
+
+
+// static GLuint global_data[1440*1584*4];
+
+
+
+static int pfd[2];
+static pthread_t thr;
+static const char *tag = "myapp";
+
+static void *
+thread_func(void *)
+{
+	ssize_t rdsz;
+	char buf[2048];
+	while ((rdsz = read(pfd[0], buf, sizeof buf - 1)) > 0) {
+		if (buf[rdsz - 1] == '\n')
+			--rdsz;
+		buf[rdsz] = 0; /* add null-terminator */
+		__android_log_write(ANDROID_LOG_DEBUG, tag, buf);
+	}
+	return 0;
+}
+
+
+
+int
+start_logger(const char *app_name)
+{
+	tag = app_name;
+
+	/* make stdout line-buffered and stderr unbuffered */
+	setvbuf(stdout, 0, _IOLBF, 0);
+	setvbuf(stderr, 0, _IOLBF, 0);
+
+	/* create the pipe and redirect stdout and stderr */
+	pipe(pfd);
+	dup2(pfd[1], 1);
+	dup2(pfd[1], 2);
+
+	/* spawn the logging thread */
+	if (pthread_create(&thr, 0, thread_func, 0) == -1)
+		return -1;
+	pthread_detach(thr);
+	return 0;
+}
+
+
 
 static state_t state = {};
 
@@ -27,6 +87,137 @@ onAppCmd(struct android_app *app, int32_t cmd)
 	case APP_CMD_INIT_WINDOW: U_LOG_E("APP_CMD_INIT_WINDOW"); break;
 	case APP_CMD_TERM_WINDOW: U_LOG_E("APP_CMD_TERM_WINDOW"); break;
 	}
+}
+
+
+void
+sink_push_frame(struct xrt_frame_sink *xfs, struct xrt_frame *xf)
+{
+	U_LOG_E("called!");
+	if (!xf) {
+		U_LOG_E("what??");
+		return;
+	}
+	struct state_t *st = container_of(xfs, struct state_t, frame_sink);
+
+	// This can cause a segfault if we hold onto one frame for too long so OH.
+	if (!st->xf) {
+		//		xrt_frame_reference(&xf, st->xf);
+		xrt_frame_reference(&st->xf, xf);
+	}
+	U_LOG_E("Called! %d %p %u %u %zu", st->frame_tex, xf->data, xf->width, xf->height, xf->stride);
+}
+
+void
+writeRandomTexture(GLsizei width, GLsizei height, int way, GLubyte *data)
+{
+
+	// Seed the random number generator
+	//    std::srand(std::time(0));
+	if (way == 0) {
+
+		// Fill the texture data with random values
+		for (GLsizei i = 0; i < width * height * 4; i++) {
+			data[i] = std::rand() % 256;
+		}
+	} else if (way == 1) {
+
+		int tileSize = 100;
+		for (GLsizei y = 0; y < height; y++) {
+			for (GLsizei x = 0; x < width; x++) {
+				GLsizei tileX = x / tileSize;
+				GLsizei tileY = y / tileSize;
+
+				GLubyte color = ((tileX + tileY) % 2 == 0) ? 255 : 0;
+				GLsizei index = (y * width + x) * 4;
+
+				data[index] = color;
+				data[index + 1] = color;
+				data[index + 2] = color;
+				data[index + 3] = 255;
+			}
+		}
+	} else {
+		// Define the colors for the rainbow checkerboard
+		std::array<GLubyte[4], 7> colors = {{
+		    {255, 0, 0, 255},   // Red
+		    {255, 127, 0, 255}, // Orange
+		    {255, 255, 0, 255}, // Yellow
+		    {0, 255, 0, 255},   // Green
+		    {0, 0, 255, 255},   // Blue
+		    {75, 0, 130, 255},  // Indigo
+		    {148, 0, 211, 255}  // Violet
+		}};
+		int tileSize = 100;
+		for (GLsizei y = 0; y < height; y++) {
+			for (GLsizei x = 0; x < width; x++) {
+				GLsizei tileX = x / tileSize;
+				GLsizei tileY = y / tileSize;
+
+				GLsizei tileIndex = (tileX + tileY) % colors.size();
+				GLsizei index = (y * width + x) * 4;
+
+				data[index] = colors[tileIndex][0];
+				data[index + 1] = colors[tileIndex][1];
+				data[index + 2] = colors[tileIndex][2];
+				data[index + 3] = colors[tileIndex][3];
+			}
+		}
+	}
+}
+
+GLuint
+generateRandomTexture(GLsizei width, GLsizei height, int way)
+{
+	// Allocate memory for the texture data
+	GLubyte *data = new GLubyte[width * height * 4];
+
+	writeRandomTexture(width, height, way, data);
+	// Create the texture
+	GLuint texture;
+	glGenTextures(1, &texture);
+	glBindTexture(GL_TEXTURE_2D, texture);
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	// Free the texture data
+	delete[] data;
+
+	return texture;
+}
+
+
+void
+generateRandomTextureOld(GLsizei width, GLsizei height, int way, GLuint *handle)
+{
+
+
+	// Allocate memory for the texture data
+	GLubyte *data = new GLubyte[width * height * 4];
+
+	writeRandomTexture(width, height, way, data);
+	glBindTexture(GL_TEXTURE_2D, *handle);
+	// This call is definitely what's crashing, which is real confusing.
+	U_LOG_E("%d %d", width, height);
+#if 0
+//    glPixelStorei(GL_UNPACK_ALIGNMENT, 1); // Set to 1 for tightly packed data
+
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+
+#else
+	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, data);
+
+#endif
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	// Free the texture data
+	delete[] data;
 }
 
 void
@@ -70,7 +261,7 @@ really_make_socket(struct state_t &st)
 static void
 hmd_pose(struct state_t &st)
 {
-
+	return;
 	XrResult result = XR_SUCCESS;
 
 
@@ -294,13 +485,68 @@ mainloop_one(struct state_t &state)
 		U_LOG_E("Failed to wait for swapchain image (%d)", result);
 	}
 
+	if (state.xf) {
+		//	if (false) {
+
+		//            for (int y = 0; y < state.xf->height; y++) {
+		//                for (int x = 0; x < state.xf->width; x++) {
+		//                    const uint8_t *src = state.xf->data;
+		//                    uint8_t *dst = (uint8_t*)global_data;
+		//
+		//                    src = src + (y * state.xf->stride ) + (x*4);
+		//                    dst = dst + (y * width*4) + (x * 4);
+		//                    dst[0] = src[0];
+		//                    dst[1] = src[1];
+		//                    dst[2] = src[2];
+		//                    dst[3] = src[3];
+		//
+		//                }
+		//
+		//            }
+
+
+		U_LOG_E("meow!");
+		glBindTexture(GL_TEXTURE_2D, state.frame_tex);
+		glPixelStorei(GL_UNPACK_ROW_LENGTH, 1440);
+		//            glPixelStorei(GL_UNPACK_ALIGNMENT, 2); // Set to 1 for tightly packed data
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 1440, 1584, GL_RGBA, GL_UNSIGNED_BYTE, state.xf->data);
+
+		//		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, state.xf->width, state.xf->height, 0, GL_RGBA,
+		// GL_UNSIGNED_BYTE, 		             state.xf->data);
+
+		//        glPixelStorei(GL_UNPACK_ROW_LENGTH, state.xf->stride / 4);
+		//    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, state.xf->width, state.xf->height, 0, GL_RGBA,
+		//    GL_UNSIGNED_BYTE, state.xf->data);
+		glBindTexture(GL_TEXTURE_2D, 0);
+
+		//            delete[] data;
+	}
+
+	// can be factored into the above, it's just useful to be able to disable seperately
+	if (state.xf) {
+		xrt_frame_reference(&state.xf, NULL);
+	}
+
+	//    state.frame_idx++;
+	//	if (state.frame_idx % 20 == 0) {
+	//		U_LOG_E("what");
+	//        state.way++;
+	//		generateRandomTextureOld(state.width, state.height, state.way % 3, &state.frame_tex);
+	//	}
+
 
 	glBindFramebuffer(GL_FRAMEBUFFER, state.framebuffers[imageIndex]);
+
+	glViewport(0, 0, state.width * 2, state.height);
+
+
+	glClearColor(0.0f, 1.0f, 0.0f, 1.0f);
+	//    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	// Just display purple nothingness
 	for (uint32_t eye = 0; eye < 2; eye++) {
 		glViewport(eye * state.width, 0, state.width, state.height);
-		drawTriangle(state.shader_program);
+		draw(state.framebuffers[imageIndex], state.frame_tex);
 	}
 
 	// Release
@@ -325,15 +571,86 @@ mainloop_one(struct state_t &state)
 	xrEndFrame(state.session, &endInfo);
 }
 
+#if 0
+const char *
+getFilePath(JNIEnv *env, jobject activity)
+{
+	jclass contextClass = env->GetObjectClass(activity);
+	jmethodID getExternalFilesDirMethod =
+	    env->GetMethodID(contextClass, "getExternalFilesDir", "(Ljava/lang/String;)Ljava/io/File;");
+	jstring directoryName = env->NewStringUTF("debug");
+	jobject directory = env->CallObjectMethod(activity, getExternalFilesDirMethod, directoryName);
+	env->DeleteLocalRef(directoryName);
+	env->DeleteLocalRef(contextClass);
+	if (directory == nullptr) {
+		return env->NewStringUTF("Failed to obtain external files directory");
+	}
+	jmethodID getPathMethod = env->GetMethodID(env->FindClass("java/io/File"), "getPath", "()Ljava/lang/String;");
+	jstring path = static_cast<jstring>(env->CallObjectMethod(directory, getPathMethod));
+	env->DeleteLocalRef(directory);
+	if (path == nullptr) {
+		return env->NewStringUTF("Failed to obtain path to external files directory");
+	}
+	std::string filePath = env->GetStringUTFChars(path, nullptr);
+	filePath += "/meow.dot";
+	jstring result = env->NewStringUTF(filePath.c_str());
+	env->ReleaseStringUTFChars(path, filePath.c_str());
+	return result;
+}
+#else
+extern "C" const char *
+getFilePath(JNIEnv *env, jobject activity)
+{
+	jclass contextClass = env->GetObjectClass(activity);
+	jmethodID getExternalFilesDirMethod =
+	    env->GetMethodID(contextClass, "getExternalFilesDir", "(Ljava/lang/String;)Ljava/io/File;");
+	jstring directoryName = env->NewStringUTF("debug");
+	jobject directory = env->CallObjectMethod(activity, getExternalFilesDirMethod, directoryName);
+	env->DeleteLocalRef(directoryName);
+	env->DeleteLocalRef(contextClass);
+	if (directory == nullptr) {
+		return strdup("Failed to obtain external files directory");
+	}
+	jmethodID getPathMethod = env->GetMethodID(env->FindClass("java/io/File"), "getPath", "()Ljava/lang/String;");
+	jstring path = static_cast<jstring>(env->CallObjectMethod(directory, getPathMethod));
+	env->DeleteLocalRef(directory);
+	if (path == nullptr) {
+		return strdup("Failed to obtain path to external files directory");
+	}
+	const char *filePath = env->GetStringUTFChars(path, nullptr);
+	env->DeleteLocalRef(path);
+	return filePath;
+}
+#endif
+
 void
 android_main(struct android_app *app)
 {
+	start_logger("meow meow");
+	setenv("GST_DEBUG", "*ssl*:9,*tls*:9,*webrtc*:9", 1);
+	setenv("GST_DEBUG", "*CAPS*:6", 1);
 
 	state.app = app;
 	(*app->activity->vm).AttachCurrentThread(&state.jni, NULL);
 	app->onAppCmd = onAppCmd;
 
 	initializeEGL(state);
+
+	ANativeActivity *activity = app->activity;
+	JNIEnv *env = state.jni;
+	jclass clazz = env->FindClass("android/Manifest$permission");
+	jfieldID field = env->GetStaticFieldID(clazz, "WRITE_EXTERNAL_STORAGE", "Ljava/lang/String;");
+	jstring permissionString = (jstring)env->GetStaticObjectField(clazz, field);
+	jint permission = env->CallIntMethod(
+	    activity->clazz, env->GetMethodID(clazz, "checkSelfPermission", "(Ljava/lang/String;)I"), permissionString);
+
+	if (permission != PackageManager.PERMISSION_GRANTED) {
+		env->CallVoidMethod(activity->clazz,
+		                    env->GetMethodID(clazz, "requestPermissions", "([Ljava/lang/String;I)V"),
+		                    env->NewObjectArray(1, env->FindClass("java/lang/String"), permissionString), 1);
+	}
+
+	state.xf = nullptr;
 
 
 
@@ -413,6 +730,30 @@ android_main(struct android_app *app)
 	state.width = viewInfo[0].recommendedImageRectWidth;
 	state.height = viewInfo[0].recommendedImageRectHeight;
 
+	state.frame_tex = generateRandomTexture(state.width, state.height, 1);
+	//    state.frame_tex = generateRandomTexture(320, 240);
+
+
+	//    GLint w = 1;
+	//    GLint h = 1;
+
+
+	state.frame_sink.push_frame = sink_push_frame;
+
+	struct xrt_frame_context xfctx = {};
+	U_LOG_E("Creating videotestsrc");
+	struct xrt_fs *blah = vf_fs_videotestsource(&xfctx, state.width, state.height);
+	U_LOG_E("Done creating videotestsrc");
+
+#if 1
+	U_LOG_E("Starting source");
+
+	xrt_fs_stream_start(blah, &state.frame_sink, XRT_FS_CAPTURE_TYPE_TRACKING, 0);
+	U_LOG_E("Done starting source");
+#else
+	(void)blah;
+#endif
+
 	// OpenXR session
 
 	PFN_xrGetOpenGLESGraphicsRequirementsKHR xrGetOpenGLESGraphicsRequirementsKHR = NULL;
@@ -464,6 +805,16 @@ android_main(struct android_app *app)
 
 	glGenFramebuffers(state.imageCount, state.framebuffers);
 
+
+	if (state.xf) {
+		glBindTexture(GL_TEXTURE_2D, state.frame_tex);
+		glPixelStorei(GL_UNPACK_ROW_LENGTH, state.xf->stride / 4);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, state.xf->width, state.xf->height, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+		             state.xf->data);
+		glBindTexture(GL_TEXTURE_2D, 0);
+	}
+
+
 	for (uint32_t i = 0; i < state.imageCount; i++) {
 		glBindFramebuffer(GL_FRAMEBUFFER, state.framebuffers[i]);
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, state.images[i].image, 0);
@@ -476,7 +827,7 @@ android_main(struct android_app *app)
 
 	create_spaces(state);
 
-	state.shader_program = makeShaderProgram();
+	setupRender();
 
 	really_make_socket(state);
 
