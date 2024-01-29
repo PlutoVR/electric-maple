@@ -6,7 +6,7 @@
  * @brief Pluto HMD device
  *
  * @author Jakob Bornecrantz <jakob@collabora.com>
- * @author Ryan Pavlik <ryan.pavlik@collabora.com>
+ * @author Rylie Pavlik <rylie.pavlik@collabora.com>
  * @author Moshi Turner <moses@collabora.com>
  * @ingroup drv_sample
  */

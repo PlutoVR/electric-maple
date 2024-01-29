@@ -1,7 +1,7 @@
 #!/bin/sh
 # Copyright 2019, Collabora, Ltd.
 # SPDX-License-Identifier: BSL-1.0
-# Author: Ryan Pavlik <ryan.pavlik@collabora.com>
+# Author: Rylie Pavlik <rylie.pavlik@collabora.com>
 
 # Run both format-project and codespell-project, making a patch if any changes can be auto-made.
 # Intended mainly for use in CI, but can be used elsewhere.
