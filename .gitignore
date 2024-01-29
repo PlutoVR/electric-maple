@@ -1,5 +1,10 @@
-.vs/
-.vscode/
+.*
+!.gitignore
+!.clang-tidy
+!.gitmodules
+!.cmake-format.py
+!.mailmap
+
 out/
 
 cmake-build-*/
@@ -10,8 +15,6 @@ CMakeSettings.json
 
 patches/
 __pycache__/
-
-.cache/
 
 # Moshi's SyncThing does things sometimes.
 **syncthing**
