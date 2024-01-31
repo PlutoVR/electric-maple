@@ -11,6 +11,11 @@
  * @ingroup drv_sample
  */
 
+#include "pl_callbacks.h"
+#include "xrt/xrt_defines.h"
+#include <memory>
+#undef CLAMP
+
 #include "xrt/xrt_device.h"
 
 #include "os/os_time.h"
@@ -33,7 +38,9 @@
 
 #include "pl_server_internal.h"
 
-#include "stdio.h"
+#include <glib.h>
+#include <mutex>
+#include <stdio.h>
 
 #include <thread>
 
@@ -71,6 +78,8 @@ pluto_hmd_destroy(struct xrt_device *xdev)
 {
 	struct pluto_hmd *ph = pluto_hmd(xdev);
 
+	ph->received = nullptr;
+
 	// Remove the variable tracking.
 	u_var_remove_root(ph);
 
@@ -96,8 +105,13 @@ pluto_hmd_get_tracked_pose(struct xrt_device *xdev,
 		return;
 	}
 
-	// Estimate pose at timestamp at_timestamp_ns!
-	math_quat_normalize(&ph->pose.orientation);
+	if (ph->received->updated) {
+		std::lock_guard<std::mutex> lock(ph->received->mutex);
+		ph->pose = ph->received->pose;
+		math_quat_normalize(&ph->pose.orientation);
+		ph->received->updated = false;
+	}
+	// TODO Estimate pose at timestamp at_timestamp_ns!
 	out_relation->pose = ph->pose;
 	out_relation->relation_flags = (enum xrt_space_relation_flags)(XRT_SPACE_RELATION_ORIENTATION_VALID_BIT |
 	                                                               XRT_SPACE_RELATION_POSITION_VALID_BIT |
@@ -117,7 +131,32 @@ pluto_hmd_get_view_poses(struct xrt_device *xdev,
 	                        out_poses);
 }
 
+static void
+pluto_hmd_handle_data(enum pl_callbacks_event event, const pluto_UpMessage *message, void *userdata)
+{
+	struct pluto_hmd *ph = (struct pluto_hmd *)userdata;
 
+	if (!message->has_tracking) {
+		return;
+	}
+	struct xrt_pose pose = {};
+	pose.position = {message->tracking.P_localSpace_viewSpace.position.x,
+	                 message->tracking.P_localSpace_viewSpace.position.y,
+	                 message->tracking.P_localSpace_viewSpace.position.z};
+
+	pose.orientation.w = message->tracking.P_localSpace_viewSpace.orientation.w;
+	pose.orientation.x = message->tracking.P_localSpace_viewSpace.orientation.x;
+	pose.orientation.y = message->tracking.P_localSpace_viewSpace.orientation.y;
+	pose.orientation.z = message->tracking.P_localSpace_viewSpace.orientation.z;
+
+	// TODO handle timestamp, etc
+
+	{
+		std::lock_guard<std::mutex> lock(ph->received->mutex);
+		ph->received->pose = pose;
+		ph->received->updated = true;
+	}
+}
 
 // extern "C"
 struct pluto_hmd *
@@ -127,6 +166,8 @@ pluto_hmd_create(pluto_program &pp)
 	enum u_device_alloc_flags flags = (enum u_device_alloc_flags)(U_DEVICE_ALLOC_HMD);
 
 	struct pluto_hmd *ph = U_DEVICE_ALLOCATE(struct pluto_hmd, flags, 1, 0);
+
+	ph->received = std::make_unique<pluto_hmd_recvbuf>();
 
 	// Functions.
 	ph->base.update_inputs = pluto_hmd_update_inputs;
@@ -203,7 +244,9 @@ pluto_hmd_create(pluto_program &pp)
 	ph->base.hmd->views[0].viewport.x_pixels = 0;
 	ph->base.hmd->views[1].viewport.x_pixels = panel_w;
 
-	// TODO: Doing anything wiht distortion here makes no sense
+	pl_callbacks_add(pp.callbacks, PL_CALLBACKS_EVENT_TRACKING, pluto_hmd_handle_data, ph);
+
+	// TODO: Doing anything with distortion here makes no sense
 	u_distortion_mesh_set_none(&ph->base);
 
 	// TODO: Are we going to have any actual useful info to show here?
@@ -211,11 +254,6 @@ pluto_hmd_create(pluto_program &pp)
 	u_var_add_root(ph, "Pluto HMD", true);
 	u_var_add_pose(ph, &ph->pose, "pose");
 	u_var_add_log_level(ph, &ph->log_level, "log_level");
-
-	// make_connect_socket(*ph);
-
-	// ph->aaaaa = std::thread(run_comms_thread, ph);
-
 
 	return ph;
 }

@@ -6,6 +6,7 @@
  * @author Jakob Bornecrantz <jakob@collabora.com>
  */
 
+#include "pl_callbacks.h"
 #include "xrt/xrt_system.h"
 #include "xrt/xrt_instance.h"
 #include "xrt/xrt_config_drivers.h"
@@ -21,17 +22,14 @@
 
 #include <assert.h>
 
-
-extern "C" {
-
-
-static inline struct pluto_program *
+namespace {
+inline struct pluto_program *
 from_xinst(struct xrt_instance *xinst)
 {
 	return container_of(xinst, struct pluto_program, xinst_base);
 }
 
-static inline struct pluto_program *
+inline struct pluto_program *
 from_xsysd(struct xrt_system_devices *xsysd)
 {
 	return container_of(xsysd, struct pluto_program, xsysd_base);
@@ -45,16 +43,18 @@ from_xsysd(struct xrt_system_devices *xsysd)
  *
  */
 
-static void
+void
 pluto_system_devices_destroy(struct xrt_system_devices *xsysd)
 {
 	struct pluto_program *sp = from_xsysd(xsysd);
+
+	pl_callbacks_reset(sp->callbacks);
 
 	for (size_t i = 0; i < xsysd->xdev_count; i++) {
 		xrt_device_destroy(&xsysd->xdevs[i]);
 	}
 
-	(void)sp; // We are apart of pluto_program, do not free.
+	(void)sp; // We are a part of pluto_program, do not free.
 }
 
 
@@ -65,14 +65,13 @@ pluto_system_devices_destroy(struct xrt_system_devices *xsysd)
  *
  */
 
-static xrt_result_t
+xrt_result_t
 pluto_instance_get_prober(struct xrt_instance *xinst, struct xrt_prober **out_xp)
 {
 	return XRT_ERROR_PROBER_NOT_SUPPORTED;
 }
 
-// This is where
-static xrt_result_t
+xrt_result_t
 pluto_instance_create_system(struct xrt_instance *xinst,
                              struct xrt_system_devices **out_xsysd,
                              struct xrt_space_overseer **out_xso,
@@ -85,7 +84,7 @@ pluto_instance_create_system(struct xrt_instance *xinst,
 	assert(out_xsysc == NULL || *out_xsysc == NULL);
 
 	struct xrt_system_compositor *xsysc = NULL;
-	struct xrt_space_overseer *xso = NULL;
+	// struct xrt_space_overseer *xso = NULL;
 
 	xrt_result_t xret = XRT_SUCCESS;
 
@@ -100,9 +99,6 @@ pluto_instance_create_system(struct xrt_instance *xinst,
 		return XRT_SUCCESS;
 	}
 
-	//! @todo We're creating the regular compositor here, which is good for testing, but we need to make a
-	// Pluto-compositor :)
-
 	if (xret == XRT_SUCCESS && xsysc == NULL) {
 		// xret = comp_main_create_system_compositor(sp->xsysd_base.roles.head, NULL, &xsysc);
 		// xret = pluto_compositor_create_system(*sp, sp->xsysd_base.roles.head, &xsysc);
@@ -114,14 +110,14 @@ pluto_instance_create_system(struct xrt_instance *xinst,
 	return XRT_SUCCESS;
 }
 
-static void
+void
 pluto_instance_destroy(struct xrt_instance *xinst)
 {
 	struct pluto_program *sp = from_xinst(xinst);
 
-	sp->comms_thread_should_stop = true;
+	pl_callbacks_reset(sp->callbacks);
 
-	sp->comms_thread.join();
+	pl_callbacks_destroy(&sp->callbacks);
 
 	delete sp;
 }
@@ -136,6 +132,9 @@ pluto_instance_destroy(struct xrt_instance *xinst)
 void
 pluto_system_devices_init(struct pluto_program *sp)
 {
+	// needed before creating devices
+	sp->callbacks = pl_callbacks_create();
+
 	sp->xsysd_base.destroy = pluto_system_devices_destroy;
 
 
@@ -182,6 +181,8 @@ pluto_instance_init(struct pluto_program *sp)
 	sp->xinst_base.destroy = pluto_instance_destroy;
 }
 
+} // namespace
+
 xrt_result_t
 xrt_instance_create(struct xrt_instance_info *ii, struct xrt_instance **out_xinst)
 {
@@ -192,12 +193,7 @@ xrt_instance_create(struct xrt_instance_info *ii, struct xrt_instance **out_xins
 	pluto_system_devices_init(sp);
 	pluto_instance_init(sp);
 
-	make_connect_socket(*sp);
-
-	sp->comms_thread = std::thread(run_comms_thread, sp);
-
 	*out_xinst = &sp->xinst_base;
 
 	return XRT_SUCCESS;
 }
-} // extern "C"

@@ -1,11 +1,15 @@
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 buildscript {
+    ext {
+        kotlin_version = '1.9.0'
+    }
     repositories {
         google()
         mavenCentral()
     }
     dependencies {
         classpath 'com.android.tools.build:gradle:7.4.2'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
 
         // NOTE: Do not place your application dependencies here; they belong
         // in the individual module build.gradle files
@@ -15,6 +19,7 @@ buildscript {
 plugins {
     // Used for getting the eigen dir, explicit python binary, etc. from local.properties
     id 'com.github.b3er.local.properties' version '1.1'
+    id 'org.jetbrains.kotlin.android' version '1.9.0' apply false
 }
 
 allprojects {
@@ -32,6 +37,19 @@ ext {
     // If you are building on Windows, you will need to explicitly set eigenIncludeDir in your
     // local.properties file since the default value provided below only makes sense on *nix
     eigenIncludeDir = project.findProperty('eigenIncludeDir') ?: '/usr/include/eigen3'
-    // You will need to set "ovrOpenXRMobileSDK=/PATH" in your local.properties file.
-    ovrOpenXRMobileSDK = project.findProperty('ovrOpenXRMobileSDK') ?: '.'
+
+    gstreamerBaseDir = project.findProperty('gstreamerBaseDir') ?: "${projectDir}/deps/gstreamer_android"
+    gstreamerArchDir = project.findProperty('gstreamerArchDir') ?: ''
+
+    // ndkVersion = '22.1.7171670' // '25.2.9519653'
+    ndkVersion = '25.2.9519653'
+}
+
+if (project.gstreamerArchDir) {
+    project.ext.gstJavaDir = "${project.gstreamerArchDir}/share/gst-android/ndk-build"
+    project.ext.gstreamerCMakeArg = "-DGST_ARCH_DIR=${project.gstreamerArchDir}"
+
+} else if (project.gstreamerBaseDir) {
+    project.ext.gstJavaDir = "${project.gstreamerBaseDir}/arm64/share/gst-android/ndk-build"
+    project.ext.gstreamerCMakeArg = "-DGST_BASE_DIR=${project.gstreamerBaseDir}"
 }

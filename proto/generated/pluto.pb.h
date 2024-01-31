@@ -30,6 +30,11 @@ typedef struct _pluto_Vec3 {
     float z;
 } pluto_Vec3;
 
+typedef struct _pluto_Vec2 {
+    float x;
+    float y;
+} pluto_Vec2;
+
 typedef struct _pluto_Pose {
     bool has_position;
     pluto_Vec3 position;
@@ -56,6 +61,82 @@ typedef struct _pluto_TrackingMessage {
     int64_t sequence_idx;
 } pluto_TrackingMessage;
 
+typedef struct _pluto_InputThumbstick {
+    bool has_xy;
+    pluto_Vec2 xy;
+    bool click;
+    bool touch; /* bool proximity = 4; */
+} pluto_InputThumbstick;
+
+typedef struct _pluto_InputValueTouch {
+    float value;
+    bool touch;
+} pluto_InputValueTouch;
+
+typedef struct _pluto_InputClickTouch {
+    bool click;
+    bool touch;
+} pluto_InputClickTouch;
+
+typedef struct _pluto_TouchControllerCommon {
+    bool has_thumbstick;
+    pluto_InputThumbstick thumbstick;
+    bool has_trigger;
+    pluto_InputValueTouch trigger;
+    bool has_squeeze;
+    pluto_InputValueTouch squeeze; /* no "touch" */
+    bool thumbrest_touch;
+} pluto_TouchControllerCommon;
+
+typedef struct _pluto_TouchControllerLeft {
+    bool has_x;
+    pluto_InputClickTouch x;
+    bool has_y;
+    pluto_InputClickTouch y;
+    bool has_menu;
+    pluto_InputClickTouch menu; /* no "touch" */
+    bool has_common;
+    pluto_TouchControllerCommon common;
+} pluto_TouchControllerLeft;
+
+typedef struct _pluto_TouchControllerRight {
+    bool has_a;
+    pluto_InputClickTouch a;
+    bool has_b;
+    pluto_InputClickTouch b;
+    bool has_system;
+    pluto_InputClickTouch system; /* no "touch", probably not accessible */
+    bool has_common;
+    pluto_TouchControllerCommon common;
+} pluto_TouchControllerRight;
+
+typedef struct _pluto_UpFrameMessage {
+    int64_t frame_sequence_id;
+    int64_t decode_complete_time; /* nanoseconds, in client OpenXR time domain */
+    int64_t begin_frame_time; /* nanoseconds, in client OpenXR time domain */
+    int64_t display_time; /* nanoseconds, in client OpenXR time domain */
+} pluto_UpFrameMessage;
+
+typedef struct _pluto_UpMessage {
+    int64_t up_message_id;
+    bool has_tracking;
+    pluto_TrackingMessage tracking;
+    bool has_frame;
+    pluto_UpFrameMessage frame;
+} pluto_UpMessage;
+
+typedef struct _pluto_DownFrameDataMessage {
+    int64_t frame_sequence_id;
+    bool has_P_localSpace_viewSpace;
+    pluto_Pose P_localSpace_viewSpace;
+    int64_t display_time; /* TODO fovs here */
+} pluto_DownFrameDataMessage;
+
+typedef struct _pluto_DownMessage {
+    bool has_frame_data;
+    pluto_DownFrameDataMessage frame_data;
+} pluto_DownMessage;
+
 
 #ifdef __cplusplus
 extern "C" {
@@ -71,15 +152,48 @@ extern "C" {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
 /* Initializer values for message structs */
 #define pluto_Quaternion_init_default            {0, 0, 0, 0}
 #define pluto_Vec3_init_default                  {0, 0, 0}
+#define pluto_Vec2_init_default                  {0, 0}
 #define pluto_Pose_init_default                  {false, pluto_Vec3_init_default, false, pluto_Quaternion_init_default}
 #define pluto_TrackingMessage_init_default       {false, pluto_Pose_init_default, false, pluto_Pose_init_default, false, pluto_Pose_init_default, false, pluto_Pose_init_default, false, pluto_Pose_init_default, false, pluto_Pose_init_default, false, pluto_Pose_init_default, 0, 0}
+#define pluto_InputThumbstick_init_default       {false, pluto_Vec2_init_default, 0, 0}
+#define pluto_InputValueTouch_init_default       {0, 0}
+#define pluto_InputClickTouch_init_default       {0, 0}
+#define pluto_TouchControllerCommon_init_default {false, pluto_InputThumbstick_init_default, false, pluto_InputValueTouch_init_default, false, pluto_InputValueTouch_init_default, 0}
+#define pluto_TouchControllerLeft_init_default   {false, pluto_InputClickTouch_init_default, false, pluto_InputClickTouch_init_default, false, pluto_InputClickTouch_init_default, false, pluto_TouchControllerCommon_init_default}
+#define pluto_TouchControllerRight_init_default  {false, pluto_InputClickTouch_init_default, false, pluto_InputClickTouch_init_default, false, pluto_InputClickTouch_init_default, false, pluto_TouchControllerCommon_init_default}
+#define pluto_UpFrameMessage_init_default        {0, 0, 0, 0}
+#define pluto_UpMessage_init_default             {0, false, pluto_TrackingMessage_init_default, false, pluto_UpFrameMessage_init_default}
+#define pluto_DownFrameDataMessage_init_default  {0, false, pluto_Pose_init_default, 0}
+#define pluto_DownMessage_init_default           {false, pluto_DownFrameDataMessage_init_default}
 #define pluto_Quaternion_init_zero               {0, 0, 0, 0}
 #define pluto_Vec3_init_zero                     {0, 0, 0}
+#define pluto_Vec2_init_zero                     {0, 0}
 #define pluto_Pose_init_zero                     {false, pluto_Vec3_init_zero, false, pluto_Quaternion_init_zero}
 #define pluto_TrackingMessage_init_zero          {false, pluto_Pose_init_zero, false, pluto_Pose_init_zero, false, pluto_Pose_init_zero, false, pluto_Pose_init_zero, false, pluto_Pose_init_zero, false, pluto_Pose_init_zero, false, pluto_Pose_init_zero, 0, 0}
+#define pluto_InputThumbstick_init_zero          {false, pluto_Vec2_init_zero, 0, 0}
+#define pluto_InputValueTouch_init_zero          {0, 0}
+#define pluto_InputClickTouch_init_zero          {0, 0}
+#define pluto_TouchControllerCommon_init_zero    {false, pluto_InputThumbstick_init_zero, false, pluto_InputValueTouch_init_zero, false, pluto_InputValueTouch_init_zero, 0}
+#define pluto_TouchControllerLeft_init_zero      {false, pluto_InputClickTouch_init_zero, false, pluto_InputClickTouch_init_zero, false, pluto_InputClickTouch_init_zero, false, pluto_TouchControllerCommon_init_zero}
+#define pluto_TouchControllerRight_init_zero     {false, pluto_InputClickTouch_init_zero, false, pluto_InputClickTouch_init_zero, false, pluto_InputClickTouch_init_zero, false, pluto_TouchControllerCommon_init_zero}
+#define pluto_UpFrameMessage_init_zero           {0, 0, 0, 0}
+#define pluto_UpMessage_init_zero                {0, false, pluto_TrackingMessage_init_zero, false, pluto_UpFrameMessage_init_zero}
+#define pluto_DownFrameDataMessage_init_zero     {0, false, pluto_Pose_init_zero, 0}
+#define pluto_DownMessage_init_zero              {false, pluto_DownFrameDataMessage_init_zero}
 
 /* Field tags (for use in manual encoding/decoding) */
 #define pluto_Quaternion_w_tag                   1
@@ -89,6 +203,8 @@ extern "C" {
 #define pluto_Vec3_x_tag                         1
 #define pluto_Vec3_y_tag                         2
 #define pluto_Vec3_z_tag                         3
+#define pluto_Vec2_x_tag                         1
+#define pluto_Vec2_y_tag                         2
 #define pluto_Pose_position_tag                  1
 #define pluto_Pose_orientation_tag               2
 #define pluto_TrackingMessage_P_localSpace_viewSpace_tag 1
@@ -100,6 +216,36 @@ extern "C" {
 #define pluto_TrackingMessage_controller_aim_right_tag 7
 #define pluto_TrackingMessage_timestamp_tag      8
 #define pluto_TrackingMessage_sequence_idx_tag   9
+#define pluto_InputThumbstick_xy_tag             1
+#define pluto_InputThumbstick_click_tag          2
+#define pluto_InputThumbstick_touch_tag          3
+#define pluto_InputValueTouch_value_tag          1
+#define pluto_InputValueTouch_touch_tag          2
+#define pluto_InputClickTouch_click_tag          1
+#define pluto_InputClickTouch_touch_tag          2
+#define pluto_TouchControllerCommon_thumbstick_tag 1
+#define pluto_TouchControllerCommon_trigger_tag  2
+#define pluto_TouchControllerCommon_squeeze_tag  3
+#define pluto_TouchControllerCommon_thumbrest_touch_tag 4
+#define pluto_TouchControllerLeft_x_tag          1
+#define pluto_TouchControllerLeft_y_tag          2
+#define pluto_TouchControllerLeft_menu_tag       3
+#define pluto_TouchControllerLeft_common_tag     4
+#define pluto_TouchControllerRight_a_tag         1
+#define pluto_TouchControllerRight_b_tag         2
+#define pluto_TouchControllerRight_system_tag    3
+#define pluto_TouchControllerRight_common_tag    4
+#define pluto_UpFrameMessage_frame_sequence_id_tag 1
+#define pluto_UpFrameMessage_decode_complete_time_tag 2
+#define pluto_UpFrameMessage_begin_frame_time_tag 3
+#define pluto_UpFrameMessage_display_time_tag    4
+#define pluto_UpMessage_up_message_id_tag        1
+#define pluto_UpMessage_tracking_tag             2
+#define pluto_UpMessage_frame_tag                3
+#define pluto_DownFrameDataMessage_frame_sequence_id_tag 1
+#define pluto_DownFrameDataMessage_P_localSpace_viewSpace_tag 2
+#define pluto_DownFrameDataMessage_display_time_tag 3
+#define pluto_DownMessage_frame_data_tag         1
 
 /* Struct field encoding specification for nanopb */
 #define pluto_Quaternion_FIELDLIST(X, a) \
@@ -116,6 +262,12 @@ X(a, STATIC,   SINGULAR, FLOAT,    y,                 2) \
 X(a, STATIC,   SINGULAR, FLOAT,    z,                 3)
 #define pluto_Vec3_CALLBACK NULL
 #define pluto_Vec3_DEFAULT NULL
+
+#define pluto_Vec2_FIELDLIST(X, a) \
+X(a, STATIC,   SINGULAR, FLOAT,    x,                 1) \
+X(a, STATIC,   SINGULAR, FLOAT,    y,                 2)
+#define pluto_Vec2_CALLBACK NULL
+#define pluto_Vec2_DEFAULT NULL
 
 #define pluto_Pose_FIELDLIST(X, a) \
 X(a, STATIC,   OPTIONAL, MESSAGE,  position,          1) \
@@ -145,21 +297,140 @@ X(a, STATIC,   SINGULAR, INT64,    sequence_idx,      9)
 #define pluto_TrackingMessage_controller_grip_right_MSGTYPE pluto_Pose
 #define pluto_TrackingMessage_controller_aim_right_MSGTYPE pluto_Pose
 
+#define pluto_InputThumbstick_FIELDLIST(X, a) \
+X(a, STATIC,   OPTIONAL, MESSAGE,  xy,                1) \
+X(a, STATIC,   SINGULAR, BOOL,     click,             2) \
+X(a, STATIC,   SINGULAR, BOOL,     touch,             3)
+#define pluto_InputThumbstick_CALLBACK NULL
+#define pluto_InputThumbstick_DEFAULT NULL
+#define pluto_InputThumbstick_xy_MSGTYPE pluto_Vec2
+
+#define pluto_InputValueTouch_FIELDLIST(X, a) \
+X(a, STATIC,   SINGULAR, FLOAT,    value,             1) \
+X(a, STATIC,   SINGULAR, BOOL,     touch,             2)
+#define pluto_InputValueTouch_CALLBACK NULL
+#define pluto_InputValueTouch_DEFAULT NULL
+
+#define pluto_InputClickTouch_FIELDLIST(X, a) \
+X(a, STATIC,   SINGULAR, BOOL,     click,             1) \
+X(a, STATIC,   SINGULAR, BOOL,     touch,             2)
+#define pluto_InputClickTouch_CALLBACK NULL
+#define pluto_InputClickTouch_DEFAULT NULL
+
+#define pluto_TouchControllerCommon_FIELDLIST(X, a) \
+X(a, STATIC,   OPTIONAL, MESSAGE,  thumbstick,        1) \
+X(a, STATIC,   OPTIONAL, MESSAGE,  trigger,           2) \
+X(a, STATIC,   OPTIONAL, MESSAGE,  squeeze,           3) \
+X(a, STATIC,   SINGULAR, BOOL,     thumbrest_touch,   4)
+#define pluto_TouchControllerCommon_CALLBACK NULL
+#define pluto_TouchControllerCommon_DEFAULT NULL
+#define pluto_TouchControllerCommon_thumbstick_MSGTYPE pluto_InputThumbstick
+#define pluto_TouchControllerCommon_trigger_MSGTYPE pluto_InputValueTouch
+#define pluto_TouchControllerCommon_squeeze_MSGTYPE pluto_InputValueTouch
+
+#define pluto_TouchControllerLeft_FIELDLIST(X, a) \
+X(a, STATIC,   OPTIONAL, MESSAGE,  x,                 1) \
+X(a, STATIC,   OPTIONAL, MESSAGE,  y,                 2) \
+X(a, STATIC,   OPTIONAL, MESSAGE,  menu,              3) \
+X(a, STATIC,   OPTIONAL, MESSAGE,  common,            4)
+#define pluto_TouchControllerLeft_CALLBACK NULL
+#define pluto_TouchControllerLeft_DEFAULT NULL
+#define pluto_TouchControllerLeft_x_MSGTYPE pluto_InputClickTouch
+#define pluto_TouchControllerLeft_y_MSGTYPE pluto_InputClickTouch
+#define pluto_TouchControllerLeft_menu_MSGTYPE pluto_InputClickTouch
+#define pluto_TouchControllerLeft_common_MSGTYPE pluto_TouchControllerCommon
+
+#define pluto_TouchControllerRight_FIELDLIST(X, a_) \
+X(a_, STATIC,   OPTIONAL, MESSAGE,  a,                 1) \
+X(a_, STATIC,   OPTIONAL, MESSAGE,  b,                 2) \
+X(a_, STATIC,   OPTIONAL, MESSAGE,  system,            3) \
+X(a_, STATIC,   OPTIONAL, MESSAGE,  common,            4)
+#define pluto_TouchControllerRight_CALLBACK NULL
+#define pluto_TouchControllerRight_DEFAULT NULL
+#define pluto_TouchControllerRight_a_MSGTYPE pluto_InputClickTouch
+#define pluto_TouchControllerRight_b_MSGTYPE pluto_InputClickTouch
+#define pluto_TouchControllerRight_system_MSGTYPE pluto_InputClickTouch
+#define pluto_TouchControllerRight_common_MSGTYPE pluto_TouchControllerCommon
+
+#define pluto_UpFrameMessage_FIELDLIST(X, a) \
+X(a, STATIC,   SINGULAR, INT64,    frame_sequence_id,   1) \
+X(a, STATIC,   SINGULAR, INT64,    decode_complete_time,   2) \
+X(a, STATIC,   SINGULAR, INT64,    begin_frame_time,   3) \
+X(a, STATIC,   SINGULAR, INT64,    display_time,      4)
+#define pluto_UpFrameMessage_CALLBACK NULL
+#define pluto_UpFrameMessage_DEFAULT NULL
+
+#define pluto_UpMessage_FIELDLIST(X, a) \
+X(a, STATIC,   SINGULAR, INT64,    up_message_id,     1) \
+X(a, STATIC,   OPTIONAL, MESSAGE,  tracking,          2) \
+X(a, STATIC,   OPTIONAL, MESSAGE,  frame,             3)
+#define pluto_UpMessage_CALLBACK NULL
+#define pluto_UpMessage_DEFAULT NULL
+#define pluto_UpMessage_tracking_MSGTYPE pluto_TrackingMessage
+#define pluto_UpMessage_frame_MSGTYPE pluto_UpFrameMessage
+
+#define pluto_DownFrameDataMessage_FIELDLIST(X, a) \
+X(a, STATIC,   SINGULAR, INT64,    frame_sequence_id,   1) \
+X(a, STATIC,   OPTIONAL, MESSAGE,  P_localSpace_viewSpace,   2) \
+X(a, STATIC,   SINGULAR, INT64,    display_time,      3)
+#define pluto_DownFrameDataMessage_CALLBACK NULL
+#define pluto_DownFrameDataMessage_DEFAULT NULL
+#define pluto_DownFrameDataMessage_P_localSpace_viewSpace_MSGTYPE pluto_Pose
+
+#define pluto_DownMessage_FIELDLIST(X, a) \
+X(a, STATIC,   OPTIONAL, MESSAGE,  frame_data,        1)
+#define pluto_DownMessage_CALLBACK NULL
+#define pluto_DownMessage_DEFAULT NULL
+#define pluto_DownMessage_frame_data_MSGTYPE pluto_DownFrameDataMessage
+
 extern const pb_msgdesc_t pluto_Quaternion_msg;
 extern const pb_msgdesc_t pluto_Vec3_msg;
+extern const pb_msgdesc_t pluto_Vec2_msg;
 extern const pb_msgdesc_t pluto_Pose_msg;
 extern const pb_msgdesc_t pluto_TrackingMessage_msg;
+extern const pb_msgdesc_t pluto_InputThumbstick_msg;
+extern const pb_msgdesc_t pluto_InputValueTouch_msg;
+extern const pb_msgdesc_t pluto_InputClickTouch_msg;
+extern const pb_msgdesc_t pluto_TouchControllerCommon_msg;
+extern const pb_msgdesc_t pluto_TouchControllerLeft_msg;
+extern const pb_msgdesc_t pluto_TouchControllerRight_msg;
+extern const pb_msgdesc_t pluto_UpFrameMessage_msg;
+extern const pb_msgdesc_t pluto_UpMessage_msg;
+extern const pb_msgdesc_t pluto_DownFrameDataMessage_msg;
+extern const pb_msgdesc_t pluto_DownMessage_msg;
 
 /* Defines for backwards compatibility with code written before nanopb-0.4.0 */
 #define pluto_Quaternion_fields &pluto_Quaternion_msg
 #define pluto_Vec3_fields &pluto_Vec3_msg
+#define pluto_Vec2_fields &pluto_Vec2_msg
 #define pluto_Pose_fields &pluto_Pose_msg
 #define pluto_TrackingMessage_fields &pluto_TrackingMessage_msg
+#define pluto_InputThumbstick_fields &pluto_InputThumbstick_msg
+#define pluto_InputValueTouch_fields &pluto_InputValueTouch_msg
+#define pluto_InputClickTouch_fields &pluto_InputClickTouch_msg
+#define pluto_TouchControllerCommon_fields &pluto_TouchControllerCommon_msg
+#define pluto_TouchControllerLeft_fields &pluto_TouchControllerLeft_msg
+#define pluto_TouchControllerRight_fields &pluto_TouchControllerRight_msg
+#define pluto_UpFrameMessage_fields &pluto_UpFrameMessage_msg
+#define pluto_UpMessage_fields &pluto_UpMessage_msg
+#define pluto_DownFrameDataMessage_fields &pluto_DownFrameDataMessage_msg
+#define pluto_DownMessage_fields &pluto_DownMessage_msg
 
 /* Maximum encoded size of messages (where known) */
+#define pluto_DownFrameDataMessage_size          63
+#define pluto_DownMessage_size                   65
+#define pluto_InputClickTouch_size               4
+#define pluto_InputThumbstick_size               16
+#define pluto_InputValueTouch_size               7
 #define pluto_Pose_size                          39
 #define pluto_Quaternion_size                    20
+#define pluto_TouchControllerCommon_size         38
+#define pluto_TouchControllerLeft_size           58
+#define pluto_TouchControllerRight_size          58
 #define pluto_TrackingMessage_size               309
+#define pluto_UpFrameMessage_size                44
+#define pluto_UpMessage_size                     369
+#define pluto_Vec2_size                          10
 #define pluto_Vec3_size                          15
 
 #ifdef __cplusplus

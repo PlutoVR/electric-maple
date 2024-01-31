@@ -1,0 +1,29 @@
+// We have this as a separate module to avoid "duplicate content root" warnings in Android Studio.
+
+
+plugins {
+    id 'com.android.library'
+}
+
+tasks.register('copyGStreamerJava', Copy) {
+    from(project.gstJavaDir) {
+        include "**/*.java"
+    }
+    // into layout.buildDirectory.dir("gstreamer_java/org/freedesktop/gstreamer")
+    into layout.buildDirectory.dir("generated/source/gstreamer/main/org/freedesktop/gstreamer")
+    includeEmptyDirs = false
+}
+
+android {
+    compileSdk 33
+
+    namespace 'org.freedesktop.gstreamer'
+
+    defaultConfig {
+        minSdkVersion 26
+        // Version 30 breaks loader
+        targetSdkVersion 29
+    }
+    preBuild.dependsOn(copyGStreamerJava)
+    sourceSets.main.java.srcDirs(layout.buildDirectory.dir("generated/source/gstreamer/main"))
+}

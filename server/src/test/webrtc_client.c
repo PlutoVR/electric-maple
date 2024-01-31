@@ -14,17 +14,93 @@
 
 static gchar *websocket_uri = NULL;
 
-static GOptionEntry options[] = {
-    {"websocket-uri", 'u', 0, G_OPTION_ARG_STRING, &websocket_uri, "Websocket URI of webrtc signaling connection"},
-    {NULL}};
+static GOptionEntry options[] = {{
+                                     "websocket-uri",
+                                     'u',
+                                     0,
+                                     G_OPTION_ARG_STRING,
+                                     &websocket_uri,
+                                     "Websocket URI of webrtc signaling connection",
+                                     "URI",
+                                 },
+                                 {NULL}};
 
-#define WEBSOCKET_URI_DEFAULT "ws://192.168.0.168:8080/ws"
+#define WEBSOCKET_URI_DEFAULT "ws://127.0.0.1:8080/ws"
 
 //!@todo Don't use global state
 static SoupWebsocketConnection *ws = NULL;
 static GstElement *pipeline = NULL;
 static GstElement *webrtcbin = NULL;
 static GstWebRTCDataChannel *datachannel = NULL;
+
+
+/*
+ *
+ * Data channel functions.
+ *
+ */
+
+static void
+data_channel_error_cb(GstWebRTCDataChannel *datachannel, void *data)
+{
+	U_LOG_E("Error");
+	abort();
+}
+
+static void
+data_channel_close_cb(GstWebRTCDataChannel *datachannel, gpointer timeout_src_id)
+{
+	U_LOG_E("Data channel closed");
+
+	g_source_remove(GPOINTER_TO_UINT(timeout_src_id));
+	g_clear_object(&datachannel);
+}
+
+static void
+data_channel_message_data_cb(GstWebRTCDataChannel *datachannel, GBytes *data, void *user_data)
+{
+	U_LOG_E("Received data channel message data: %u", (uint32_t)g_bytes_get_size(data));
+}
+
+static void
+data_channel_message_string_cb(GstWebRTCDataChannel *datachannel, gchar *str, void *user_data)
+{
+	U_LOG_E("Received data channel message string: %s", str);
+}
+
+static gboolean
+datachannel_send_message(gpointer unused)
+{
+	g_signal_emit_by_name(datachannel, "send-string", "Hi! from Pluto client");
+
+	return G_SOURCE_CONTINUE;
+}
+
+static void
+webrtc_on_data_channel_cb(GstElement *webrtcbin, GstWebRTCDataChannel *data_channel, void *user_data)
+{
+	guint timeout_src_id;
+
+	U_LOG_E("Successfully created datachannel");
+
+	g_assert_null(datachannel);
+
+	datachannel = GST_WEBRTC_DATA_CHANNEL(data_channel);
+
+	timeout_src_id = g_timeout_add_seconds(3, datachannel_send_message, NULL);
+
+	g_signal_connect(datachannel, "on-close", G_CALLBACK(data_channel_close_cb), GUINT_TO_POINTER(timeout_src_id));
+	g_signal_connect(datachannel, "on-error", G_CALLBACK(data_channel_error_cb), GUINT_TO_POINTER(timeout_src_id));
+	g_signal_connect(datachannel, "on-message-data", G_CALLBACK(data_channel_message_data_cb), NULL);
+	g_signal_connect(datachannel, "on-message-string", G_CALLBACK(data_channel_message_string_cb), NULL);
+}
+
+
+/*
+ *
+ * Websocket connection.
+ *
+ */
 
 static gboolean
 sigint_handler(gpointer user_data)
@@ -228,54 +304,6 @@ out:
 }
 
 static void
-data_channel_error_cb(GstWebRTCDataChannel *datachannel, void *data)
-{
-	U_LOG_E("error\n");
-	abort();
-}
-
-static void
-data_channel_close_cb(GstWebRTCDataChannel *datachannel, gpointer timeout_src_id)
-{
-	U_LOG_E("Data channel closed\n");
-
-	g_source_remove(GPOINTER_TO_UINT(timeout_src_id));
-	g_clear_object(&datachannel);
-}
-
-static void
-data_channel_message_string_cb(GstWebRTCDataChannel *datachannel, gchar *str, void *data)
-{
-	U_LOG_E("Received data channel message: %s\n", str);
-}
-
-gboolean
-datachannel_send_message(gpointer unused)
-{
-	g_signal_emit_by_name(datachannel, "send-string", "Hi! from Pluto client");
-
-	return G_SOURCE_CONTINUE;
-}
-
-static void
-webrtc_on_data_channel_cb(GstElement *webrtcbin, GstWebRTCDataChannel *data_channel, void *data)
-{
-	guint timeout_src_id;
-
-	U_LOG_E("Successfully created datachannel\n");
-
-	g_assert_null(datachannel);
-
-	datachannel = GST_WEBRTC_DATA_CHANNEL(data_channel);
-
-	timeout_src_id = g_timeout_add_seconds(3, datachannel_send_message, NULL);
-
-	g_signal_connect(datachannel, "on-close", G_CALLBACK(data_channel_close_cb), GUINT_TO_POINTER(timeout_src_id));
-	g_signal_connect(datachannel, "on-error", G_CALLBACK(data_channel_error_cb), GUINT_TO_POINTER(timeout_src_id));
-	g_signal_connect(datachannel, "on-message-string", G_CALLBACK(data_channel_message_string_cb), NULL);
-}
-
-static void
 websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 {
 	GError *error = NULL;
@@ -293,15 +321,18 @@ websocket_connected_cb(GObject *session, GAsyncResult *res, gpointer user_data)
 		g_signal_connect(ws, "message", G_CALLBACK(message_cb), NULL);
 
 		pipeline = gst_parse_launch(
-		    "webrtcbin name=webrtc bundle-policy=max-bundle ! rtph264depay ! h264parse ! avdec_h264 ! "
+		    "webrtcbin name=webrtc bundle-policy=max-bundle ! "
+		    "rtph264depay ! "
+		    "h264parse ! "
+		    "avdec_h264 ! "
 		    "autovideosink",
 		    &error);
 		g_assert_no_error(error);
 
+		// Connect callbacks on sinks.
 		webrtcbin = gst_bin_get_by_name(GST_BIN(pipeline), "webrtc");
+
 		g_signal_connect(webrtcbin, "on-data-channel", G_CALLBACK(webrtc_on_data_channel_cb), NULL);
-
-
 		g_signal_connect(webrtcbin, "on-ice-candidate", G_CALLBACK(webrtc_on_ice_candidate_cb), NULL);
 
 		bus = gst_element_get_bus(pipeline);
@@ -336,7 +367,7 @@ main(int argc, char *argv[])
 
 	soup_session = soup_session_new();
 
-#ifdef PL_LIBSOUP2
+#if !SOUP_CHECK_VERSION(3, 0, 0)
 	soup_session_websocket_connect_async(soup_session,                                     // session
 	                                     soup_message_new(SOUP_METHOD_GET, websocket_uri), // message
 	                                     NULL,                                             // origin

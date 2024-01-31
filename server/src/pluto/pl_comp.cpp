@@ -1,17 +1,19 @@
-// Copyright 2019-2022, Collabora, Ltd.
+// Copyright 2019-2023, Collabora, Ltd.
+// Copyright 2023, PlutoVR, Inc.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
- * @brief  Null compositor implementation.
+ * @brief  Remote rendering compositor implementation.
  *
- * Based on src/xrt/compositor/main/comp_compositor.c
+ * Based on the null compositor
  *
  * @author Jakob Bornecrantz <jakob@collabora.com>
  * @author Lubosz Sarnecki <lubosz.sarnecki@collabora.com>
  * @author Rylie Pavlik <rylie.pavlik@collabora.com>
- * @ingroup comp_null
+ * @ingroup comp_pl
  */
 
+#include "gstreamer/gst_internal.h"
 #include "os/os_time.h"
 
 #include "util/u_misc.h"
@@ -290,7 +292,7 @@ compositor_init_sys_info(struct pluto_compositor *c, struct xrt_device *xdev)
 
 	// clang-format off
 
-	// These seem to control the 
+	// These seem to control the
 	sys_info->views[0].recommended.width_pixels  = APP_VIEW_W;
 	sys_info->views[0].recommended.height_pixels = APP_VIEW_H;
 	sys_info->views[0].recommended.sample_count  = 1;
@@ -337,6 +339,11 @@ do_the_thing(struct pluto_compositor *c,
              struct comp_swapchain *lsc,
              struct comp_swapchain *rsc)
 {
+	if (c->offset_ns == 0) {
+		uint64_t now = os_monotonic_get_ns();
+		c->offset_ns = now;
+		c->hackers_gstreamer_sink->offset_ns = now;
+	}
 	VkResult ret;
 
 	struct vk_image_readback_to_xf *wrap = NULL;
@@ -505,6 +512,9 @@ do_the_thing(struct pluto_compositor *c,
 
 	xrt_sink_push_frame(c->hackers_xfs, frame);
 
+
+	// TODO send data channel message with pose and fov here?
+
 	// Dereference this frame - by now we should have pushed it.
 	xrt_frame_reference(&frame, NULL);
 }
@@ -522,11 +532,6 @@ pluto_compositor_begin_session(struct xrt_compositor *xc, const struct xrt_begin
 	struct pluto_compositor *c = pluto_compositor(xc);
 	PLUTO_COMP_DEBUG(c, "BEGIN_SESSION");
 
-	/*
-	 * No logic needed here for the null compositor, if using the null
-	 * compositor as a base for a new compositor put desired logic here.
-	 */
-
 	return XRT_SUCCESS;
 }
 
@@ -535,11 +540,6 @@ pluto_compositor_end_session(struct xrt_compositor *xc)
 {
 	struct pluto_compositor *c = pluto_compositor(xc);
 	PLUTO_COMP_DEBUG(c, "END_SESSION");
-
-	/*
-	 * No logic needed here for the null compositor, if using the null
-	 * compositor as a base for a new compositor put desired logic here.
-	 */
 
 	return XRT_SUCCESS;
 }
@@ -603,11 +603,6 @@ pluto_compositor_begin_frame(struct xrt_compositor *xc, int64_t frame_id)
 	struct pluto_compositor *c = pluto_compositor(xc);
 	PLUTO_COMP_TRACE(c, "BEGIN_FRAME");
 
-	/*
-	 * No logic needed here for the null compositor, if using the null
-	 * compositor as a base for a new compositor put desired logic here.
-	 */
-
 	return XRT_SUCCESS;
 }
 
@@ -632,13 +627,6 @@ pluto_compositor_layer_commit(struct xrt_compositor *xc, xrt_graphics_sync_handl
 	PLUTO_COMP_TRACE(c, "LAYER_COMMIT");
 
 	int64_t frame_id = c->base.slot.data.frame_id;
-
-	/*
-	 * The null compositor doesn't render and frames, but needs to do
-	 * minimal bookkeeping and handling of arguments. If using the null
-	 * compositor as a base for a new compositor this is where you render
-	 * frames to be displayed to devices or remote clients.
-	 */
 
 	u_graphics_sync_unref(&sync_handle);
 
@@ -701,10 +689,7 @@ pluto_compositor_poll_events(struct xrt_compositor *xc, union xrt_compositor_eve
 	PLUTO_COMP_TRACE(c, "POLL_EVENTS");
 
 	/*
-	 * The null compositor does only minimal state keeping. If using the
-	 * null compositor as a base for a new compositor this is where you can
-	 * improve the state tracking. Note this is very often consumed only
-	 * by the multi compositor.
+	 * Note this is very often consumed only by the multi compositor.
 	 */
 
 	U_ZERO(out_xce);
@@ -864,7 +849,7 @@ pluto_compositor_create_system(pluto_program &pp, struct xrt_system_compositor *
 	u_var_add_root(c, "Pluto compositor!", 0);
 	u_var_add_sink_debug(c, &c->hackers_debug_sink, "Meow!");
 
-	gstreamer_pipeline_webrtc_create(&c->xfctx, "Meow", &c->hackers_gstreamer_pipeline);
+	gstreamer_pipeline_webrtc_create(&c->xfctx, "Meow", pp.callbacks, &c->hackers_gstreamer_pipeline);
 	gstreamer_sink_create_with_pipeline( //
 	    c->hackers_gstreamer_pipeline,   //
 	    READBACK_W,                      //

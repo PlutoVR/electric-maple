@@ -9,12 +9,14 @@ out/
 
 cmake-build-*/
 build/
-deps/
 
 CMakeSettings.json
 
 patches/
 __pycache__/
 
-# Moshi's SyncThing does things sometimes.
-**syncthing**
+*.bkp
+*.code-workspace
+compile_commands.json
+
+logcat.*.txt

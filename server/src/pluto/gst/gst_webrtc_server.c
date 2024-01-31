@@ -18,12 +18,13 @@
 
 #include <json-glib/json-glib.h>
 
-
+#include <libsoup/soup-version.h>
 #include <libsoup/soup-message.h>
-#ifndef PL_LIBSOUP2
+#include <libsoup/soup-server.h>
+
+#if SOUP_CHECK_VERSION(3,0,0)
 #include <libsoup/soup-server-message.h>
 #endif
-#include <libsoup/soup-server.h>
 
 #include "util/u_logging.h"
 
@@ -55,7 +56,7 @@ mss_http_server_new()
 	return MSS_HTTP_SERVER(g_object_new(MSS_TYPE_HTTP_SERVER, NULL));
 }
 
-#ifdef PL_LIBSOUP2
+#if !SOUP_CHECK_VERSION(3, 0, 0)
 static void
 http_cb(SoupServer *server,
         SoupMessage *msg,
@@ -134,6 +135,7 @@ message_cb(SoupWebsocketConnection *connection, gint type, GBytes *message, gpoi
 static void
 mss_http_server_remove_websocket_connection(MssHttpServer *server, SoupWebsocketConnection *connection)
 {
+	g_info("%s", __FUNCTION__);
 	MssClientId client_id;
 
 	client_id = g_object_get_data(G_OBJECT(connection), "client_id");
@@ -154,19 +156,20 @@ closed_cb(SoupWebsocketConnection *connection, gpointer user_data)
 static void
 mss_http_server_add_websocket_connection(MssHttpServer *server, SoupWebsocketConnection *connection)
 {
+	g_info("%s", __FUNCTION__);
+	g_object_ref(connection);
+	server->websocket_connections = g_slist_append(server->websocket_connections, connection);
+	g_object_set_data(G_OBJECT(connection), "client_id", connection);
+
 	g_signal_connect(connection, "message", (GCallback)message_cb, server);
 	g_signal_connect(connection, "closed", (GCallback)closed_cb, server);
 
-	g_object_ref(connection);
 
-	g_object_set_data(G_OBJECT(connection), "client_id", connection);
-
-	server->websocket_connections = g_slist_append(server->websocket_connections, connection);
 
 	g_signal_emit(server, signals[SIGNAL_WS_CLIENT_CONNECTED], 0, connection);
 }
 
-#ifdef PL_LIBSOUP2
+#if !SOUP_CHECK_VERSION(3, 0, 0)
 static void
 websocket_cb(SoupServer *server,
              SoupWebsocketConnection *connection,
@@ -213,6 +216,7 @@ mss_http_server_send_to_websocket_client(MssHttpServer *server, MssClientId clie
 {
 	SoupWebsocketConnection *connection = client_id;
 	SoupWebsocketState socket_state;
+	g_info("%s", __FUNCTION__);
 
 	if (!g_slist_find(server->websocket_connections, connection)) {
 		g_warning("Unknown websocket connection.");

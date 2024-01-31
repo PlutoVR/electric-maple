@@ -1,0 +1,55 @@
+%% Copyright 2023, Collabora, Ltd.
+%% Copyright 2023, PlutoVR Inc.
+%%
+%% SPDX-License-Identifier: BSL-1.0
+
+sequenceDiagram
+    participant server_ws as pluto_streaming_server
+    participant em_connection as em_connection client
+    participant em_stream_client
+    em_connection->>server_ws: connect to signaling websocket
+    activate server_ws
+    server_ws-->>em_connection: connection established
+
+    %% emconn_websocket_connected_cb
+    activate em_connection
+    em_connection->>+em_stream_client: need pipeline
+    create participant client_pipeline
+    em_stream_client->>client_pipeline: create
+    em_stream_client-->>-em_connection: set pipeline
+    em_connection->>client_pipeline: set state PLAYING
+    deactivate em_connection
+
+    Note over em_connection: In PlutoSphere,<br> this initial SDP offer is received but not fully correctly handled<br>so the client shuts down the connection prematurely, without<br>any EM code knowing about the message.
+
+    %% Server sends this on websocket establishment
+    server_ws->>em_connection: sdp offer (in JSON)
+
+    %% emconn_webrtc_process_sdp_offer
+    activate em_connection
+    em_connection->>client_pipeline: set-remote-description
+    em_connection->>+client_pipeline: create-answer
+
+    %% emconn_webrtc_on_answer_created
+    client_pipeline-->>-em_connection: on_answer_created: answer
+    em_connection->>client_pipeline: set-local-description(answer)
+    em_connection->>server_ws: send answer
+    deactivate em_connection
+
+    %% Server sends several of these on websocket establishment after the offer
+    %% This is known as "Trickle ICE": https://datatracker.ietf.org/doc/html/rfc8838
+    loop Several times based on server IP addresses
+        server_ws->>em_connection: ICE candidate (in JSON)
+
+        %% emconn_webrtc_process_candidate
+        em_connection->>client_pipeline: add-ice-candidate
+    end
+
+    loop Several times based on client IP addresses?
+        client_pipeline->>em_connection: on-ice-candidate
+        em_connection->>server_ws: ICE candidate (in JSON)
+    end
+
+    note over client_pipeline, server_ws: STUN setup occurs between client and server instances of GStreamer webrtcbin,<br>setting up RTP media type 96 for the H.264 video, plus a WebRTC data channel.<br>The frame and data-channel data do not go over the signaling websocket."
+
+    deactivate server_ws
