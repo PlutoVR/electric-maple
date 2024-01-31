@@ -26,7 +26,7 @@ target_link_libraries(
 		comp_multi
 		pl_gst
 	)
-target_include_directories(comp_pluto PUBLIC .)
+target_include_directories(comp_pluto PUBLIC . ${GST_INCLUDE_DIRS})
 
 add_library(drv_pluto STATIC pl_driver.cpp pl_device_controller.cpp)
 
