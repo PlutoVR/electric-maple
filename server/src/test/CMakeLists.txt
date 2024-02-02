@@ -3,7 +3,7 @@ add_executable(webrtc_client webrtc_client.c)
 target_link_libraries(
 	webrtc_client
 	PRIVATE
-		pl_build_defines
+		ems_build_defines
 		aux_util
 		aux_gstreamer
 		${GST_LIBRARIES}

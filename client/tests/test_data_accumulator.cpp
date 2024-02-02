@@ -1,4 +1,4 @@
-// Copyright 2023, PlutoVR
+// Copyright 2023, Pluto VR, Inc.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file

@@ -16,5 +16,5 @@ fi
 
 mkdir -p generated
 
-nanopb_generator pluto.proto
-mv pluto.pb.h pluto.pb.c generated/
+nanopb_generator electricmaple.proto
+mv electricmaple.pb.h electricmaple.pb.c generated/

@@ -1,4 +1,4 @@
-// Copyright 2023, PlutoVR
+// Copyright 2023, Pluto VR, Inc.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -17,11 +17,11 @@
 #include <cstdint>
 #include <mutex>
 
-typedef struct _pluto_UpMessage pluto_UpMessage;
+typedef struct _em_proto_UpMessage em_proto_UpMessage;
 
 namespace em {
 
-using PfnEmitUpMessage = void (*)(pluto_UpMessage *, void *);
+using PfnEmitUpMessage = void (*)(em_proto_UpMessage *, void *);
 
 struct FrameData
 {

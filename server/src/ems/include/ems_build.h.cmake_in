@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
- * @brief  Build options for Pluto server and tests
+ * @brief  Build options for Electric Maple Server and tests
  * @author Moshi Turner <moses@collabora.com>
  * @ingroup xrt_iface
  */

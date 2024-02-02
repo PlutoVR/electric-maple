@@ -1,4 +1,4 @@
-# Pluto ElectricMaple streaming server
+# Electric Maple streaming server
 
 <!--
 Copyright 2023, Collabora, Ltd.
@@ -62,7 +62,7 @@ apt info gstreamer1.0-plugins-good | grep libsoup-3.0
   - libsoup-3.0-dev
 - Otherwise you must use libsoup 2:
   - libsoup2.4-dev
-  - In this case, you must also pass `-DPL_LIBSOUP2=ON` to CMake.
+  - In this case, you must also pass `-DEMS_LIBSOUP2=ON` to CMake.
 
 Best to only have one of the two libsoup dev packages installed at a time.
 
@@ -82,15 +82,15 @@ Due to the early stage of the project, you must start this up in this particular
 Assuming you followed the build steps above, you can start the server with:
 
 ```sh
-build/src/pluto/pluto_streaming_server
+build/src/ems/ems_streaming_server
 ```
 
 To run an OpenXR app, use the build-tree OpenXR runtime manifest at
-`build/openxr_monado-dev.json` by symlinking it to the active runtime path,
+`build/openxr_electricmaple-dev.json` by symlinking it to the active runtime path,
 using something like XR Picker to do that for you, or:
 
 ```sh
-env XR_RUNTIME_JSON=$HOME/src/linux-streaming/server/build/openxr_monado-dev.json hello_xr -G vulkan2
+env XR_RUNTIME_JSON=$HOME/src/linux-streaming/server/build/openxr_electricmaple-dev.json hello_xr -G vulkan2
 ```
 
 to apply the active runtime just for a single command. (Change the path to the

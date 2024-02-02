@@ -10,24 +10,20 @@ target_include_directories(native_app_glue PUBLIC ${ANDROID_NDK}/sources/android
 # now build app's shared lib
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror")
 
-add_library(
-	plutovr_webrtc_client SHARED
-	main.cpp
-	EglData.cpp
-	)
+add_library(electricmaple_standalone_client SHARED main.cpp EglData.cpp)
 
 target_include_directories(
-	plutovr_webrtc_client PRIVATE "${PROJECT_SOURCE_DIR}/../monado/external/include"
-				      ${GLIB_INCLUDE_DIRS} ${GST_INCLUDE_DIRS}
+	electricmaple_standalone_client PRIVATE "${PROJECT_SOURCE_DIR}/../monado/external/include"
+						${GLIB_INCLUDE_DIRS} ${GST_INCLUDE_DIRS}
 	)
 
 # add lib dependencies
 target_link_libraries(
-	plutovr_webrtc_client
+	electricmaple_standalone_client
 	PRIVATE
-		pluto_proto
+		em_proto
 		aux_util
-		pluto_electricmaple
+		electricmaple_client
 		gstreamer_android
 		native_app_glue
 		OpenXR::openxr_loader
@@ -40,7 +36,7 @@ target_link_libraries(
 
 # Export ANativeActivity_onCreate()
 set_property(
-	TARGET plutovr_webrtc_client
+	TARGET electricmaple_standalone_client
 	APPEND_STRING
 	PROPERTY LINK_FLAGS " -u ANativeActivity_onCreate"
 	)

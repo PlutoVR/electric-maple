@@ -16,7 +16,7 @@
 typedef struct _EmRemoteExperience EmRemoteExperience;
 typedef struct _EmConnection EmConnection;
 
-typedef struct _pluto_UpMessage pluto_UpMessage;
+typedef struct _em_proto_UpMessage em_proto_UpMessage;
 
 #ifdef __cplusplus
 extern "C" {
@@ -130,7 +130,7 @@ em_remote_experience_inner_poll_and_render_frame(EmRemoteExperience *exp,
  * @return true on success
  */
 bool
-em_remote_experience_emit_upmessage(EmRemoteExperience *exp, pluto_UpMessage *upMessage);
+em_remote_experience_emit_upmessage(EmRemoteExperience *exp, em_proto_UpMessage *upMessage);
 
 #ifdef __cplusplus
 } // extern "C"

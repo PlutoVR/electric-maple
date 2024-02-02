@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
- * @brief  A GStreamer pipeline for WebRTC streaming
+ * @brief  WebSocket signaling server for Electric Maple
  * @author Moshi Turner <moses@collabora.com>
  * @author Jakub Adam <jakub.adam@collabora.com
  * @author Nicolas Dufresne <nicolas.dufresne@collabora.com>
@@ -11,8 +11,7 @@
  * @ingroup aux_util
  */
 
-#include "pl_build.h"
-#include "gst_webrtc_server.h"
+#include "ems_signaling_server.h"
 
 #include <glib/gstdio.h>
 
@@ -22,13 +21,13 @@
 #include <libsoup/soup-message.h>
 #include <libsoup/soup-server.h>
 
-#if SOUP_CHECK_VERSION(3,0,0)
+#if SOUP_CHECK_VERSION(3, 0, 0)
 #include <libsoup/soup-server-message.h>
 #endif
 
 #include "util/u_logging.h"
 
-struct _MssHttpServer
+struct _EmsSignalingServer
 {
 	GObject parent;
 
@@ -37,7 +36,7 @@ struct _MssHttpServer
 	GSList *websocket_connections;
 };
 
-G_DEFINE_TYPE(MssHttpServer, mss_http_server, G_TYPE_OBJECT)
+G_DEFINE_TYPE(EmsSignalingServer, ems_signaling_server, G_TYPE_OBJECT)
 
 enum
 {
@@ -50,10 +49,10 @@ enum
 
 static guint signals[N_SIGNALS];
 
-MssHttpServer *
-mss_http_server_new()
+EmsSignalingServer *
+ems_signaling_server_new()
 {
-	return MSS_HTTP_SERVER(g_object_new(MSS_TYPE_HTTP_SERVER, NULL));
+	return EMS_SIGNALING_SERVER(g_object_new(EMS_TYPE_SIGNALING_SERVER, NULL));
 }
 
 #if !SOUP_CHECK_VERSION(3, 0, 0)
@@ -86,7 +85,7 @@ http_cb(SoupServer *server,     //
 #endif
 
 static void
-mss_http_server_handle_message(MssHttpServer *server, SoupWebsocketConnection *connection, GBytes *message)
+ems_signaling_server_handle_message(EmsSignalingServer *server, SoupWebsocketConnection *connection, GBytes *message)
 {
 	gsize length = 0;
 	const gchar *msg_data = g_bytes_get_data(message, &length);
@@ -129,14 +128,14 @@ out:
 static void
 message_cb(SoupWebsocketConnection *connection, gint type, GBytes *message, gpointer user_data)
 {
-	mss_http_server_handle_message(MSS_HTTP_SERVER(user_data), connection, message);
+	ems_signaling_server_handle_message(EMS_SIGNALING_SERVER(user_data), connection, message);
 }
 
 static void
-mss_http_server_remove_websocket_connection(MssHttpServer *server, SoupWebsocketConnection *connection)
+ems_signaling_server_remove_websocket_connection(EmsSignalingServer *server, SoupWebsocketConnection *connection)
 {
 	g_info("%s", __FUNCTION__);
-	MssClientId client_id;
+	EmsClientId client_id;
 
 	client_id = g_object_get_data(G_OBJECT(connection), "client_id");
 
@@ -150,11 +149,11 @@ closed_cb(SoupWebsocketConnection *connection, gpointer user_data)
 {
 	g_debug("Connection closed");
 
-	mss_http_server_remove_websocket_connection(MSS_HTTP_SERVER(user_data), connection);
+	ems_signaling_server_remove_websocket_connection(EMS_SIGNALING_SERVER(user_data), connection);
 }
 
 static void
-mss_http_server_add_websocket_connection(MssHttpServer *server, SoupWebsocketConnection *connection)
+ems_signaling_server_add_websocket_connection(EmsSignalingServer *server, SoupWebsocketConnection *connection)
 {
 	g_info("%s", __FUNCTION__);
 	g_object_ref(connection);
@@ -179,7 +178,7 @@ websocket_cb(SoupServer *server,
 {
 	g_debug("New connection from %s", soup_client_context_get_host(client));
 
-	mss_http_server_add_websocket_connection(MSS_HTTP_SERVER(user_data), connection);
+	ems_signaling_server_add_websocket_connection(EMS_SIGNALING_SERVER(user_data), connection);
 }
 #else
 static void
@@ -191,12 +190,12 @@ websocket_cb(SoupServer *server,
 {
 	g_debug("New connection from somewhere");
 
-	mss_http_server_add_websocket_connection(MSS_HTTP_SERVER(user_data), connection);
+	ems_signaling_server_add_websocket_connection(EMS_SIGNALING_SERVER(user_data), connection);
 }
 #endif
 
 static void
-mss_http_server_init(MssHttpServer *server)
+ems_signaling_server_init(EmsSignalingServer *server)
 {
 	GError *error = NULL;
 
@@ -212,7 +211,7 @@ mss_http_server_init(MssHttpServer *server)
 
 
 static void
-mss_http_server_send_to_websocket_client(MssHttpServer *server, MssClientId client_id, JsonNode *msg)
+ems_signaling_server_send_to_websocket_client(EmsSignalingServer *server, EmsClientId client_id, JsonNode *msg)
 {
 	SoupWebsocketConnection *connection = client_id;
 	SoupWebsocketState socket_state;
@@ -237,7 +236,7 @@ mss_http_server_send_to_websocket_client(MssHttpServer *server, MssClientId clie
 }
 
 void
-mss_http_server_send_sdp_offer(MssHttpServer *server, MssClientId client_id, const gchar *sdp)
+ems_signaling_server_send_sdp_offer(EmsSignalingServer *server, EmsClientId client_id, const gchar *sdp)
 {
 	JsonBuilder *builder;
 	JsonNode *root;
@@ -255,14 +254,17 @@ mss_http_server_send_sdp_offer(MssHttpServer *server, MssClientId client_id, con
 
 	root = json_builder_get_root(builder);
 
-	mss_http_server_send_to_websocket_client(server, client_id, root);
+	ems_signaling_server_send_to_websocket_client(server, client_id, root);
 
 	json_node_unref(root);
 	g_object_unref(builder);
 }
 
 void
-mss_http_server_send_candidate(MssHttpServer *server, MssClientId client_id, guint mlineindex, const gchar *candidate)
+ems_signaling_server_send_candidate(EmsSignalingServer *server,
+                                    EmsClientId client_id,
+                                    guint mlineindex,
+                                    const gchar *candidate)
 {
 	JsonBuilder *builder;
 	JsonNode *root;
@@ -285,16 +287,16 @@ mss_http_server_send_candidate(MssHttpServer *server, MssClientId client_id, gui
 
 	root = json_builder_get_root(builder);
 
-	mss_http_server_send_to_websocket_client(server, client_id, root);
+	ems_signaling_server_send_to_websocket_client(server, client_id, root);
 
 	json_node_unref(root);
 	g_object_unref(builder);
 }
 
 static void
-mss_http_server_dispose(GObject *object)
+ems_signaling_server_dispose(GObject *object)
 {
-	MssHttpServer *self = MSS_HTTP_SERVER(object);
+	EmsSignalingServer *self = EMS_SIGNALING_SERVER(object);
 	GDir *dir;
 
 	soup_server_disconnect(self->soup_server);
@@ -302,11 +304,11 @@ mss_http_server_dispose(GObject *object)
 }
 
 static void
-mss_http_server_class_init(MssHttpServerClass *klass)
+ems_signaling_server_class_init(EmsSignalingServerClass *klass)
 {
 	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 
-	gobject_class->dispose = mss_http_server_dispose;
+	gobject_class->dispose = ems_signaling_server_dispose;
 
 	signals[SIGNAL_WS_CLIENT_CONNECTED] =
 	    g_signal_new("ws-client-connected", G_OBJECT_CLASS_TYPE(klass), G_SIGNAL_RUN_LAST, 0, NULL, NULL, NULL,

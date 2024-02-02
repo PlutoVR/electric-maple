@@ -1,11 +1,11 @@
-add_library(pl_gst STATIC gst_webrtc_pipeline.c gst_webrtc_server.c)
+add_library(ems_gst STATIC ems_gstreamer_pipeline.c ems_signaling_server.c)
 
 target_link_libraries(
-	pl_gst
+	ems_gst
 	PRIVATE
-		pl_build_defines
-		pl_callbacks
-		pluto_proto
+		ems_build_defines
+		ems_callbacks
+		em_proto
 		aux_util
 		aux_gstreamer
 		${GST_LIBRARIES}
@@ -18,7 +18,7 @@ target_link_libraries(
 	)
 
 target_include_directories(
-	pl_gst
+	ems_gst
 	PRIVATE
 		${GLIB_INCLUDE_DIRS}
 		${GST_INCLUDE_DIRS}

@@ -1,5 +1,5 @@
 // Copyright 2019-2023, Collabora, Ltd.
-// Copyright 2023, PlutoVR, Inc.
+// Copyright 2023, Pluto VR, Inc.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -10,8 +10,10 @@
  * @author Jakob Bornecrantz <jakob@collabora.com>
  * @author Lubosz Sarnecki <lubosz.sarnecki@collabora.com>
  * @author Rylie Pavlik <rylie.pavlik@collabora.com>
- * @ingroup comp_pl
+ * @ingroup comp_ems
  */
+
+#include "ems_compositor.h"
 
 #include "gstreamer/gst_internal.h"
 #include "os/os_time.h"
@@ -30,9 +32,6 @@
 #include "vk/vk_image_readback_to_xf_pool.h"
 #include "vk/vk_cmd.h"
 #include "vk/vk_cmd_pool.h"
-
-
-#include "pl_comp.h"
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -57,7 +56,7 @@ DEBUG_GET_ONCE_LOG_OPTION(log, "XRT_COMPOSITOR_LOG", U_LOGGING_INFO)
  */
 
 static struct vk_bundle *
-get_vk(struct pluto_compositor *c)
+get_vk(struct ems_compositor *c)
 {
 	return &c->base.vk;
 }
@@ -148,7 +147,7 @@ static const char *optional_device_extensions[] = {
 };
 
 static VkResult
-select_instances_extensions(struct pluto_compositor *c, struct u_string_list *required, struct u_string_list *optional)
+select_instances_extensions(struct ems_compositor *c, struct u_string_list *required, struct u_string_list *optional)
 {
 #ifdef VK_EXT_display_surface_counter
 	u_string_list_append(optional, VK_EXT_DISPLAY_SURFACE_COUNTER_EXTENSION_NAME);
@@ -158,7 +157,7 @@ select_instances_extensions(struct pluto_compositor *c, struct u_string_list *re
 }
 
 static bool
-compositor_init_vulkan(struct pluto_compositor *c)
+compositor_init_vulkan(struct ems_compositor *c)
 {
 	struct vk_bundle *vk = get_vk(c);
 	VkResult ret;
@@ -230,14 +229,14 @@ compositor_init_vulkan(struct pluto_compositor *c)
 	U_LOG_E("%s", vk_result_string(ret));
 	ret = vk_cmd_pool_init(vk, &c->cmd_pool, flags);
 	if (ret != VK_SUCCESS) {
-		PLUTO_COMP_ERROR(c, "vk_cmd_pool_init: %s", vk_result_string(ret));
+		EMS_COMP_ERROR(c, "vk_cmd_pool_init: %s", vk_result_string(ret));
 		return false;
 	}
 
 	// Init shared swapchain resources.
 	xrt_result_t xret = comp_swapchain_shared_init(&c->base.cscs, vk);
 	if (xret != XRT_SUCCESS) {
-		PLUTO_COMP_ERROR(c, "comp_swapchain_shared_init: %u", xret);
+		EMS_COMP_ERROR(c, "comp_swapchain_shared_init: %u", xret);
 		return false;
 	}
 
@@ -252,11 +251,11 @@ compositor_init_vulkan(struct pluto_compositor *c)
  */
 
 static bool
-compositor_init_pacing(struct pluto_compositor *c)
+compositor_init_pacing(struct ems_compositor *c)
 {
 	xrt_result_t xret = u_pc_fake_create(c->settings.frame_interval_ns, os_monotonic_get_ns(), &c->upc);
 	if (xret != XRT_SUCCESS) {
-		PLUTO_COMP_ERROR(c, "Failed to create fake pacing helper!");
+		EMS_COMP_ERROR(c, "Failed to create fake pacing helper!");
 		return false;
 	}
 
@@ -264,7 +263,7 @@ compositor_init_pacing(struct pluto_compositor *c)
 }
 
 static bool
-compositor_init_info(struct pluto_compositor *c)
+compositor_init_info(struct ems_compositor *c)
 {
 	struct xrt_compositor_info *info = &c->base.base.base.info;
 
@@ -277,7 +276,7 @@ compositor_init_info(struct pluto_compositor *c)
 }
 
 static bool
-compositor_init_sys_info(struct pluto_compositor *c, struct xrt_device *xdev)
+compositor_init_sys_info(struct ems_compositor *c, struct xrt_device *xdev)
 {
 	struct xrt_system_compositor_info *sys_info = &c->sys_info;
 
@@ -333,16 +332,16 @@ compositor_init_sys_info(struct pluto_compositor *c, struct xrt_device *xdev)
  */
 
 void
-do_the_thing(struct pluto_compositor *c,
-             const struct xrt_layer_projection_view_data *lvd,
-             const struct xrt_layer_projection_view_data *rvd,
-             struct comp_swapchain *lsc,
-             struct comp_swapchain *rsc)
+pack_blit_and_encode(struct ems_compositor *c,
+                     const struct xrt_layer_projection_view_data *lvd,
+                     const struct xrt_layer_projection_view_data *rvd,
+                     struct comp_swapchain *lsc,
+                     struct comp_swapchain *rsc)
 {
 	if (c->offset_ns == 0) {
 		uint64_t now = os_monotonic_get_ns();
 		c->offset_ns = now;
-		c->hackers_gstreamer_sink->offset_ns = now;
+		c->gstreamer_sink->offset_ns = now;
 	}
 	VkResult ret;
 
@@ -351,7 +350,7 @@ do_the_thing(struct pluto_compositor *c,
 
 	// Getting frame
 	if (!vk_image_readback_to_xf_pool_get_unused_frame(vk, c->pool, &wrap)) {
-		PLUTO_COMP_ERROR(c, "vk_image_readback_to_xf_pool_get_unused_frame: Failed!");
+		EMS_COMP_ERROR(c, "vk_image_readback_to_xf_pool_get_unused_frame: Failed!");
 		return;
 	}
 
@@ -366,7 +365,7 @@ do_the_thing(struct pluto_compositor *c,
 
 	ret = vk_cmd_pool_create_and_begin_cmd_buffer_locked(vk, &c->cmd_pool, flags, &cmd);
 	if (ret != VK_SUCCESS) {
-		PLUTO_COMP_ERROR(c, "vk_cmd_pool_create_and_begin_cmd_buffer_locked: %s", vk_result_string(ret));
+		EMS_COMP_ERROR(c, "vk_cmd_pool_create_and_begin_cmd_buffer_locked: %s", vk_result_string(ret));
 		xrt_frame_reference(&frame, NULL);
 		return;
 	}
@@ -490,8 +489,7 @@ do_the_thing(struct pluto_compositor *c,
 
 	// Do checking here.
 	if (ret != VK_SUCCESS) {
-		PLUTO_COMP_ERROR(c, "vk_cmd_pool_end_submit_wait_and_free_cmd_buffer_locked: %s",
-		                 vk_result_string(ret));
+		EMS_COMP_ERROR(c, "vk_cmd_pool_end_submit_wait_and_free_cmd_buffer_locked: %s", vk_result_string(ret));
 		xrt_frame_reference(&frame, NULL);
 		return;
 	}
@@ -504,13 +502,13 @@ do_the_thing(struct pluto_compositor *c,
 	wrap = NULL;
 
 	if (!c->pipeline_playing) {
-		gstreamer_webrtc_pipeline_play(c->hackers_gstreamer_pipeline);
+		ems_gstreamer_pipeline_play(c->gstreamer_pipeline);
 		c->pipeline_playing = true;
 	}
 
-	u_sink_debug_push_frame(&c->hackers_debug_sink, frame);
+	u_sink_debug_push_frame(&c->debug_sink, frame);
 
-	xrt_sink_push_frame(c->hackers_xfs, frame);
+	xrt_sink_push_frame(c->frame_sink, frame);
 
 
 	// TODO send data channel message with pose and fov here?
@@ -527,35 +525,35 @@ do_the_thing(struct pluto_compositor *c,
  */
 
 static xrt_result_t
-pluto_compositor_begin_session(struct xrt_compositor *xc, const struct xrt_begin_session_info *info)
+ems_compositor_begin_session(struct xrt_compositor *xc, const struct xrt_begin_session_info *info)
 {
-	struct pluto_compositor *c = pluto_compositor(xc);
-	PLUTO_COMP_DEBUG(c, "BEGIN_SESSION");
+	struct ems_compositor *c = ems_compositor(xc);
+	EMS_COMP_DEBUG(c, "BEGIN_SESSION");
 
 	return XRT_SUCCESS;
 }
 
 static xrt_result_t
-pluto_compositor_end_session(struct xrt_compositor *xc)
+ems_compositor_end_session(struct xrt_compositor *xc)
 {
-	struct pluto_compositor *c = pluto_compositor(xc);
-	PLUTO_COMP_DEBUG(c, "END_SESSION");
+	struct ems_compositor *c = ems_compositor(xc);
+	EMS_COMP_DEBUG(c, "END_SESSION");
 
 	return XRT_SUCCESS;
 }
 
 static xrt_result_t
-pluto_compositor_predict_frame(struct xrt_compositor *xc,
-                               int64_t *out_frame_id,
-                               uint64_t *out_wake_time_ns,
-                               uint64_t *out_predicted_gpu_time_ns,
-                               uint64_t *out_predicted_display_time_ns,
-                               uint64_t *out_predicted_display_period_ns)
+ems_compositor_predict_frame(struct xrt_compositor *xc,
+                             int64_t *out_frame_id,
+                             uint64_t *out_wake_time_ns,
+                             uint64_t *out_predicted_gpu_time_ns,
+                             uint64_t *out_predicted_display_time_ns,
+                             uint64_t *out_predicted_display_period_ns)
 {
 	COMP_TRACE_MARKER();
 
-	struct pluto_compositor *c = pluto_compositor(xc);
-	PLUTO_COMP_TRACE(c, "PREDICT_FRAME");
+	struct ems_compositor *c = ems_compositor(xc);
+	EMS_COMP_TRACE(c, "PREDICT_FRAME");
 
 	uint64_t now_ns = os_monotonic_get_ns();
 	uint64_t null_desired_present_time_ns = 0;
@@ -577,15 +575,15 @@ pluto_compositor_predict_frame(struct xrt_compositor *xc,
 }
 
 static xrt_result_t
-pluto_compositor_mark_frame(struct xrt_compositor *xc,
-                            int64_t frame_id,
-                            enum xrt_compositor_frame_point point,
-                            uint64_t when_ns)
+ems_compositor_mark_frame(struct xrt_compositor *xc,
+                          int64_t frame_id,
+                          enum xrt_compositor_frame_point point,
+                          uint64_t when_ns)
 {
 	COMP_TRACE_MARKER();
 
-	struct pluto_compositor *c = pluto_compositor(xc);
-	PLUTO_COMP_TRACE(c, "MARK_FRAME %i", point);
+	struct ems_compositor *c = ems_compositor(xc);
+	EMS_COMP_TRACE(c, "MARK_FRAME %i", point);
 
 	switch (point) {
 	case XRT_COMPOSITOR_FRAME_POINT_WOKE:
@@ -598,19 +596,19 @@ pluto_compositor_mark_frame(struct xrt_compositor *xc,
 }
 
 static xrt_result_t
-pluto_compositor_begin_frame(struct xrt_compositor *xc, int64_t frame_id)
+ems_compositor_begin_frame(struct xrt_compositor *xc, int64_t frame_id)
 {
-	struct pluto_compositor *c = pluto_compositor(xc);
-	PLUTO_COMP_TRACE(c, "BEGIN_FRAME");
+	struct ems_compositor *c = ems_compositor(xc);
+	EMS_COMP_TRACE(c, "BEGIN_FRAME");
 
 	return XRT_SUCCESS;
 }
 
 static xrt_result_t
-pluto_compositor_discard_frame(struct xrt_compositor *xc, int64_t frame_id)
+ems_compositor_discard_frame(struct xrt_compositor *xc, int64_t frame_id)
 {
-	struct pluto_compositor *c = pluto_compositor(xc);
-	PLUTO_COMP_TRACE(c, "DISCARD_FRAME");
+	struct ems_compositor *c = ems_compositor(xc);
+	EMS_COMP_TRACE(c, "DISCARD_FRAME");
 
 	// Shouldn't be called.
 	assert(false);
@@ -619,12 +617,12 @@ pluto_compositor_discard_frame(struct xrt_compositor *xc, int64_t frame_id)
 }
 
 static xrt_result_t
-pluto_compositor_layer_commit(struct xrt_compositor *xc, xrt_graphics_sync_handle_t sync_handle)
+ems_compositor_layer_commit(struct xrt_compositor *xc, xrt_graphics_sync_handle_t sync_handle)
 {
 	COMP_TRACE_MARKER();
 
-	struct pluto_compositor *c = pluto_compositor(xc);
-	PLUTO_COMP_TRACE(c, "LAYER_COMMIT");
+	struct ems_compositor *c = ems_compositor(xc);
+	EMS_COMP_TRACE(c, "LAYER_COMMIT");
 
 	int64_t frame_id = c->base.slot.data.frame_id;
 
@@ -653,7 +651,7 @@ pluto_compositor_layer_commit(struct xrt_compositor *xc, xrt_graphics_sync_handl
 			struct comp_swapchain *left = layer.sc_array[0];
 			struct comp_swapchain *right = layer.sc_array[1];
 
-			do_the_thing(c, lvd, rvd, left, right);
+			pack_blit_and_encode(c, lvd, rvd, left, right);
 		} break;
 		case XRT_LAYER_STEREO_PROJECTION: {
 			const struct xrt_layer_stereo_projection_data *stereo = &layer.data.stereo;
@@ -663,7 +661,7 @@ pluto_compositor_layer_commit(struct xrt_compositor *xc, xrt_graphics_sync_handl
 			struct comp_swapchain *left = layer.sc_array[0];
 			struct comp_swapchain *right = layer.sc_array[1];
 
-			do_the_thing(c, lvd, rvd, left, right);
+			pack_blit_and_encode(c, lvd, rvd, left, right);
 		} break;
 		default: U_LOG_E("Unhandled layer type %d", layer.data.type); break;
 		}
@@ -683,10 +681,10 @@ pluto_compositor_layer_commit(struct xrt_compositor *xc, xrt_graphics_sync_handl
 
 
 static xrt_result_t
-pluto_compositor_poll_events(struct xrt_compositor *xc, union xrt_compositor_event *out_xce)
+ems_compositor_poll_events(struct xrt_compositor *xc, union xrt_compositor_event *out_xce)
 {
-	struct pluto_compositor *c = pluto_compositor(xc);
-	PLUTO_COMP_TRACE(c, "POLL_EVENTS");
+	struct ems_compositor *c = ems_compositor(xc);
+	EMS_COMP_TRACE(c, "POLL_EVENTS");
 
 	/*
 	 * Note this is very often consumed only by the multi compositor.
@@ -695,25 +693,25 @@ pluto_compositor_poll_events(struct xrt_compositor *xc, union xrt_compositor_eve
 	U_ZERO(out_xce);
 
 	switch (c->state) {
-	case PLUTO_COMP_COMP_STATE_UNINITIALIZED:
-		PLUTO_COMP_ERROR(c, "Polled uninitialized compositor");
+	case EMS_COMP_COMP_STATE_UNINITIALIZED:
+		EMS_COMP_ERROR(c, "Polled uninitialized compositor");
 		out_xce->state.type = XRT_COMPOSITOR_EVENT_NONE;
 		break;
-	case PLUTO_COMP_COMP_STATE_READY: out_xce->state.type = XRT_COMPOSITOR_EVENT_NONE; break;
-	case PLUTO_COMP_COMP_STATE_PREPARED:
-		PLUTO_COMP_DEBUG(c, "PREPARED -> VISIBLE");
+	case EMS_COMP_COMP_STATE_READY: out_xce->state.type = XRT_COMPOSITOR_EVENT_NONE; break;
+	case EMS_COMP_COMP_STATE_PREPARED:
+		EMS_COMP_DEBUG(c, "PREPARED -> VISIBLE");
 		out_xce->state.type = XRT_COMPOSITOR_EVENT_STATE_CHANGE;
 		out_xce->state.visible = true;
-		c->state = PLUTO_COMP_COMP_STATE_VISIBLE;
+		c->state = EMS_COMP_COMP_STATE_VISIBLE;
 		break;
-	case PLUTO_COMP_COMP_STATE_VISIBLE:
-		PLUTO_COMP_DEBUG(c, "VISIBLE -> FOCUSED");
+	case EMS_COMP_COMP_STATE_VISIBLE:
+		EMS_COMP_DEBUG(c, "VISIBLE -> FOCUSED");
 		out_xce->state.type = XRT_COMPOSITOR_EVENT_STATE_CHANGE;
 		out_xce->state.visible = true;
 		out_xce->state.focused = true;
-		c->state = PLUTO_COMP_COMP_STATE_FOCUSED;
+		c->state = EMS_COMP_COMP_STATE_FOCUSED;
 		break;
-	case PLUTO_COMP_COMP_STATE_FOCUSED:
+	case EMS_COMP_COMP_STATE_FOCUSED:
 		// No more transitions.
 		out_xce->state.type = XRT_COMPOSITOR_EVENT_NONE;
 		break;
@@ -723,9 +721,9 @@ pluto_compositor_poll_events(struct xrt_compositor *xc, union xrt_compositor_eve
 }
 
 static xrt_result_t
-pluto_compositor_get_swapchain_create_properties(struct xrt_compositor *xc,
-                                                 const struct xrt_swapchain_create_info *info,
-                                                 struct xrt_swapchain_create_properties *xsccp)
+ems_compositor_get_swapchain_create_properties(struct xrt_compositor *xc,
+                                               const struct xrt_swapchain_create_info *info,
+                                               struct xrt_swapchain_create_properties *xsccp)
 {
 	xrt_result_t xret = comp_swapchain_get_create_properties(info, xsccp);
 	if (xret != XRT_SUCCESS) {
@@ -738,12 +736,12 @@ pluto_compositor_get_swapchain_create_properties(struct xrt_compositor *xc,
 }
 
 static void
-pluto_compositor_destroy(struct xrt_compositor *xc)
+ems_compositor_destroy(struct xrt_compositor *xc)
 {
-	struct pluto_compositor *c = pluto_compositor(xc);
+	struct ems_compositor *c = ems_compositor(xc);
 	struct vk_bundle *vk = get_vk(c);
 
-	PLUTO_COMP_DEBUG(c, "PLUTO_COMP_COMP_DESTROY");
+	EMS_COMP_DEBUG(c, "EMS_COMP_COMP_DESTROY");
 
 	// Make sure we don't have anything to destroy.
 	comp_swapchain_shared_garbage_collect(&c->base.cscs);
@@ -787,38 +785,38 @@ pluto_compositor_destroy(struct xrt_compositor *xc)
  */
 
 xrt_result_t
-pluto_compositor_create_system(pluto_program &pp, struct xrt_system_compositor **out_xsysc)
+ems_compositor_create_system(ems_instance &emsi, struct xrt_system_compositor **out_xsysc)
 {
-	struct pluto_compositor *c = U_TYPED_CALLOC(struct pluto_compositor);
+	struct ems_compositor *c = U_TYPED_CALLOC(struct ems_compositor);
 
-	PLUTO_COMP_DEBUG(c, "Doing init %p", (void *)c);
+	EMS_COMP_DEBUG(c, "Doing init %p", (void *)c);
 
 	// Needs to be done before functions are set as override function(s).
 	comp_base_init(&c->base);
 
-	c->base.base.base.get_swapchain_create_properties = pluto_compositor_get_swapchain_create_properties;
-	c->base.base.base.begin_session = pluto_compositor_begin_session;
-	c->base.base.base.end_session = pluto_compositor_end_session;
-	c->base.base.base.predict_frame = pluto_compositor_predict_frame;
-	c->base.base.base.mark_frame = pluto_compositor_mark_frame;
-	c->base.base.base.begin_frame = pluto_compositor_begin_frame;
-	c->base.base.base.discard_frame = pluto_compositor_discard_frame;
-	c->base.base.base.layer_commit = pluto_compositor_layer_commit;
-	c->base.base.base.poll_events = pluto_compositor_poll_events;
-	c->base.base.base.destroy = pluto_compositor_destroy;
+	c->base.base.base.get_swapchain_create_properties = ems_compositor_get_swapchain_create_properties;
+	c->base.base.base.begin_session = ems_compositor_begin_session;
+	c->base.base.base.end_session = ems_compositor_end_session;
+	c->base.base.base.predict_frame = ems_compositor_predict_frame;
+	c->base.base.base.mark_frame = ems_compositor_mark_frame;
+	c->base.base.base.begin_frame = ems_compositor_begin_frame;
+	c->base.base.base.discard_frame = ems_compositor_discard_frame;
+	c->base.base.base.layer_commit = ems_compositor_layer_commit;
+	c->base.base.base.poll_events = ems_compositor_poll_events;
+	c->base.base.base.destroy = ems_compositor_destroy;
 
 	// Note that we don't want to set eg. layer_stereo_projection - comp_base handles that stuff for us.
 	c->settings.log_level = debug_get_log_option_log();
 	c->frame.waited.id = -1;
 	c->frame.rendering.id = -1;
-	c->state = PLUTO_COMP_COMP_STATE_READY;
+	c->state = EMS_COMP_COMP_STATE_READY;
 
-	xrt_device *xdev = pp.xsysd_base.roles.head;
+	xrt_device *xdev = emsi.xsysd_base.roles.head;
 
 	c->settings.frame_interval_ns = xdev->hmd->screens[0].nominal_frame_interval_ns;
 	c->xdev = xdev;
 
-	PLUTO_COMP_INFO(c, "Starting Pluto remote compositor!");
+	EMS_COMP_INFO(c, "Starting Electric Maple Server remote compositor!");
 
 
 	/*
@@ -829,7 +827,7 @@ pluto_compositor_create_system(pluto_program &pp, struct xrt_system_compositor *
 	    !compositor_init_vulkan(c) ||         //
 	    !compositor_init_sys_info(c, xdev) || //
 	    !compositor_init_info(c)) {           //
-		PLUTO_COMP_DEBUG(c, "Failed to init compositor %p", (void *)c);
+		EMS_COMP_DEBUG(c, "Failed to init compositor %p", (void *)c);
 		c->base.base.base.destroy(&c->base.base.base);
 
 		return XRT_ERROR_VULKAN;
@@ -846,18 +844,20 @@ pluto_compositor_create_system(pluto_program &pp, struct xrt_system_compositor *
 	    XRT_FORMAT_R8G8B8X8,             // xrt_format
 	    VK_FORMAT_R8G8B8A8_UNORM);       // vk_format
 
-	u_var_add_root(c, "Pluto compositor!", 0);
-	u_var_add_sink_debug(c, &c->hackers_debug_sink, "Meow!");
+	u_var_add_root(c, "Electric Maple Server compositor", 0);
+	u_var_add_sink_debug(c, &c->debug_sink, "Debug Sink");
 
-	gstreamer_pipeline_webrtc_create(&c->xfctx, "Meow", pp.callbacks, &c->hackers_gstreamer_pipeline);
+#define EMS_APPSRC_NAME "EMS_source"
+
+	ems_gstreamer_pipeline_create(&c->xfctx, EMS_APPSRC_NAME, emsi.callbacks, &c->gstreamer_pipeline);
 	gstreamer_sink_create_with_pipeline( //
-	    c->hackers_gstreamer_pipeline,   //
+	    c->gstreamer_pipeline,           //
 	    READBACK_W,                      //
 	    READBACK_H,                      //
 	    XRT_FORMAT_R8G8B8X8,             //
-	    "Meow",                          //
-	    &c->hackers_gstreamer_sink,      //
-	    &c->hackers_xfs);                //
+	    EMS_APPSRC_NAME,                 //
+	    &c->gstreamer_sink,              //
+	    &c->frame_sink);                 //
 
 
 	// Bounce image for scaling.
@@ -875,11 +875,11 @@ pluto_compositor_create_system(pluto_program &pp, struct xrt_system_compositor *
 		    &c->bounce.device_memory, // out_mem
 		    &c->bounce.image);        // out_image
 		if (ret != VK_SUCCESS) {
-			PLUTO_COMP_DEBUG(c, "vk_create_image_simple: %s", vk_result_string(ret));
+			EMS_COMP_DEBUG(c, "vk_create_image_simple: %s", vk_result_string(ret));
 		}
 	}
 
-	PLUTO_COMP_DEBUG(c, "Done %p", (void *)c);
+	EMS_COMP_DEBUG(c, "Done %p", (void *)c);
 
 	// Standard app pacer.
 	struct u_pacing_app_factory *upaf = NULL;

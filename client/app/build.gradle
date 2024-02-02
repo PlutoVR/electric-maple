@@ -6,7 +6,7 @@ plugins {
 android {
     compileSdk 33
 
-    namespace 'com.plutovr.plutosphere.webrtc_client'
+    namespace 'com.plutovr.electricmaple.standalone_client'
     ndkVersion project.ndkVersion
 
     defaultConfig {
@@ -16,7 +16,7 @@ android {
 //                install "nanopb"
 //            }
 //        }
-        applicationId "com.plutovr.plutosphere.webrtc_client"
+        applicationId "com.plutovr.electricmaple.standalone_client"
         minSdkVersion 26
         // Version 30 breaks loader
         targetSdkVersion 29

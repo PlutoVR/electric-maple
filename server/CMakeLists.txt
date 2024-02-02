@@ -35,7 +35,7 @@ if(NOT MSVC)
 	set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -Wl,--no-undefined")
 endif()
 
-option(PL_LIBSOUP2 "Use libsoup2.4 instead of libsoup3.0" OFF)
+option(EMS_LIBSOUP2 "Use libsoup2.4 instead of libsoup3.0" OFF)
 
 # pkgconfig!
 find_package(PkgConfig REQUIRED)
@@ -47,7 +47,7 @@ pkg_check_modules(GST_WEBRTC REQUIRED gstreamer-webrtc-1.0)
 pkg_check_modules(GST REQUIRED gstreamer-plugins-base-1.0)
 pkg_check_modules(GST REQUIRED gstreamer-plugins-bad-1.0)
 
-if(PL_LIBSOUP2)
+if(EMS_LIBSOUP2)
 	pkg_check_modules(LIBSOUP REQUIRED libsoup-2.4)
 else()
 	pkg_check_modules(LIBSOUP REQUIRED libsoup-3.0)
@@ -135,7 +135,7 @@ setforce(BUILD_DOC OFF)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 
-set(XRT_OXR_RUNTIME_SUFFIX pluto_server)
+set(XRT_OXR_RUNTIME_SUFFIX electricmaple CACHE STRING "OpenXR client library suffix" FORCE)
 
 add_subdirectory(../monado ${CMAKE_CURRENT_BINARY_DIR}/monado)
 

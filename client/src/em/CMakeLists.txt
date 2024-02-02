@@ -1,5 +1,5 @@
 add_library(
-	pluto_electricmaple SHARED
+	electricmaple_client SHARED
 	em_connection.c
 	em_frame_data.cpp
 	em_remote_experience.cpp
@@ -10,8 +10,8 @@ add_library(
 	render/render.cpp
 	)
 target_link_libraries(
-	pluto_electricmaple
-	PRIVATE pluto_proto aux_util ${ANDROID_LOG_LIBRARY}
+	electricmaple_client
+	PRIVATE em_proto aux_util ${ANDROID_LOG_LIBRARY}
 	PUBLIC
 		OpenXR::openxr_loader # actually only need headers but prefab doesn't expose that
 		EGL::EGL
@@ -22,11 +22,11 @@ target_link_libraries(
 		em_egl
 	)
 target_compile_definitions(
-	pluto_electricmaple PUBLIC XR_USE_PLATFORM_ANDROID XR_USE_GRAPHICS_API_OPENGL_ES
-				   XR_USE_TIMESPEC
+	electricmaple_client PUBLIC XR_USE_PLATFORM_ANDROID XR_USE_GRAPHICS_API_OPENGL_ES
+				    XR_USE_TIMESPEC
 	)
 target_include_directories(
-	pluto_electricmaple
+	electricmaple_client
 	PRIVATE ${LIBSOUP_INCLUDE_DIRS} ${JSONGLIB_INCLUDE_DIRS} ${GIO_INCLUDE_DIRS}
 	PUBLIC .. ${GST_INCLUDE_DIRS} ${GLIB_INCLUDE_DIRS}
 	)

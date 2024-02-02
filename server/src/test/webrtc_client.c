@@ -1,4 +1,3 @@
-#include "pl_build.h"
 #include <glib-unix.h>
 #include <gst/gst.h>
 
@@ -71,7 +70,7 @@ data_channel_message_string_cb(GstWebRTCDataChannel *datachannel, gchar *str, vo
 static gboolean
 datachannel_send_message(gpointer unused)
 {
-	g_signal_emit_by_name(datachannel, "send-string", "Hi! from Pluto client");
+	g_signal_emit_by_name(datachannel, "send-string", "Hi! from EMS test client");
 
 	return G_SOURCE_CONTINUE;
 }
