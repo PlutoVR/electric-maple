@@ -1,4 +1,4 @@
-package com.plutovr.plutosphere.webrtc_client
+package com.plutovr.electricmaple.standalone_client
 
 import org.freedesktop.gstreamer.GStreamer
 
