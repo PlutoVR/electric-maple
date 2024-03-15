@@ -51,7 +51,6 @@ struct em_sc_sample
 	GstSample *sample;
 };
 
-
 struct _EmStreamClient
 {
 	GMainLoop *loop;
@@ -581,6 +580,7 @@ em_stream_client_stop(EmStreamClient *sc)
 	gst_clear_object(&sc->pipeline);
 	gst_clear_object(&sc->appsink);
 	gst_clear_object(&sc->context);
+	gst_clear_object(&sc->connection);
 
 	sc->pipeline_is_running = false;
 }
@@ -590,7 +590,6 @@ em_stream_client_try_pull_sample(EmStreamClient *sc, struct timespec *out_decode
 {
 	if (!sc->appsink) {
 		// not setup yet.
-		ALOGV("%s: no app sink yet, waiting for connection", __FUNCTION__);
 		return NULL;
 	}
 
