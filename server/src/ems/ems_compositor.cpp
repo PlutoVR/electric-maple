@@ -374,6 +374,7 @@ pack_blit_and_encode(struct ems_compositor *c,
 	if (ret != VK_SUCCESS) {
 		EMS_COMP_ERROR(c, "vk_cmd_pool_create_and_begin_cmd_buffer_locked: %s", vk_result_string(ret));
 		xrt_frame_reference(&frame, NULL);
+		vk_cmd_pool_unlock(&c->cmd_pool);
 		return;
 	}
 
