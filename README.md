@@ -1,5 +1,11 @@
 # linux-streaming
 
+<!--
+Copyright 2023, Pluto VR, Inc.
+Copyright 2023-2024, Collabora, Ltd.
+
+SPDX-License-Identifier: CC-BY-4.0
+-->
 
 ## Structure
 

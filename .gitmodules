@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2023, Pluto VR, Inc.
+#
+# SPDX-License-Identifier: CC0-1.0
+
 [submodule "monado"]
 	path = monado
 	url = ../linux-streaming-monado.git

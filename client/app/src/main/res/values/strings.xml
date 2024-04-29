@@ -1,3 +1,9 @@
+<!--
+Copyright 2023, Pluto VR, Inc.
+
+SPDX-License-Identifier: BSL-1.0
+-->
+
 <resources>
     <string name="app_name">electricmaple_standalone_client</string>
 </resources>

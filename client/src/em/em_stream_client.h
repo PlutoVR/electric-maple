@@ -1,5 +1,7 @@
-// Copyright 2022-2023, PlutoVR
+// Copyright 2022-2023, Pluto VR, Inc.
+//
 // SPDX-License-Identifier: BSL-1.0
+
 /*!
  * @file
  * @brief  Header for the stream client module of the ElectricMaple XR streaming solution

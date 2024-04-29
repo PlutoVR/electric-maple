@@ -1,5 +1,7 @@
 // Copyright 2023, Pluto VR, Inc.
+//
 // SPDX-License-Identifier: BSL-1.0
+
 /*!
  * @file
  * @brief  Internal header for a data structure used by the ElectricMaple XR streaming solution

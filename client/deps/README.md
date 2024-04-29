@@ -1,5 +1,11 @@
 # Deps Readme
 
+<!--
+Copyright 2023, Pluto VR, Inc.
+
+SPDX-License-Identifier: CC-BY-4.0
+-->
+
 The gstreamer_android deps are fetched by running the
 ../download_gst.sh script. The gstreamer version we're using is
 version 1.22.6 which contains all the fixes we need.

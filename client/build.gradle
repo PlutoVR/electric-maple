@@ -1,3 +1,7 @@
+// Copyright 2023, Pluto VR, Inc.
+//
+// SPDX-License-Identifier: BSL-1.0
+
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 buildscript {
     ext {

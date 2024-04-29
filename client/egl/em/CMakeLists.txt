@@ -1,3 +1,7 @@
+# Copyright 2023, Pluto VR, Inc.
+#
+# SPDX-License-Identifier: BSL-1.0
+
 add_library(em_egl STATIC em_egl.cpp)
 target_link_libraries(
 	em_egl

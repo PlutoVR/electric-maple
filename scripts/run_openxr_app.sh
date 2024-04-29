@@ -1,5 +1,9 @@
 #!/bin/sh
 
+# Copyright 2023, Pluto VR, Inc.
+#
+# SPDX-License-Identifier: BSL-1.0
+
 # Script used to run an openxr app (hello_xr) against the running monado-based Electric Maple RR server.
 # NOTE: one NEEDS to run an openxr app on running monado-based RR server in order for a
 # RR client (client/ ) to connect successfully and get frames.
