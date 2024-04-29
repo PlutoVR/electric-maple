@@ -1,5 +1,8 @@
 // Copyright 2020-2023, Collabora, Ltd.
-// SPDX-License-Identifier: MIT
+// Copyright 2023, Pluto VR, Inc.
+//
+// SPDX-License-Identifier: BSL-1.0
+
 /*!
  * @file
  * @brief  Shared default implementation of the instance with compositor.
