@@ -1,6 +1,8 @@
 #!/bin/sh
-# Copyright 2019, Collabora, Ltd.
+# Copyright 2019-2024, Collabora, Ltd.
+#
 # SPDX-License-Identifier: BSL-1.0
+
 # Author: Rylie Pavlik <rylie.pavlik@collabora.com>
 
 # Run both format-project and codespell-project, making a patch if any changes can be auto-made.
@@ -11,7 +13,7 @@ PATCH_DIR=patches
 PATCH_NAME=fixes.diff
 (
     cd $(dirname $0)
-    
+
     # Exit if working tree dirty or uncommitted changes staged.
     if ! git diff-files --quiet; then
         echo "ERROR: Cannot perform check/fix, working tree dirty."
@@ -38,7 +40,7 @@ PATCH_NAME=fixes.diff
         CODESPELL_RESULT=false
     fi
 
-    
+
     echo "Running clang-format..."
     echo
     ./format-project.sh
@@ -47,7 +49,7 @@ PATCH_NAME=fixes.diff
     echo
     ./format-cmake.sh
 
-    
+
     (
         cd ..
         mkdir -p $PATCH_DIR
