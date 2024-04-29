@@ -1,0 +1,13 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: Electric Maple
+Upstream-Contact: Rylie Pavlik <rylie.pavlik@collabora.com>
+
+Files: client/app/src/main/res/mipmap-hdpi/*
+   client/app/src/main/res/mipmap-mdpi/*
+   client/app/src/main/res/mipmap-xhdpi/*
+   client/app/src/main/res/mipmap-xxhdpi/*
+   client/app/src/main/res/mipmap-xxxhdpi/*
+Copyright: 2023-2024, Pluto VR, Inc.
+   2013, Google Inc.
+License: Apache-2.0
+Comment: Based in part on images from "Noto-Emoji" https://github.com/googlefonts/noto-emoji by Google.
