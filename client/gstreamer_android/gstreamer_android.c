@@ -1,3 +1,7 @@
+// Copyright 2023, Pluto VR, Inc.
+//
+// SPDX-License-Identifier: BSL-1.0
+
 #include <gst/gst.h>
 #include <gio/gio.h>
 
@@ -35,7 +39,7 @@ gst_android_load_gio_modules (void)
   GTlsBackend *backend;
   const gchar *ca_certs;
 
-  
+
 
   ca_certs = g_getenv ("CA_CERTIFICATES");
 

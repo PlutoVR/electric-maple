@@ -1,5 +1,7 @@
 // Copyright 2023, Pluto VR, Inc.
-// SPDX-License-Identifier: MIT
+//
+// SPDX-License-Identifier: BSL-1.0
+
 /*!
  * @file
  * @brief  Wrapper around OpenGL (ES) swapchain

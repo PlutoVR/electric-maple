@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <!--
+    Copyright 2023-2024, Pluto VR, Inc.
+
+    SPDX-License-Identifier: BSL-1.0
+    -->
+    <background android:drawable="@color/ic_em_launcher_background" />
+    <foreground android:drawable="@drawable/ic_em_launcher_foreground" />
+</adaptive-icon>

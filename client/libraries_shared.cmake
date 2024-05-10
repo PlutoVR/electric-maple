@@ -1,3 +1,7 @@
+# Copyright 2023, Pluto VR, Inc.
+#
+# SPDX-License-Identifier: BSL-1.0
+
 set(GST_LIBRARIES
     ${GST_ARCH_DIR}/lib/libgstreamer-1.0.so
     ${GST_ARCH_DIR}/lib/libgstrtsp-1.0.so

@@ -1,3 +1,7 @@
+# Copyright 2023, Pluto VR, Inc.
+#
+# SPDX-License-Identifier: BSL-1.0
+
 add_library(ems_gst STATIC ems_gstreamer_pipeline.c ems_signaling_server.c)
 
 target_link_libraries(

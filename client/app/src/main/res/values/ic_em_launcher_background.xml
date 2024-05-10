@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+Copyright 2024, Pluto VR, Inc.
+
+SPDX-License-Identifier: BSL-1.0
+-->
+<resources>
+    <color name="ic_em_launcher_background">#E5E5E5</color>
+</resources>

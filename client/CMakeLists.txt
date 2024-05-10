@@ -1,3 +1,7 @@
+# Copyright 2023, Pluto VR, Inc.
+#
+# SPDX-License-Identifier: BSL-1.0
+
 cmake_minimum_required(VERSION 3.10.2)
 
 project(electricmaple_standalone_client VERSION 0.0.1)

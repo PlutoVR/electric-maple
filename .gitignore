@@ -1,9 +1,14 @@
+# SPDX-FileCopyrightText: 2023, Pluto VR, Inc.
+#
+# SPDX-License-Identifier: CC0-1.0
+
 .*
-!.gitignore
 !.clang-tidy
-!.gitmodules
 !.cmake-format.py
+!.gitignore
+!.gitmodules
 !.mailmap
+!.reuse
 
 out/
 
@@ -20,3 +25,7 @@ __pycache__/
 compile_commands.json
 
 logcat.*.txt
+
+# GraphViz from gstreamer
+*.dot
+*.dot.pdf
