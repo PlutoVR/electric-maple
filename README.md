@@ -1,4 +1,4 @@
-# linux-streaming
+# electric-maple
 
 <!--
 Copyright 2023, Pluto VR, Inc.
